@@ -1,67 +1,54 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { Icon } from "@/components/ui";
 
-type Step = "request" | "verify";
+// No-auth test mode: pick who you are, no email/password. Auth returns later.
+const PEOPLE = ["Min-Taec", "Kris"];
+const REMEMBER_KEY = "brew_identity";
 
 export default function LoginPage() {
-  const [step, setStep] = useState<Step>("request");
-  const [joining, setJoining] = useState(false);
-  const [email, setEmail] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [remembered, setRemembered] = useState<string | null>(null);
 
-  async function sendCode() {
-    if (!email.trim()) return;
-    if (joining && !inviteCode.trim()) { setError("Enter the household invite code."); return; }
-    setLoading(true); setError("");
-    const sb = createClient();
-    // No emailRedirectTo — we want a typed 6-digit code, not a clickable link
-    // (links get consumed by email prefetch/scanners before the user clicks them).
-    const { error } = await sb.auth.signInWithOtp({ email: email.trim() });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    setStep("verify");
-  }
+  useEffect(() => {
+    try { setRemembered(localStorage.getItem(REMEMBER_KEY)); } catch { /* ignore */ }
+  }, []);
 
-  async function verifyCode() {
-    if (code.trim().length < 6) return;
-    setLoading(true); setError("");
-    const sb = createClient();
-    const { error } = await sb.auth.verifyOtp({
-      email: email.trim(),
-      token: code.trim(),
-      type: "email",
-    });
-    if (error) {
-      setLoading(false);
-      setError(error.message.includes("expired") ? "That code is invalid or expired. Request a new one." : error.message);
-      return;
-    }
-    // Session is now set. Create or join the household before entering the app.
+  async function enterAs(name: string) {
+    setLoading(name); setError("");
     try {
+      const sb = createClient();
+      // Reuse an existing anonymous session if we have one; otherwise create it.
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        const { error: signInErr } = await sb.auth.signInAnonymously();
+        if (signInErr) throw signInErr;
+      }
+      // Join (or create + seed) the shared household under this name.
       const res = await fetch("/api/household", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(joining ? { invite_code: inviteCode.trim() } : {}),
+        body: JSON.stringify({ name }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setLoading(false);
-        setError(body.error ?? "Could not set up your household. Try again.");
-        return;
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? "Could not set up your household.");
       }
-    } catch {
-      setLoading(false);
-      setError("Network error setting up your household. Try again.");
-      return;
+      try { localStorage.setItem(REMEMBER_KEY, name); } catch { /* ignore */ }
+      // Full navigation so the server picks up the new session cookie.
+      window.location.href = "/";
+    } catch (e) {
+      setLoading(null);
+      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
     }
-    // Full navigation so the server picks up the new session cookie.
-    window.location.href = "/";
   }
+
+  // Show the remembered person first, if any.
+  const ordered = remembered
+    ? [remembered, ...PEOPLE.filter((p) => p !== remembered)]
+    : PEOPLE;
 
   return (
     <div style={{
@@ -79,120 +66,36 @@ export default function LoginPage() {
           <p style={{ fontSize: 13.5, color: "var(--ink-dim)", marginTop: 6 }}>Pour-over logging & shelf</p>
         </div>
 
-        {step === "verify" ? (
-          <>
-            <div className="card" style={{ padding: "20px 20px 8px" }}>
-              <h2 style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 4 }}>Enter your code</h2>
-              <p style={{ fontSize: 13.5, color: "var(--ink-dim)", marginBottom: 14, lineHeight: 1.5 }}>
-                We sent a 6-digit code to <strong style={{ color: "var(--ink)" }}>{email}</strong>
-              </p>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="123456"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && verifyCode()}
-                style={{
-                  width: "100%", padding: "12px 14px", borderRadius: 13,
-                  background: "var(--surface-2)", border: "1px solid var(--line)",
-                  color: "var(--ink)", fontFamily: "var(--font-mono)", fontSize: 22,
-                  letterSpacing: "0.3em", textAlign: "center", outline: "none",
-                }}
-              />
-
-              {error && (
-                <p style={{ fontSize: 12.5, color: "#c9755f", marginTop: 8 }}>{error}</p>
-              )}
-
+        <div className="card" style={{ padding: 20 }}>
+          <div className="label" style={{ marginBottom: 12, textAlign: "center" }}>Who&apos;s brewing?</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {ordered.map((name) => (
               <button
+                key={name}
                 className="btn btn-accent"
-                style={{ marginTop: 16, opacity: loading || code.length < 6 ? 0.6 : 1 }}
-                disabled={loading || code.length < 6}
-                onClick={verifyCode}
-              >
-                {loading ? "Verifying…" : "Verify & sign in"}
-              </button>
-            </div>
-
-            <div style={{ textAlign: "center", marginTop: 18 }}>
-              <button
-                className="btn btn-ghost"
-                style={{ display: "inline-flex", fontSize: 13.5, color: "var(--ink-faint)" }}
-                onClick={() => { setStep("request"); setCode(""); setError(""); }}
-              >
-                Use a different email
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="card" style={{ padding: "20px 20px 8px" }}>
-              <div className="label" style={{ marginBottom: 8 }}>Your email</div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                inputMode="email"
-                autoComplete="email"
-                onKeyDown={(e) => e.key === "Enter" && sendCode()}
                 style={{
-                  width: "100%", padding: "12px 14px", borderRadius: 13,
-                  background: "var(--surface-2)", border: "1px solid var(--line)",
-                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15.5, outline: "none",
+                  width: "100%", justifyContent: "center", fontSize: 16,
+                  opacity: loading && loading !== name ? 0.5 : 1,
                 }}
-              />
-
-              {joining && (
-                <>
-                  <div className="label" style={{ marginTop: 14, marginBottom: 8 }}>Household invite code</div>
-                  <input
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    placeholder="ABC123"
-                    style={{
-                      width: "100%", padding: "12px 14px", borderRadius: 13,
-                      background: "var(--surface-2)", border: "1px solid var(--line)",
-                      color: "var(--ink)", fontFamily: "var(--font-mono)", fontSize: 16,
-                      letterSpacing: "0.15em", outline: "none",
-                    }}
-                  />
-                </>
-              )}
-
-              {error && (
-                <p style={{ fontSize: 12.5, color: "#c9755f", marginTop: 8 }}>{error}</p>
-              )}
-
-              <button
-                className="btn btn-accent"
-                style={{ marginTop: 16, opacity: loading ? 0.6 : 1 }}
-                disabled={loading}
-                onClick={sendCode}
+                disabled={!!loading}
+                onClick={() => enterAs(name)}
               >
-                {loading ? "Sending…" : "Send sign-in code"}
+                {loading === name ? "Setting up…" : name}
+                {remembered === name && loading == null && (
+                  <span style={{ fontSize: 12, color: "var(--ink-dim)", marginLeft: 8 }}>· last used</span>
+                )}
               </button>
-            </div>
+            ))}
+          </div>
 
-            <div style={{ textAlign: "center", marginTop: 18 }}>
-              <button
-                className="btn btn-ghost"
-                style={{ display: "inline-flex", fontSize: 13.5, color: "var(--ink-faint)" }}
-                onClick={() => { setJoining(!joining); setError(""); }}
-              >
-                {joining ? "Create my own household instead" : <><Icon name="plus" size={15} stroke={2} /> Join someone&apos;s household</>}
-              </button>
-            </div>
+          {error && (
+            <p style={{ fontSize: 12.5, color: "#c9755f", marginTop: 12, textAlign: "center" }}>{error}</p>
+          )}
+        </div>
 
-            <p style={{ fontSize: 11.5, color: "var(--ink-faint)", textAlign: "center", marginTop: 20, lineHeight: 1.5 }}>
-              Two people share one shelf and brew log — each rates and logs as themselves.
-            </p>
-          </>
-        )}
+        <p style={{ fontSize: 11.5, color: "var(--ink-faint)", textAlign: "center", marginTop: 20, lineHeight: 1.5 }}>
+          Two people share one shelf and brew log — each rates and logs as themselves.
+        </p>
       </div>
     </div>
   );

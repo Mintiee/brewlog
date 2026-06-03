@@ -1,16 +1,18 @@
 /**
- * POST /api/household — called after first sign-in to create or join a household.
- * Body: { invite_code?: string } — if provided, join that household; else create a new one.
+ * POST /api/household — called after picking an identity (no-auth test mode).
+ * Body: { name?: string } — the display name (e.g. "Min-Taec" / "Kris").
+ *
+ * Everyone joins ONE shared household (fixed invite code) so Min-Taec and Kris
+ * see the same shelf + brew log. The first caller creates and seeds it; the
+ * rest join it. Reversible: when real auth returns, restore invite-code logic.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServer } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { seedHousehold } from "@/lib/db/seed";
 
-function generateInviteCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
+// Single shared household for the no-auth phase.
+const SHARED_INVITE_CODE = "BREWMK";
 
 export async function POST(req: NextRequest) {
   const supabase = await createServer();
@@ -18,40 +20,43 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const inviteCode: string | undefined = body.invite_code;
+  const name: string =
+    typeof body.name === "string" && body.name.trim() ? body.name.trim() : "You";
 
   const service = createServiceClient();
 
-  // Check if profile already exists (idempotent)
-  const { data: existingProfile } = await service.from("profiles").select("id,household_id").eq("id", user.id).single();
-  if (existingProfile) {
-    return NextResponse.json({ household_id: existingProfile.household_id });
+  // Find the shared household, or create + seed it (tolerating a creation race).
+  let householdId: string;
+  let justCreated = false;
+
+  const { data: existing } = await service
+    .from("households").select("id").eq("invite_code", SHARED_INVITE_CODE).maybeSingle();
+
+  if (existing) {
+    householdId = existing.id;
+  } else {
+    const { data: created, error } = await service
+      .from("households").insert({ invite_code: SHARED_INVITE_CODE }).select("id").single();
+    if (error) {
+      // Likely a unique-violation race — another request created it first. Re-fetch.
+      const { data: again } = await service
+        .from("households").select("id").eq("invite_code", SHARED_INVITE_CODE).maybeSingle();
+      if (!again) return NextResponse.json({ error: "Failed to create household" }, { status: 500 });
+      householdId = again.id;
+    } else {
+      householdId = created.id;
+      justCreated = true;
+    }
   }
 
-  let householdId: string;
+  // Create/refresh this user's profile in the shared household (idempotent).
+  // Must exist before seeding, since seeded brews reference profiles via logged_by.
+  await service.from("profiles").upsert({ id: user.id, household_id: householdId, name });
 
-  if (inviteCode) {
-    // Join existing household
-    const { data: household, error } = await service.from("households").select("id").eq("invite_code", inviteCode.toUpperCase()).single();
-    if (error || !household) return NextResponse.json({ error: "Invalid invite code" }, { status: 400 });
-    householdId = household.id;
-  } else {
-    // Create new household
-    const code = generateInviteCode();
-    const { data: household, error } = await service.from("households").insert({ invite_code: code }).select("id").single();
-    if (error || !household) return NextResponse.json({ error: "Failed to create household" }, { status: 500 });
-    householdId = household.id;
-
-    // Seed the household with demo data
+  // Seed demo data only for the first user who created the household.
+  if (justCreated) {
     try { await seedHousehold(service, householdId, user.id); } catch { /* non-fatal */ }
   }
-
-  // Create profile
-  await service.from("profiles").insert({
-    id: user.id,
-    household_id: householdId,
-    name: user.email?.split("@")[0] ?? "You",
-  });
 
   return NextResponse.json({ household_id: householdId });
 }
