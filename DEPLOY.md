@@ -15,19 +15,45 @@
    supabase/migrations/001_init.sql
    ```
    (Paste the contents and click Run.)
-3. In **Project Settings → API**, copy:
-   - **Project URL** (`NEXT_PUBLIC_SUPABASE_URL`)
-   - **anon / public key** (`NEXT_PUBLIC_SUPABASE_ANON_KEY`)
-   - **service_role key** (`SUPABASE_SERVICE_ROLE_KEY`)
-4. In **Auth → URL Configuration**, set:
-   - Site URL: your Vercel deployment URL (e.g. `https://brew.vercel.app`)
-   - Redirect URLs: add `https://brew.vercel.app/auth/callback`
+3. Grab the **Project URL** and **keys**. Supabase reorganised the dashboard in
+   2025–26, so the layout differs from older guides:
+
+   - **Project URL** (`NEXT_PUBLIC_SUPABASE_URL`):
+     `https://<project-ref>.supabase.co`. Easiest source is the green
+     **Connect** button at the top of the dashboard (App Frameworks tab), or
+     **Settings → API** → "Project URL".
+   - **Keys** live under **Settings → API Keys**. Supabase replaced the old
+     `anon` / `service_role` keys with new **publishable** (`sb_publishable_…`)
+     and **secret** (`sb_secret_…`) keys. The legacy keys still work but are
+     scheduled for removal in late 2026 — **use the new keys**:
+     - **Publishable** key → set as `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+       (the app's env var name is still `…ANON_KEY`; the publishable value goes here).
+     - **Secret** key (click to reveal) → set as `SUPABASE_SERVICE_ROLE_KEY`.
+       Used server-side to bypass RLS — keep it out of the browser and out of git.
+
+   > Legacy fallback: the old `anon` / `service_role` values are under the
+   > **Legacy API keys** tab on the same page and map to the same two env vars.
+
+4. Set the auth redirect URLs. This page is nested: **Authentication →
+   Configuration → URL Configuration** (or go direct to
+   `https://supabase.com/dashboard/project/<project-ref>/auth/url-configuration`).
+   Set these to your **live Vercel URL** (you'll have it after step 3 of Deploy):
+   - Site URL: e.g. `https://your-app.vercel.app`
+   - Redirect URLs: add `https://your-app.vercel.app/auth/callback`
+
+   Magic-link login fails silently if these don't match the real deployed domain.
 
 ---
 
 ## 2. Generate the encryption key
 
+`APP_ENCRYPTION_KEY` must be 32 random bytes, base64-encoded.
+
 ```bash
+# Cross-platform (Node is already a dependency):
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# Or, on macOS/Linux with OpenSSL:
 openssl rand -base64 32
 ```
 
@@ -38,17 +64,23 @@ Copy the output — this is your `APP_ENCRYPTION_KEY`.
 ## 3. Deploy to Vercel
 
 1. Push this directory to a GitHub repository.
-2. Import the repo in Vercel.
-3. Set these **Environment Variables** in Vercel:
+2. Import the repo at **https://vercel.com/new**. Vercel auto-detects Next.js —
+   leave the framework preset, build command, and root directory at defaults
+   (`package.json` is at the repo root).
+3. Before deploying, expand **Environment Variables** and add:
 
 | Variable | Value |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | your Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | your Supabase service-role key |
-| `APP_ENCRYPTION_KEY` | output of `openssl rand -base64 32` |
+| `NEXT_PUBLIC_SUPABASE_URL` | your Supabase project URL (`https://<ref>.supabase.co`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your Supabase **publishable** key (`sb_publishable_…`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | your Supabase **secret** key (`sb_secret_…`) |
+| `APP_ENCRYPTION_KEY` | the base64 key from step 2 |
 
-4. Deploy.
+4. Deploy, then copy the live URL Vercel gives you.
+5. **Go back to Supabase step 1.4** and set Site URL + Redirect URL to that live
+   URL. (You couldn't do this earlier because the URL didn't exist yet.)
+
+Future `git push`es to the connected branch auto-redeploy.
 
 ---
 
