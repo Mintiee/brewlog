@@ -56,7 +56,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
         })}
       </div>
       {/* Safe-area spacer — solid bg so home-indicator zone matches the app, not the PWA chrome */}
-      <div style={{ height: "env(safe-area-inset-bottom, 0px)", background: "var(--bg)" }} />
+      <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
     </div>
   );
 }
