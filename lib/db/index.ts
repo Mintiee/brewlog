@@ -153,6 +153,7 @@ function rowToCoffee(r: any): Coffee {
 function coffeeToRow(c: Partial<Coffee>) {
   return {
     ...(c.id ? { id: c.id } : {}),
+    ...(c.household_id ? { household_id: c.household_id } : {}),
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
     varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
@@ -185,14 +186,16 @@ function rowToBrew(r: any): Brew {
 function brewToRow(b: Partial<Brew>) {
   return {
     ...(b.id ? { id: b.id } : {}),
+    // Supply household_id / logged_by explicitly — do not rely on DB defaults
+    // (migration 002 defaults are belt-and-braces; the client must send these).
+    ...(b.household_id ? { household_id: b.household_id } : {}),
+    ...(b.logged_by ? { logged_by: b.logged_by } : {}),
     coffee_id: b.coffee_id,
     brewer_id: b.brewer_id,
     dose: b.dose, water: b.water, bypass: b.bypass, temp: b.temp,
     grind: b.grind, ratio: b.ratio, water_type: b.water_type,
     started_at: b.started_at ? new Date(parseInt(b.started_at)).toISOString() : undefined,
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
-    // logged_by omitted — DB default is auth.uid() (migration 002), matching how
-    // household_id is also omitted and filled server-side.
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,
     acidity: b.acidity, sweetness: b.sweetness, body: b.body, clarity: b.clarity,

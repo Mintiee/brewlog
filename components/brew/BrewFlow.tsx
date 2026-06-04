@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui";
 import { StepWhat } from "./StepWhat";
 import { StepHow } from "./StepHow";
 import { StepRate } from "./StepRate";
+import { BrewDetail } from "@/components/palate/BrewDetail";
 
 import type { Coffee } from "@/lib/types";
 
@@ -18,13 +19,14 @@ interface BrewFlowProps {
 }
 
 export function BrewFlow({ resetKey, startCoffee, onStep }: BrewFlowProps = {}) {
-  const { coffees, brews, config, profile, startBrew, rateBrew, dismissBrew } = useApp();
+  const { coffees, brews, config, profile, startBrew, rateBrew, updateBrew, dismissBrew } = useApp();
 
   const [step, setStep] = useState<Step>("what");
   const [coffee, setCoffee] = useState(coffees[0] ?? null);
   const [brewer, setBrewer] = useState<Brewer | null>(null);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [rateTarget, setRateTarget] = useState<Brew | null>(null);
+  const [detailBrew, setDetailBrew] = useState<Brew | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const logTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,6 +128,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep }: BrewFlowProps = {}) 
           config={config}
           onPick={(c) => { setCoffee(c); setStep("how"); }}
           onRate={openRate}
+          onOpenBrew={setDetailBrew}
         />
       )}
       {step === "how" && coffee && (
@@ -183,6 +186,16 @@ export function BrewFlow({ resetKey, startCoffee, onStep }: BrewFlowProps = {}) 
           <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-dim)" }}>{coffee && coffee.name}</div>
         </div>
       )}
+
+      {/* BrewDetail sheet — opened by tapping a day cell on the recent strip */}
+      <BrewDetail
+        brew={detailBrew}
+        coffees={coffees}
+        config={config}
+        onClose={() => setDetailBrew(null)}
+        onUpdate={updateBrew}
+        onDelete={dismissBrew}
+      />
     </div>
   );
 }

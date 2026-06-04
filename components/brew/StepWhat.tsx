@@ -11,9 +11,10 @@ interface StepWhatProps {
   config: Config;
   onPick: (c: Coffee) => void;
   onRate: (b: Brew) => void;
+  onOpenBrew?: (b: Brew) => void;
 }
 
-export function StepWhat({ coffees, brews, config, onPick, onRate }: StepWhatProps) {
+export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }: StepWhatProps) {
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
   const [, setTick] = useState(0);
 
@@ -48,7 +49,8 @@ export function StepWhat({ coffees, brews, config, onPick, onRate }: StepWhatPro
     const lb = lastBrewOf(c.id, brews);
     const daysAgo = lb ? daysAgoFromStartedAt(lb.started_at) : null;
     const last = daysAgo !== null ? (daysAgo === 0 ? "today" : `${daysAgo}d`) : null;
-    const serves = cupsLeft(activeGrams(c, brews)).toFixed(1);
+    const servesN = cupsLeft(activeGrams(c, brews));
+    const serves = servesN % 1 === 0 ? String(servesN) : servesN.toFixed(1);
     return (
       <button key={c.id} onClick={() => onPick(c)} className={`rise rise-${Math.min(i + 2, 5)}`} style={{
         display: "flex", alignItems: "center", gap: 15, textAlign: "left", color: "var(--ink)",
@@ -154,18 +156,27 @@ export function StepWhat({ coffees, brews, config, onPick, onRate }: StepWhatPro
             {days.map((day, i) => {
               const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - day.d);
               const weekStart = i > 0 && dt.getDay() === 1;
+              const tappable = day.brews.length > 0 && !!onOpenBrew;
               return (
-                <span key={day.d} title={(day.brews.length ? day.brews.length + (day.brews.length === 1 ? " brew" : " brews") : "no brew") + " · " + rel(day.d)} style={{
-                  width: 19, height: 19, borderRadius: 5, overflow: "hidden", display: "flex", flexShrink: 0,
-                  marginLeft: weekStart ? 8 : 0,
-                  border: day.brews.length ? "none" : "1px solid var(--line)",
-                  boxShadow: day.brews.length ? "inset 0 0 0 1px rgba(255,255,255,0.1)" : "none",
-                }}>
+                <button
+                  key={day.d}
+                  title={(day.brews.length ? day.brews.length + (day.brews.length === 1 ? " brew" : " brews") : "no brew") + " · " + rel(day.d)}
+                  onClick={() => tappable && onOpenBrew!(day.brews[0])}
+                  disabled={!tappable}
+                  style={{
+                    width: 19, height: 19, borderRadius: 5, overflow: "hidden", display: "flex", flexShrink: 0,
+                    marginLeft: weekStart ? 8 : 0,
+                    border: day.brews.length ? "none" : "1px solid var(--line)",
+                    boxShadow: day.brews.length ? "inset 0 0 0 1px rgba(255,255,255,0.1)" : "none",
+                    padding: 0, background: "none",
+                    cursor: tappable ? "pointer" : "default",
+                  }}
+                >
                   {day.brews.map((b, j) => {
                     const c = coffees.find((x) => x.id === b.coffee_id);
                     return <span key={j} style={{ flex: 1, background: c ? c.color : "var(--ink-ghost)", borderLeft: j ? "1px solid rgba(12,11,10,0.35)" : "none" }} />;
                   })}
-                </span>
+                </button>
               );
             })}
           </div>

@@ -5,7 +5,7 @@ import { SEED_CONFIG } from "@/lib/domain/seed";
 import { createClient } from "@/lib/supabase/browser";
 import {
   fetchCoffees, fetchBrews, fetchConfig, fetchProfile,
-  insertBrew, updateBrew, deleteBrew, upsertCoffee, upsertConfig,
+  insertBrew, updateBrew as dbUpdateBrew, deleteBrew, upsertCoffee, upsertConfig,
   fetchAiKeyStatus, fetchLearnedNotes,
 } from "@/lib/db";
 import { setLearnedNotes } from "@/lib/flavour";
@@ -26,6 +26,7 @@ interface AppState {
   llmEnabled: boolean;
   aiProvider?: string;
   ready: boolean;          // true once data has loaded (or seeded)
+  lastError: string | null; // last swallowed DB error, shown as a banner
 }
 
 interface AppActions {
@@ -33,9 +34,11 @@ interface AppActions {
   updateCoffee: (c: Coffee) => void;
   startBrew: (b: Brew) => void;
   rateBrew: (id: string, rating: Partial<Brew>) => void;
+  updateBrew: (id: string, patch: Partial<Brew>) => void;
   dismissBrew: (id: string) => void;
   setConfig: (c: Config) => void;
   setProfile: (p: Profile) => void;
+  clearError: () => void;
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null);
@@ -51,6 +54,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [aiProvider, setAiProvider] = useState<string | undefined>();
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   // Check auth + load data
   useEffect(() => {
@@ -93,14 +97,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ---- Optimistic mutations (update local state immediately; sync to DB if authed) ----
 
   const addCoffee = useCallback((c: Coffee) => {
-    setCoffees((prev) => [c, ...prev]);
-    if (authed) upsertCoffee(c).catch(console.error);
-  }, [authed]);
+    // Ensure household_id is always set — upsertCoffee will forward it to coffeeToRow.
+    const coffee = { ...c, household_id: profile.household_id };
+    setCoffees((prev) => [coffee, ...prev]);
+    if (authed) upsertCoffee(coffee).catch((err) => {
+      console.error("[addCoffee] upsert failed:", err);
+      setLastError("Couldn't save coffee — changes will be lost on refresh.");
+    });
+  }, [authed, profile.household_id]);
 
   const updateCoffee = useCallback((c: Coffee) => {
-    setCoffees((prev) => prev.map((x) => x.id === c.id ? c : x));
-    if (authed) upsertCoffee(c).catch(console.error);
-  }, [authed]);
+    const coffee = { ...c, household_id: c.household_id || profile.household_id };
+    setCoffees((prev) => prev.map((x) => x.id === c.id ? coffee : x));
+    if (authed) upsertCoffee(coffee).catch(console.error);
+  }, [authed, profile.household_id]);
 
   const startBrew = useCallback((b: Brew) => {
     setBrews((prev) => [b, ...prev]);
@@ -113,13 +123,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     insertBrew(b).catch((err) => {
       console.error("[startBrew] insert failed — brew saved locally only and will be lost on reload:", err);
+      setLastError("Couldn't save brew — it'll vanish on refresh.");
     });
   }, [authed]);
 
   const rateBrew = useCallback((id: string, rating: Partial<Brew>) => {
     const patch = { ...rating, pending: false, rated_at: String(Date.now()) };
     setBrews((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } : x));
-    if (authed) updateBrew(id, patch).catch(console.error);
+    if (authed) dbUpdateBrew(id, patch).catch(console.error);
+  }, [authed]);
+
+  // Pure patch — no forced pending/rated_at (use for BrewDetail edits, not the rating flow).
+  const updateBrew = useCallback((id: string, patch: Partial<Brew>) => {
+    setBrews((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } : x));
+    if (authed) dbUpdateBrew(id, patch).catch(console.error);
   }, [authed]);
 
   const dismissBrew = useCallback((id: string) => {
@@ -135,10 +152,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setProfile = useCallback((p: Profile) => setProfileState(p), []);
 
+  const clearError = useCallback(() => setLastError(null), []);
+
   return (
     <AppContext.Provider value={{
-      coffees, brews, config, profile, llmEnabled, aiProvider, ready,
-      addCoffee, updateCoffee, startBrew, rateBrew, dismissBrew, setConfig, setProfile,
+      coffees, brews, config, profile, llmEnabled, aiProvider, ready, lastError,
+      addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, setConfig, setProfile, clearError,
     }}>
       {children}
     </AppContext.Provider>

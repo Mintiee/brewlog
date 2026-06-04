@@ -17,11 +17,11 @@ interface HistoryProps {
 }
 
 export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
-  const { rateBrew, dismissBrew } = useApp();
+  const { updateBrew, dismissBrew } = useApp();
   const [selected, setSelected] = useState<Brew | null>(null);
 
   const handleUpdate = (id: string, patch: Partial<Brew>) => {
-    rateBrew(id, patch);
+    updateBrew(id, patch);
   };
 
   return (

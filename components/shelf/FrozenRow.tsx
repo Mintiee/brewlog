@@ -29,7 +29,7 @@ export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <div className="num" style={{ fontSize: 20, fontWeight: 600, lineHeight: 1, color: "var(--frozen)" }}>
-          {serves.toFixed(1)}<span style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 500, marginLeft: 2 }}>serves</span>
+          {serves % 1 === 0 ? String(serves) : serves.toFixed(1)}<span style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 500, marginLeft: 2 }}>serves</span>
         </div>
         <div className="label" style={{ fontSize: 9, marginTop: 4, color: "var(--ink-faint)" }}>{frozen}g</div>
       </div>

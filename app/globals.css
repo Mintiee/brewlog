@@ -39,7 +39,7 @@
   --font-ui:   var(--loaded-font-ui, "Hanken Grotesk"), system-ui, sans-serif;
   --font-mono: var(--loaded-font-mono, "JetBrains Mono"), ui-monospace, monospace;
 
-  --tab-h: 58px;
+  --tab-h: 50px;
 }
 
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }

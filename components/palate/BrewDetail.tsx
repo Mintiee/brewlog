@@ -123,7 +123,9 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
 
           <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
             <Stepper icon="star" label="Rating" value={ef.stars} unit="/ 5"
-              step={1} min={1} max={5} onChange={setE("stars")} />
+              step={0.5} min={0.5} max={5}
+              format={(v) => v % 1 === 0 ? String(v) : v.toFixed(1)}
+              onChange={setE("stars")} />
           </div>
 
           <Field label="Notes" value={ef.note} onChange={setE("note") as (v: string) => void} placeholder="Tasting notes…" />
@@ -186,9 +188,22 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
             <div className="label" style={{ marginBottom: 8 }}>Rating</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ display: "flex", gap: 4 }}>
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <span key={i} style={{ color: i <= ratingStars ? "var(--accent)" : "var(--ink-ghost)", fontSize: 22 }}>★</span>
-                ))}
+                {[1, 2, 3, 4, 5].map((i) => {
+                  const full = i <= ratingStars;
+                  const half = !full && (i - 0.5 === ratingStars);
+                  return (
+                    <span key={i} style={{ position: "relative", display: "inline-block", fontSize: 22, lineHeight: 1 }}>
+                      <span style={{ color: full ? "var(--accent)" : "var(--ink-ghost)" }}>★</span>
+                      {half && (
+                        <span style={{
+                          position: "absolute", left: 0, top: 0,
+                          overflow: "hidden", width: "50%", height: "100%",
+                          color: "var(--accent)", display: "block",
+                        }}>★</span>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
               {brew.stars2 != null && (
                 <span className="label" style={{ fontSize: 11 }}>

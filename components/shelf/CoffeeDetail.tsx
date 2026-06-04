@@ -178,7 +178,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
           </div>
           <div className="mono" style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 9, fontSize: 12, color: "var(--ink-dim)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="dot" style={{ background: "var(--accent)" }} /> {active}g ready · {cupsLeft(active).toFixed(1)} serves
+              <span className="dot" style={{ background: "var(--accent)" }} /> {active}g ready · {(() => { const s = cupsLeft(active); return s % 1 === 0 ? String(s) : s.toFixed(1); })()} serves
             </span>
             {frozen > 0 && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -214,7 +214,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
               <Stepper icon="snow" label="Into the freezer" value={amt} unit="g" step={10} min={10} max={active} onChange={setAmt} />
             </div>
             <div className="mono" style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: -4 }}>
-              {active - amt}g stays out · {cupsLeft(active - amt).toFixed(1)} serves
+              {active - amt}g stays out · {(() => { const s = cupsLeft(active - amt); return s % 1 === 0 ? String(s) : s.toFixed(1); })()} serves
             </div>
             <button className="btn btn-accent" onClick={confirmFreeze}>
               <Icon name="snow" size={19} stroke={1.8} /> Freeze {amt}g
