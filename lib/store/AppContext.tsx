@@ -102,7 +102,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCoffees((prev) => [coffee, ...prev]);
     if (authed) upsertCoffee(coffee).catch((err) => {
       console.error("[addCoffee] upsert failed:", err);
-      setLastError("Couldn't save coffee — changes will be lost on refresh.");
+      const detail = err?.message ?? err?.code ?? String(err);
+      setLastError(`Coffee save failed: ${detail}`);
     });
   }, [authed, profile.household_id]);
 
@@ -123,7 +124,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     insertBrew(b).catch((err) => {
       console.error("[startBrew] insert failed — brew saved locally only and will be lost on reload:", err);
-      setLastError("Couldn't save brew — it'll vanish on refresh.");
+      const detail = err?.message ?? err?.code ?? String(err);
+      setLastError(`Brew insert failed: ${detail}`);
     });
   }, [authed]);
 
