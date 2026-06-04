@@ -158,17 +158,16 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }:
               const weekStart = i > 0 && dt.getDay() === 1;
               const tappable = day.brews.length > 0 && !!onOpenBrew;
               return (
-                <button
+                <span
                   key={day.d}
                   title={(day.brews.length ? day.brews.length + (day.brews.length === 1 ? " brew" : " brews") : "no brew") + " · " + rel(day.d)}
                   onClick={() => tappable && onOpenBrew!(day.brews[0])}
-                  disabled={!tappable}
+                  role={tappable ? "button" : undefined}
                   style={{
                     width: 19, height: 19, borderRadius: 5, overflow: "hidden", display: "flex", flexShrink: 0,
                     marginLeft: weekStart ? 8 : 0,
                     border: day.brews.length ? "none" : "1px solid var(--line)",
                     boxShadow: day.brews.length ? "inset 0 0 0 1px rgba(255,255,255,0.1)" : "none",
-                    padding: 0, background: "none",
                     cursor: tappable ? "pointer" : "default",
                   }}
                 >
@@ -176,7 +175,7 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }:
                     const c = coffees.find((x) => x.id === b.coffee_id);
                     return <span key={j} style={{ flex: 1, background: c ? c.color : "var(--ink-ghost)", borderLeft: j ? "1px solid rgba(12,11,10,0.35)" : "none" }} />;
                   })}
-                </button>
+                </span>
               );
             })}
           </div>
