@@ -15,7 +15,7 @@ interface StepHowProps {
 
 export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHowProps) {
   const [brewer, setBrewer] = useState<Brewer>(config.brewers[0]);
-  const [r, setR] = useState<Recipe>(() => defaultsFor(coffee, config.brewers[0]));
+  const [r, setR] = useState<Recipe>(() => ({ ...defaultsFor(coffee, config.brewers[0]), water_type: config.default_water }));
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
@@ -25,7 +25,7 @@ export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHo
     if (last) {
       setR({ dose: last.dose, ratio: last.ratio, water: last.water, bypass: last.bypass || 0, temp: last.temp, grind: last.grind, water_type: last.water_type });
     } else {
-      setR(defaultsFor(coffee, b));
+      setR({ ...defaultsFor(coffee, b), water_type: config.default_water });
     }
   }
 
