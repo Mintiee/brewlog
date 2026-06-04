@@ -20,7 +20,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
   return (
     <div style={{
       position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 40,
-      height: "var(--tab-h)", paddingBottom: 22,
+      minHeight: "var(--tab-h)", paddingBottom: "env(safe-area-inset-bottom, 0px)",
       display: "flex", alignItems: "center",
       background: "color-mix(in srgb, var(--bg) 82%, transparent)",
       backdropFilter: "blur(18px) saturate(160%)",

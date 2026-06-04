@@ -138,7 +138,7 @@ export function Settings({
       ...config,
       brewers: [
         ...config.brewers,
-        { id: "b" + Date.now(), name: "New brewer", short: "New", dose: 15, water: 240, ratio: 16, temp: 94, grind: 20, pours: 3, bypass: false },
+        { id: "b" + Date.now(), name: "New brewer", short: "New", dose: 15, water: 240, ratio: 16, temp: 94, grind: 5, pours: 3, bypass: false },
       ],
     });
 
@@ -292,20 +292,20 @@ export function Settings({
             Unit shows on every grind readout (e.g. clicks, numbers, µm).
           </div>
           <div className="card" style={{ padding: "2px 16px", marginTop: 12 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 12px" }}>
-              <Stepper icon="minus" label="Min" value={config.grinder.grind_min ?? 0} unit={config.grinder.unit}
-                step={config.grinder.grind_step ?? 1} min={0} max={config.grinder.grind_max ?? 50}
-                format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
-                onChange={(v) => upd({ grinder: { ...config.grinder, grind_min: v } })} />
-              <Stepper icon="plus" label="Max" value={config.grinder.grind_max ?? 50} unit={config.grinder.unit}
-                step={config.grinder.grind_step ?? 1} min={config.grinder.grind_min ?? 0} max={999}
-                format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
-                onChange={(v) => upd({ grinder: { ...config.grinder, grind_max: v } })} />
-              <Stepper icon="grind" label="Increment" value={config.grinder.grind_step ?? 1} unit=""
-                step={0.1} min={0.1} max={10}
-                format={(v) => v % 1 === 0 ? String(v) : v.toFixed(1)}
-                onChange={(v) => upd({ grinder: { ...config.grinder, grind_step: +v.toFixed(2) } })} />
-            </div>
+            <Stepper icon="minus" label="Min" value={config.grinder.grind_min ?? 0} unit={config.grinder.unit}
+              step={config.grinder.grind_step ?? 1} min={0} max={config.grinder.grind_max ?? 50}
+              format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
+              onChange={(v) => upd({ grinder: { ...config.grinder, grind_min: v } })} />
+            <div style={{ height: 1, background: "var(--line)" }} />
+            <Stepper icon="plus" label="Max" value={config.grinder.grind_max ?? 50} unit={config.grinder.unit}
+              step={config.grinder.grind_step ?? 1} min={config.grinder.grind_min ?? 0} max={999}
+              format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
+              onChange={(v) => upd({ grinder: { ...config.grinder, grind_max: v } })} />
+            <div style={{ height: 1, background: "var(--line)" }} />
+            <Stepper icon="grind" label="Increment" value={config.grinder.grind_step ?? 1} unit=""
+              step={0.1} min={0.1} max={10}
+              format={(v) => v % 1 === 0 ? String(v) : v.toFixed(1)}
+              onChange={(v) => upd({ grinder: { ...config.grinder, grind_step: +v.toFixed(2) } })} />
           </div>
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7 }}>
             The dial range &amp; step for your grinder — e.g. a ZP6 is 0.0–10.0 in steps of 0.1.

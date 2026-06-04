@@ -39,7 +39,7 @@
   --font-ui:   var(--loaded-font-ui, "Hanken Grotesk"), system-ui, sans-serif;
   --font-mono: var(--loaded-font-mono, "JetBrains Mono"), ui-monospace, monospace;
 
-  --tab-h: 84px;
+  --tab-h: 58px;
 }
 
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
@@ -71,7 +71,7 @@ button { color: inherit; font-family: inherit; }
 }
 .screen::-webkit-scrollbar { display: none; }
 .screen-pad { padding: 0 20px; }
-.screen-bottom { height: calc(var(--tab-h) + 16px); }
+.screen-bottom { height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 12px); }
 
 /* ---------- type helpers ---------- */
 .label {
@@ -146,7 +146,7 @@ button { color: inherit; font-family: inherit; }
 
 /* sheet backdrop */
 .sheet-backdrop {
-  position: absolute; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: 80;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
   animation: fadeIn .2s ease both;

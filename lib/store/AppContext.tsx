@@ -67,8 +67,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fetchLearnedNotes(),
         ]);
         if (p) setProfileState(p);
-        if (c.length) setCoffees(c);
-        if (b.length) setBrews(b);
+        // Authed: adopt the fetched data even when empty — an authed user with no
+        // coffees/brews should see an empty shelf/journal, NOT the seed/dummy fallback.
+        setCoffees(c);
+        setBrews(b);
         if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
         if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
         if (notes) setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>);
