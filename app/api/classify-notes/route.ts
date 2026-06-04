@@ -9,10 +9,21 @@ import { getHouseholdKey } from "@/lib/llm/getKey";
 import { complete } from "@/lib/llm";
 import { createServiceClient } from "@/lib/supabase/server";
 
-const FAMILIES = "floral, citrus, berry, orchard, chocolate, nutty, sweet, winey, herbal, other";
+const FAMILIES = "floral, citrus, yellow fruit, red fruit, dark fruit, chocolate, roasty, nutty, sweet, spice, winey, herbal, other";
 const NOTE_CATMAP: Record<string, string> = {
-  floral: "flower", citrus: "citrus", berry: "berry", orchard: "cherry",
-  chocolate: "choco", nutty: "nut", sweet: "sugar", winey: "wine", herbal: "leaf", other: "drop",
+  floral: "flower",
+  citrus: "citrus",
+  "yellow fruit": "yellowfruit",
+  "red fruit": "redfruit",
+  "dark fruit": "berry",
+  chocolate: "choco",
+  roasty: "roast",
+  nutty: "nut",
+  sweet: "sugar",
+  spice: "spice",
+  winey: "wine",
+  herbal: "leaf",
+  other: "drop",
 };
 
 export async function POST(req: NextRequest) {

@@ -20,46 +20,49 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
   return (
     <div style={{
       position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 40,
-      minHeight: "var(--tab-h)", paddingBottom: "env(safe-area-inset-bottom, 0px)",
-      display: "flex", alignItems: "center",
       background: "color-mix(in srgb, var(--bg) 82%, transparent)",
       backdropFilter: "blur(18px) saturate(160%)",
       WebkitBackdropFilter: "blur(18px) saturate(160%)",
       borderTop: "1px solid var(--line)",
     }}>
-      {TABS.map((t) => {
-        const on = t.id === active;
-        const badge = t.id === "brew" && pendingCount > 0 ? pendingCount : 0;
-        return (
-          <button key={t.id} onClick={() => onChange(t.id)} style={{
-            flex: 1, background: "none", border: "none", cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            color: on ? "var(--ink)" : "var(--ink-faint)", transition: "color .15s ease",
-          }}>
-            <span
-              className="tabicon"
-              style={{ transform: on ? "translateY(-1px) scale(1.08)" : "none", lineHeight: 0, position: "relative" }}
-            >
-              <Icon name={t.icon} size={25} stroke={on ? 1.9 : 1.6} />
-              {badge > 0 && (
-                <span style={{
-                  position: "absolute", top: -5, right: -9, minWidth: 16, height: 16, padding: "0 4px",
-                  borderRadius: 8, background: "var(--accent)", color: "#1a0f06",
-                  fontSize: 10.5, fontWeight: 700, lineHeight: "16px", textAlign: "center",
-                  fontFamily: "var(--font-ui)", boxShadow: "0 0 0 2px var(--bg)",
-                }}>{badge}</span>
-              )}
-            </span>
-            <span style={{ fontSize: 10.5, fontWeight: on ? 600 : 500, letterSpacing: "0.01em" }}>{t.label}</span>
-          </button>
-        );
-      })}
+      {/* Icon row — fixed height, icons centered within it */}
+      <div style={{ minHeight: "var(--tab-h)", display: "flex", alignItems: "center" }}>
+        {TABS.map((t) => {
+          const on = t.id === active;
+          const badge = t.id === "brew" && pendingCount > 0 ? pendingCount : 0;
+          return (
+            <button key={t.id} onClick={() => onChange(t.id)} style={{
+              flex: 1, background: "none", border: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              color: on ? "var(--ink)" : "var(--ink-faint)", transition: "color .15s ease",
+            }}>
+              <span
+                className="tabicon"
+                style={{ transform: on ? "translateY(-1px) scale(1.08)" : "none", lineHeight: 0, position: "relative" }}
+              >
+                <Icon name={t.icon} size={25} stroke={on ? 1.9 : 1.6} />
+                {badge > 0 && (
+                  <span style={{
+                    position: "absolute", top: -5, right: -9, minWidth: 16, height: 16, padding: "0 4px",
+                    borderRadius: 8, background: "var(--accent)", color: "#1a0f06",
+                    fontSize: 10.5, fontWeight: 700, lineHeight: "16px", textAlign: "center",
+                    fontFamily: "var(--font-ui)", boxShadow: "0 0 0 2px var(--bg)",
+                  }}>{badge}</span>
+                )}
+              </span>
+              <span style={{ fontSize: 10.5, fontWeight: on ? 600 : 500, letterSpacing: "0.01em" }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Safe-area spacer — sits below the icons, not inside the flex row */}
+      <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
     </div>
   );
 }
 
 function Shell() {
-  const { coffees, brews, config, profile, llmEnabled, addCoffee, updateCoffee, setConfig } = useApp();
+  const { coffees, brews, config, profile, llmEnabled, ready, addCoffee, updateCoffee, setConfig } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -98,6 +101,12 @@ function Shell() {
   const effectiveLlmEnabled = localLlmEnabled || ctxLlmEnabled;
 
   const users = [profile];
+
+  if (!ready) {
+    return (
+      <div className="brew-root" style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />
+    );
+  }
 
   return (
     <div

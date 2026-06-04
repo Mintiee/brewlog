@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, cupsLeft, originCode,
 } from "@/lib/domain";
-import { noteColor, noteIcon } from "@/lib/flavour";
+import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { Sheet } from "@/components/ui/Sheet";
@@ -93,7 +93,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       grams: Number(ef.grams) || coffee.grams,
       roasted_at,
       cc: originCode(ef.origin),
-      color: notes[0] ? noteColor(notes[0]) : coffee.color,
+      color: coffeeColor(notes),
     });
     setEditing(false);
   };
@@ -146,9 +146,14 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{coffee.name}</div>
             <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>{coffee.origin} · {coffee.region}</div>
           </div>
-          <button onClick={startEdit} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Icon name="edit" size={17} stroke={1.7} />
-          </button>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button onClick={startEdit} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="edit" size={17} stroke={1.7} />
+            </button>
+            <button onClick={onClose} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="close" size={18} stroke={1.9} />
+            </button>
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginTop: 20, background: "var(--line)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>

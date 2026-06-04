@@ -8,6 +8,7 @@ interface JournalProps {
   brews: Brew[];
   coffees: Coffee[];
   config: Config;
+  onOpen?: (b: Brew) => void;
 }
 
 function relDay(d: number): string {
@@ -21,7 +22,7 @@ interface Group {
   items: Brew[];
 }
 
-export function Journal({ brews, coffees, config }: JournalProps) {
+export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
   const groups = useMemo<Group[]>(() => {
     const sorted = [...brews].sort((a, b) => {
       const da = daysAgoFromStartedAt(a.started_at);
@@ -62,10 +63,11 @@ export function Journal({ brews, coffees, config }: JournalProps) {
               const rating = Math.round(brewRating(b));
 
               return (
-                <div
+                <button
                   key={b.id}
                   className="card"
-                  style={{ padding: "13px 15px", display: "flex", alignItems: "center", gap: 12 }}
+                  onClick={() => onOpen?.(b)}
+                  style={{ padding: "13px 15px", display: "flex", alignItems: "center", gap: 12, width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, cursor: onOpen ? "pointer" : "default", textAlign: "left" }}
                 >
                   <span
                     style={{
@@ -100,7 +102,7 @@ export function Journal({ brews, coffees, config }: JournalProps) {
                       </span>
                     ) : null}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

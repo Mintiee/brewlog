@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { originCode } from "@/lib/domain";
-import { noteColor } from "@/lib/flavour";
+import { coffeeColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import { Segmented } from "@/components/ui/Segmented";
@@ -153,7 +153,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
       frozen_grams: 0,
       archived: false,
       notes,
-      color: notes[0] ? noteColor(notes[0]) : "#cf9a5a",
+      color: coffeeColor(notes),
       cc: originCode(form.origin),
     };
     onAdd(c);

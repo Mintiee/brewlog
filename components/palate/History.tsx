@@ -1,9 +1,12 @@
 "use client";
+import { useState } from "react";
 import { Icon } from "@/components/ui";
 import { InsightCard } from "./InsightCard";
 import { FlavourRanking } from "./FlavourRanking";
 import { BrewingTips } from "./BrewingTips";
 import { Journal } from "./Journal";
+import { BrewDetail } from "./BrewDetail";
+import { useApp } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface HistoryProps {
@@ -14,10 +17,17 @@ interface HistoryProps {
 }
 
 export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
+  const { rateBrew, dismissBrew } = useApp();
+  const [selected, setSelected] = useState<Brew | null>(null);
+
+  const handleUpdate = (id: string, patch: Partial<Brew>) => {
+    rateBrew(id, patch);
+  };
+
   return (
     <div className="screen">
       <div className="screen-pad" style={{ paddingTop: 8 }}>
-        <div className="label">last 3 weeks · {brews.length} brews</div>
+        <div className="label">{brews.length} brews</div>
         <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 18 }}>Palate</h1>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -38,13 +48,22 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
               <div className="label" style={{ margin: "6px 2px -2px" }}>Brewing tips</div>
               <BrewingTips brews={brews} coffees={coffees} config={config} />
               <div style={{ marginTop: 8 }}>
-                <Journal brews={brews} coffees={coffees} config={config} />
+                <Journal brews={brews} coffees={coffees} config={config} onOpen={setSelected} />
               </div>
             </>
           )}
         </div>
         <div className="screen-bottom" />
       </div>
+
+      <BrewDetail
+        brew={selected}
+        coffees={coffees}
+        config={config}
+        onClose={() => setSelected(null)}
+        onUpdate={handleUpdate}
+        onDelete={dismissBrew}
+      />
     </div>
   );
 }

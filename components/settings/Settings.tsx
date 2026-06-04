@@ -356,9 +356,13 @@ export function Settings({
         {/* FRESHNESS */}
         <SSection label="Freshness">
           <div className="card" style={{ padding: "2px 16px" }}>
-            <Stepper icon="timer" label="Rested window" value={config.rest_days} unit="days"
-              step={1} min={1} max={120}
+            <Stepper icon="timer" label="Ready from" value={config.rest_days} unit="days"
+              step={1} min={1} max={config.peak_days - 1}
               onChange={(v) => upd({ rest_days: Math.round(v) })} />
+            <div style={{ height: 1, background: "var(--line)" }} />
+            <Stepper icon="timer" label="Best until" value={config.peak_days} unit="days"
+              step={1} min={config.rest_days + 1} max={365}
+              onChange={(v) => upd({ peak_days: Math.round(v) })} />
             <div style={{ height: 1, background: "var(--line)" }} />
             <Stepper icon="scale" label="Serving size" value={config.serving_grams} unit="g per cup"
               step={0.5} min={5} max={30}
@@ -366,8 +370,8 @@ export function Settings({
               onChange={(v) => upd({ serving_grams: +v.toFixed(1) })} />
           </div>
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
-            Days a coffee rests before it&apos;s &ldquo;ready&rdquo;, and how many grams count as one
-            cup when working out servings left. Applies to every coffee.
+            &ldquo;Ready from&rdquo; is when a coffee finishes resting; &ldquo;Best until&rdquo; is when the
+            drink window closes. Applies to every coffee.
           </div>
         </SSection>
 

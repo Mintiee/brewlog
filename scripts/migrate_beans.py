@@ -53,21 +53,36 @@ def origin_code(origin):
     return None
 
 # ---- ported from lib/flavour NOTE_ICONS + NOTE_COLORS (note -> family -> hex) ----
+# Taxonomy aligned to the coffee tasting wheel. Order matters (first-match).
+# "redfruit" before "berry" so strawberry/raspberry hit redfruit.
 NOTE_ICONS = [
     (r"jasmine|floral|flower|honeysuckle|rose|lavender|blossom|elderflower|chamomile|hibiscus|geranium|violet|lilac|orange ?blossom|perfum|potpourri", "flower"),
-    (r"citrus|lemon|lime|orange|grapefruit|bergamot|mandarin|tangerine|clementine|yuzu|pomelo|kumquat|zest|tropical|mango|pineapple|papaya|passion|guava|banana|melon|kiwi|lychee|coconut", "citrus"),
-    (r"berry|berries|blueberry|blackberry|raspberry|strawberr|blackcurrant|currant|cranberry|boysenberry|mulberry|gooseberry|acai|elderberry", "berry"),
-    (r"cherry|plum|peach|apricot|nectarine|apple|pear|grape|fig|date|raisin|prune|pomegranate|red ?fruit|stone ?fruit|dried ?fruit|jammy|sultana", "cherry"),
-    (r"chocolate|cocoa|cacao|fudge|mocha|brownie|truffle|cocoa ?nib|roast|toast|smoke|smoky|burnt", "choco"),
+    (r"\bcitrus|lemon|lime|\borange|grapefruit|bergamot|mandarin|tangerine|clementine|yuzu|pomelo|kumquat|zest", "citrus"),
+    (r"peach|apricot|nectarine|mango|pineapple|papaya|passion|banana|melon|lychee|coconut|\bapple|\bpear|guava|tropical|stone ?fruit", "yellowfruit"),
+    (r"cherry|strawberr|raspberry|redcurrant|cranberry|pomegranate|red ?fruit|\bplum|jammy", "redfruit"),
+    (r"blueberry|blackberry|blackcurrant|\bcurrant|\bgrape|\bfig|\bdate|raisin|prune|sultana|mulberry|boysenberry|gooseberry|acai|elderberry|dried ?fruit|\bberry|\bberries", "berry"),
+    (r"chocolate|cocoa|cacao|fudge|mocha|brownie|truffle|cocoa ?nib", "choco"),
+    (r"\broast|toast|smoke|smoky|burnt|\bash\b|char", "roast"),
     (r"almond|walnut|hazelnut|peanut|pecan|cashew|macadamia|marzipan|praline|\bnut|nutty|malt|biscuit|bread|cereal|graham|cracker|granola|\boat|shortbread|digestive", "nut"),
-    (r"caramel|brown ?sugar|cane ?sugar|\bsugar|honey|candied|syrup|toffee|molasses|maple|vanilla|butterscotch|nougat|panela|sweet|cinnamon|clove|nutmeg|cardamom|ginger|spice|baking|anise", "sugar"),
+    (r"caramel|brown ?sugar|cane ?sugar|\bsugar|honey|candied|syrup|toffee|molasses|maple|vanilla|butterscotch|nougat|panela|sweet", "sugar"),
+    (r"cinnamon|clove|nutmeg|cardamom|ginger|baking|anise|\bspice", "spice"),
     (r"wine|winey|boozy|\brum|ferment|funky|brandy|\bport\b|whisk|champagne|cognac|liqueur|sherry|booze", "wine"),
     (r"\btea|herbal|\bherb|mint|grass|grassy|green|vegetal|vegetable|tomato|tobacco|\bhay|savory|savoury|thyme|basil|sage|eucalyptus|cedar|pine|earth|leather|mushroom|woody|\bwood", "leaf"),
 ]
 NOTE_COLORS = {
-    "flower": "#d98fb0", "citrus": "#e3b552", "berry": "#a886c4", "cherry": "#d97a6a",
-    "choco": "#b07d52", "nut": "#cda877", "sugar": "#e0a55f", "wine": "#c06b7d",
-    "leaf": "#93ad6d", "drop": "#9c9385",
+    "flower":      "#d98fb0",  # dusty pink
+    "citrus":      "#e0c14e",  # warm lemon
+    "yellowfruit": "#e0954e",  # warm peach-orange
+    "redfruit":    "#d76a58",  # warm red
+    "berry":       "#a886c4",  # muted purple
+    "choco":       "#a06a47",  # medium brown
+    "roast":       "#8a7060",  # warm charcoal
+    "nut":         "#cda877",  # tan/caramel
+    "sugar":       "#e0a55f",  # amber
+    "spice":       "#c77b4a",  # terracotta
+    "wine":        "#c06b7d",  # wine/magenta
+    "leaf":        "#93ad6d",  # sage green
+    "drop":        "#9c9385",  # neutral grey
 }
 
 def note_color(note):

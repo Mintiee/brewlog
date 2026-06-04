@@ -5,11 +5,14 @@ import type { Coffee, Brew, Brewer, FreshStatus, Recipe } from "@/lib/types";
 // pure domain helpers read, so we don't thread config through every call site.
 
 let restWindow = 28;        // days before a coffee is "ready" (global, all coffees)
-const peakWindow = 56;      // days until past-peak
+let peakWindow = 56;        // days until past-peak (end of drink window)
 let servingGrams = 12.5;
 
 export function setRestWindow(days: number) {
   if (Number.isFinite(days) && days > 0) restWindow = days;
+}
+export function setPeakWindow(days: number) {
+  if (Number.isFinite(days) && days > 0) peakWindow = days;
 }
 export function setServingGrams(grams: number) {
   if (Number.isFinite(grams) && grams > 0) servingGrams = grams;

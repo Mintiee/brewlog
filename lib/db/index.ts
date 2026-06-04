@@ -4,6 +4,7 @@
  */
 import { createClient } from "@/lib/supabase/browser";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
+import { coffeeColor } from "@/lib/flavour";
 import { SEED_BREWERS } from "@/lib/domain/seed";
 
 // ---- Coffees ----
@@ -33,9 +34,9 @@ export async function upsertCoffee(coffee: Coffee): Promise<Coffee> {
 
 export async function fetchBrews(): Promise<Brew[]> {
   const sb = createClient();
-  // Last 90 days
-  const since = new Date(Date.now() - 90 * 86400000).toISOString();
-  const { data, error } = await sb.from("brews").select("*").gte("started_at", since).order("started_at", { ascending: false });
+  // No date filter — fetch all brews so backdated entries survive reload.
+  // This is a small personal dataset; the full history is fine to load.
+  const { data, error } = await sb.from("brews").select("*").order("started_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map(rowToBrew);
 }
@@ -79,6 +80,7 @@ export async function upsertConfig(config: Config, householdId: string): Promise
     taster2: config.taster2,
     random_greeting: config.random_greeting,
     rest_days: config.rest_days,
+    peak_days: config.peak_days,
     serving_grams: config.serving_grams,
   };
   const { error } = await sb.from("config").upsert(row);
@@ -143,7 +145,7 @@ function rowToCoffee(r: any): Coffee {
     frozen_grams: r.frozen_grams,
     archived: r.archived,
     notes: r.notes ?? [],
-    color: r.color,
+    color: coffeeColor(r.notes ?? []), // derived on read — always reflects current notes
     cc: r.cc,
   };
 }
@@ -154,7 +156,9 @@ function coffeeToRow(c: Partial<Coffee>) {
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
     varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
-    frozen_grams: c.frozen_grams, archived: c.archived, notes: c.notes, color: c.color, cc: c.cc,
+    frozen_grams: c.frozen_grams, archived: c.archived, notes: c.notes,
+    color: c.notes ? coffeeColor(c.notes) : c.color, // keep column non-null; no longer authoritative
+    cc: c.cc,
   };
 }
 
@@ -187,7 +191,8 @@ function brewToRow(b: Partial<Brew>) {
     grind: b.grind, ratio: b.ratio, water_type: b.water_type,
     started_at: b.started_at ? new Date(parseInt(b.started_at)).toISOString() : undefined,
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
-    logged_by: b.logged_by,
+    // logged_by omitted — DB default is auth.uid() (migration 002), matching how
+    // household_id is also omitted and filled server-side.
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,
     acidity: b.acidity, sweetness: b.sweetness, body: b.body, clarity: b.clarity,
@@ -217,6 +222,7 @@ function rowToConfig(r: any): Config {
     taster2: r.taster2 ?? "Kris",
     random_greeting: r.random_greeting !== false,
     rest_days: r.rest_days ?? 28,
+    peak_days: r.peak_days ?? 56,
     serving_grams: r.serving_grams != null ? Number(r.serving_grams) : 12.5,
   };
 }

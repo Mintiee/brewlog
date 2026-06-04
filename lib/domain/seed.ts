@@ -145,5 +145,6 @@ export const SEED_CONFIG: Config = {
   taster2: "Kris",
   random_greeting: true,
   rest_days: 28,
+  peak_days: 56,
   serving_grams: 12.5,
 };

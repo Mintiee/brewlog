@@ -82,7 +82,8 @@ export interface Config {
   default_water: string;
   taster2: string;
   random_greeting: boolean;
-  rest_days: number;       // global "rested" window in days before a coffee is ready
+  rest_days: number;       // global "ready from" day (resting ends, drink window opens)
+  peak_days: number;       // global "best until" day (drink window closes)
   serving_grams: number;   // grams of coffee per cup/serve (for "serves left")
 }
 

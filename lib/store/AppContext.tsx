@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
-import { SEED_COFFEES, SEED_BREWS, SEED_CONFIG } from "@/lib/domain/seed";
+import { SEED_CONFIG } from "@/lib/domain/seed";
 import { createClient } from "@/lib/supabase/browser";
 import {
   fetchCoffees, fetchBrews, fetchConfig, fetchProfile,
@@ -9,11 +9,12 @@ import {
   fetchAiKeyStatus, fetchLearnedNotes,
 } from "@/lib/db";
 import { setLearnedNotes } from "@/lib/flavour";
-import { setRestWindow, setServingGrams } from "@/lib/domain";
+import { setRestWindow, setServingGrams, setPeakWindow } from "@/lib/domain";
 
 /** Push household-wide settings into the domain module's freshness/serving knobs. */
 function applyConfigToDomain(c: Config) {
   setRestWindow(c.rest_days);
+  if (c.peak_days) setPeakWindow(c.peak_days);
   setServingGrams(c.serving_grams);
 }
 
@@ -42,8 +43,8 @@ const AppContext = createContext<(AppState & AppActions) | null>(null);
 const SEED_PROFILE: Profile = { id: "me", household_id: "seed", name: "You" };
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [coffees, setCoffees] = useState<Coffee[]>(SEED_COFFEES);
-  const [brews, setBrews] = useState<Brew[]>(SEED_BREWS);
+  const [coffees, setCoffees] = useState<Coffee[]>([]);
+  const [brews, setBrews] = useState<Brew[]>([]);
   const [config, setConfigState] = useState<Config>(SEED_CONFIG);
   const [profile, setProfileState] = useState<Profile>(SEED_PROFILE);
   const [llmEnabled, setLlmEnabled] = useState(false);
@@ -81,7 +82,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Listen for auth state changes (sign in / sign out)
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        setCoffees(SEED_COFFEES); setBrews(SEED_BREWS); setConfigState(SEED_CONFIG);
+        setCoffees([]); setBrews([]); setConfigState(SEED_CONFIG);
         applyConfigToDomain(SEED_CONFIG);
         setProfileState(SEED_PROFILE); setLlmEnabled(false); setAuthed(false);
       }
@@ -106,7 +107,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Insert WITH the client-generated UUID so later rating updates (updateBrew by id)
     // match the same row — otherwise rated_at never persists and the brew reappears
     // as pending after a refresh.
-    if (authed) insertBrew(b).catch(console.error);
+    if (!authed) {
+      console.error("[startBrew] not authed — brew saved locally only and will be lost on reload");
+      return;
+    }
+    insertBrew(b).catch((err) => {
+      console.error("[startBrew] insert failed — brew saved locally only and will be lost on reload:", err);
+    });
   }, [authed]);
 
   const rateBrew = useCallback((id: string, rating: Partial<Brew>) => {
