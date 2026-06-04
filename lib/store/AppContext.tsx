@@ -9,6 +9,13 @@ import {
   fetchAiKeyStatus, fetchLearnedNotes,
 } from "@/lib/db";
 import { setLearnedNotes } from "@/lib/flavour";
+import { setRestWindow, setServingGrams } from "@/lib/domain";
+
+/** Push household-wide settings into the domain module's freshness/serving knobs. */
+function applyConfigToDomain(c: Config) {
+  setRestWindow(c.rest_days);
+  setServingGrams(c.serving_grams);
+}
 
 interface AppState {
   coffees: Coffee[];
@@ -62,7 +69,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (p) setProfileState(p);
         if (c.length) setCoffees(c);
         if (b.length) setBrews(b);
-        if (cfg) setConfigState(cfg);
+        if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
         if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
         if (notes) setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>);
       } catch { /* fall through to seed data */ }
@@ -73,6 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         setCoffees(SEED_COFFEES); setBrews(SEED_BREWS); setConfigState(SEED_CONFIG);
+        applyConfigToDomain(SEED_CONFIG);
         setProfileState(SEED_PROFILE); setLlmEnabled(false); setAuthed(false);
       }
     });
@@ -93,10 +101,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const startBrew = useCallback((b: Brew) => {
     setBrews((prev) => [b, ...prev]);
-    if (authed) {
-      const { id: _id, ...rest } = b; // eslint-disable-line @typescript-eslint/no-unused-vars
-      insertBrew(rest).catch(console.error);
-    }
+    // Insert WITH the client-generated UUID so later rating updates (updateBrew by id)
+    // match the same row — otherwise rated_at never persists and the brew reappears
+    // as pending after a refresh.
+    if (authed) insertBrew(b).catch(console.error);
   }, [authed]);
 
   const rateBrew = useCallback((id: string, rating: Partial<Brew>) => {
@@ -112,6 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setConfig = useCallback((c: Config) => {
     setConfigState(c);
+    applyConfigToDomain(c);
     if (authed && profile.household_id) upsertConfig(c, profile.household_id).catch(console.error);
   }, [authed, profile.household_id]);
 

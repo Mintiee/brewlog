@@ -138,7 +138,7 @@ export function Settings({
       ...config,
       brewers: [
         ...config.brewers,
-        { id: "b" + Date.now(), name: "New brewer", short: "New", dose: 15, ratio: 16, temp: 94, grind: 20, pours: 3, bypass: false },
+        { id: "b" + Date.now(), name: "New brewer", short: "New", dose: 15, water: 240, ratio: 16, temp: 94, grind: 20, pours: 3, bypass: false },
       ],
     });
 
@@ -331,8 +331,10 @@ export function Settings({
                 </button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
-                <Stepper icon="scale" label="Dose" value={b.dose} unit="g" step={0.5} min={8} max={40} onChange={(v) => updBrewer(i, { dose: v })} />
-                <Stepper icon="drop" label="Ratio 1:" value={b.ratio} unit="" step={0.1} min={10} max={20} format={(v) => v.toFixed(1)} onChange={(v) => updBrewer(i, { ratio: v })} />
+                {(() => { const water = b.water ?? Math.round(b.dose * b.ratio); return (<>
+                <Stepper icon="scale" label="Dose" value={b.dose} unit="g" step={0.5} min={8} max={40} onChange={(v) => updBrewer(i, { dose: v, ratio: +(water / v).toFixed(2) })} />
+                <Stepper icon="drop" label="Water" value={water} unit="g" step={1} min={50} max={1000} onChange={(v) => updBrewer(i, { water: v, ratio: +(v / b.dose).toFixed(2) })} />
+                </>); })()}
                 <Stepper icon="thermo" label="Temp" value={b.temp} unit="°C" step={1} min={80} max={100} onChange={(v) => updBrewer(i, { temp: v })} />
                 <Stepper icon="grind" label="Grind"
                   value={b.grind} unit={config.grinder.unit}
@@ -351,6 +353,24 @@ export function Settings({
           </button>
         </SSection>
 
+        {/* FRESHNESS */}
+        <SSection label="Freshness">
+          <div className="card" style={{ padding: "2px 16px" }}>
+            <Stepper icon="timer" label="Rested window" value={config.rest_days} unit="days"
+              step={1} min={1} max={120}
+              onChange={(v) => upd({ rest_days: Math.round(v) })} />
+            <div style={{ height: 1, background: "var(--line)" }} />
+            <Stepper icon="scale" label="Serving size" value={config.serving_grams} unit="g per cup"
+              step={0.5} min={5} max={30}
+              format={(v) => (v % 1 === 0 ? String(v) : v.toFixed(1))}
+              onChange={(v) => upd({ serving_grams: +v.toFixed(1) })} />
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
+            Days a coffee rests before it&apos;s &ldquo;ready&rdquo;, and how many grams count as one
+            cup when working out servings left. Applies to every coffee.
+          </div>
+        </SSection>
+
         {/* WATER */}
         <SSection label="Water">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
@@ -366,16 +386,18 @@ export function Settings({
                 >
                   {w}
                   {isDef && <span className="label" style={{ fontSize: 8, color: "inherit", opacity: 0.7 }}>default</span>}
-                  <span
+                  <button
+                    type="button"
+                    aria-label={`Remove ${w}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       const nw = config.waters.filter((x) => x !== w);
                       upd({ waters: nw, default_water: isDef ? (nw[0] || "") : config.default_water });
                     }}
-                    style={{ display: "flex", opacity: 0.6 }}
+                    style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 2, margin: -2, cursor: "pointer", color: "inherit", opacity: 0.6 }}
                   >
                     <Icon name="close" size={13} stroke={2} />
-                  </span>
+                  </button>
                 </span>
               );
             })}

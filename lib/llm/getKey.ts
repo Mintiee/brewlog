@@ -10,6 +10,7 @@ import type { Provider } from "./index";
 export interface HouseholdKey {
   key: string;
   provider: Provider;
+  householdId: string;
 }
 
 export async function getHouseholdKey(): Promise<HouseholdKey | null> {
@@ -33,7 +34,7 @@ export async function getHouseholdKey(): Promise<HouseholdKey | null> {
 
   try {
     const plaintext = await decryptKey(aiRow.key_ciphertext, aiRow.key_iv);
-    return { key: plaintext, provider: aiRow.provider as Provider };
+    return { key: plaintext, provider: aiRow.provider as Provider, householdId: profile.household_id };
   } catch {
     return null;
   }

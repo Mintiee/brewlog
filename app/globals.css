@@ -65,7 +65,8 @@ button { color: inherit; font-family: inherit; }
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 70px 0 0;
+  /* Respect the device status bar in standalone PWA mode; stay compact in-browser */
+  padding: calc(env(safe-area-inset-top, 0px) + 26px) 0 0;
   scrollbar-width: none;
 }
 .screen::-webkit-scrollbar { display: none; }

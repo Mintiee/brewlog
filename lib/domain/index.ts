@@ -1,5 +1,22 @@
 import type { Coffee, Brew, Brewer, FreshStatus, Recipe } from "@/lib/types";
 
+// ---------- Household-wide settings (set from config on load) ----------
+// Mirrors the lib/flavour setLearnedNotes pattern: a module-level value the
+// pure domain helpers read, so we don't thread config through every call site.
+
+let restWindow = 28;        // days before a coffee is "ready" (global, all coffees)
+const peakWindow = 56;      // days until past-peak
+let servingGrams = 12.5;
+
+export function setRestWindow(days: number) {
+  if (Number.isFinite(days) && days > 0) restWindow = days;
+}
+export function setServingGrams(grams: number) {
+  if (Number.isFinite(grams) && grams > 0) servingGrams = grams;
+}
+export function getRestWindow() { return restWindow; }
+export function getPeakWindow() { return peakWindow; }
+
 // ---------- Freshness ----------
 
 function parseLocalDate(iso: string): Date {
@@ -23,19 +40,22 @@ export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
   const d = roastedDaysAgo(coffee);
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
+  // Global windows (one knob for all coffees) — see setRestWindow.
+  const rest = restWindow;
+  const peak = Math.max(peakWindow, rest + 1);
 
   if (active <= 0 && frozen > 0) {
-    const restLeft = Math.max(0, coffee.rest_days - d);
+    const restLeft = Math.max(0, rest - d);
     return { state: "frozen", label: restLeft > 0 ? `Ready in ${restLeft}d` : "Ready", day: d, ready: false, pct: 1, restLeft };
   }
-  if (d < coffee.rest_days) {
-    return { state: "resting", label: `Ready in ${coffee.rest_days - d}d`, day: d, ready: false, pct: d / coffee.rest_days };
+  if (d < rest) {
+    return { state: "resting", label: `Ready in ${rest - d}d`, day: d, ready: false, pct: d / rest };
   }
-  if (d <= coffee.peak_days) {
-    const intoPeak = (d - coffee.rest_days) / (coffee.peak_days - coffee.rest_days);
-    return { state: "peak", label: `${coffee.peak_days - d}d left`, day: d, ready: active > 0, pct: intoPeak };
+  if (d <= peak) {
+    const intoPeak = (d - rest) / (peak - rest);
+    return { state: "peak", label: `${peak - d}d left`, day: d, ready: active > 0, pct: intoPeak };
   }
-  return { state: "past", label: `${d - coffee.peak_days}d past`, day: d, ready: active > 0, pct: 1 };
+  return { state: "past", label: `${d - peak}d past`, day: d, ready: active > 0, pct: 1 };
 }
 
 export function freshColor(state: string): string {
@@ -47,7 +67,7 @@ export function freshColor(state: string): string {
 
 // ---------- Inventory ----------
 
-export const CUP_GRAMS = 12.5;
+export const CUP_GRAMS = 12.5;  // default serving size; override via setServingGrams
 
 export function gramsUsed(coffeeId: string, brews: Brew[]): number {
   return brews.filter((b) => b.coffee_id === coffeeId).reduce((s, b) => s + (b.dose || 0), 0);
@@ -66,7 +86,7 @@ export function activeGrams(coffee: Coffee, brews: Brew[]): number {
 }
 
 export function cupsLeft(grams: number): number {
-  return grams / CUP_GRAMS;
+  return grams / servingGrams;
 }
 
 // ---------- Brew analytics ----------
@@ -118,10 +138,12 @@ export function defaultsFor(coffee: Coffee | null, brewer: Brewer): Recipe {
   let temp = brewer.temp;
   if (coffee) temp += ROAST_TEMP_NUDGE[coffee.roast] ?? 0;
   const dose = brewer.dose;
-  const total = Math.round(dose * brewer.ratio);
+  // Water is the source of truth; fall back to dose×ratio for legacy brewers.
+  const total = brewer.water ?? Math.round(dose * brewer.ratio);
   const water = brewer.bypass ? Math.round(total * 0.55) : total;
   const bypass = brewer.bypass ? total - water : 0;
-  return { dose, ratio: brewer.ratio, water, bypass, temp, grind: brewer.grind, water_type: "" };
+  const ratio = total / dose;
+  return { dose, ratio, water, bypass, temp, grind: brewer.grind, water_type: "" };
 }
 
 // ---------- Greeting + randomised question ----------

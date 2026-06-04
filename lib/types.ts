@@ -59,7 +59,8 @@ export interface Brewer {
   name: string;
   short: string;
   dose: number;
-  ratio: number;
+  water?: number;  // default water out (mL) — source of truth for recipe defaults (backfilled from dose×ratio)
+  ratio: number;   // legacy / derived (water ÷ dose); kept for back-compat
   temp: number;
   grind: number;   // default grind size for this brewer (within the grinder's range)
   pours: number;
@@ -81,6 +82,8 @@ export interface Config {
   default_water: string;
   taster2: string;
   random_greeting: boolean;
+  rest_days: number;       // global "rested" window in days before a coffee is ready
+  serving_grams: number;   // grams of coffee per cup/serve (for "serves left")
 }
 
 export interface Profile {

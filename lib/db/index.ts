@@ -40,7 +40,7 @@ export async function fetchBrews(): Promise<Brew[]> {
   return (data ?? []).map(rowToBrew);
 }
 
-export async function insertBrew(brew: Omit<Brew, "id">): Promise<Brew> {
+export async function insertBrew(brew: Brew): Promise<Brew> {
   const sb = createClient();
   const { data, error } = await sb.from("brews").insert(brewToRow(brew)).select().single();
   if (error) throw error;
@@ -78,6 +78,8 @@ export async function upsertConfig(config: Config, householdId: string): Promise
     default_water: config.default_water,
     taster2: config.taster2,
     random_greeting: config.random_greeting,
+    rest_days: config.rest_days,
+    serving_grams: config.serving_grams,
   };
   const { error } = await sb.from("config").upsert(row);
   if (error) throw error;
@@ -148,6 +150,7 @@ function rowToCoffee(r: any): Coffee {
 
 function coffeeToRow(c: Partial<Coffee>) {
   return {
+    ...(c.id ? { id: c.id } : {}),
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
     varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
@@ -177,6 +180,7 @@ function rowToBrew(r: any): Brew {
 
 function brewToRow(b: Partial<Brew>) {
   return {
+    ...(b.id ? { id: b.id } : {}),
     coffee_id: b.coffee_id,
     brewer_id: b.brewer_id,
     dose: b.dose, water: b.water, bypass: b.bypass, temp: b.temp,
@@ -193,7 +197,13 @@ function brewToRow(b: Partial<Brew>) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToConfig(r: any): Config {
-  const brewers = Array.isArray(r.brewers) && r.brewers.length ? r.brewers : SEED_BREWERS;
+  const rawBrewers = Array.isArray(r.brewers) && r.brewers.length ? r.brewers : SEED_BREWERS;
+  // Backfill `water` (default water out, mL) for brewers stored before this field existed.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const brewers = rawBrewers.map((b: any) => ({
+    ...b,
+    water: b.water ?? Math.round(b.dose * (b.ratio ?? 16)),
+  }));
   // Backfill grind range/step defaults for grinders stored before these fields existed
   const grinder = {
     name: "Comandante C40", unit: "clicks", grind_min: 0, grind_max: 50, grind_step: 1,
@@ -206,5 +216,7 @@ function rowToConfig(r: any): Config {
     default_water: r.default_water ?? "Third Wave",
     taster2: r.taster2 ?? "Kris",
     random_greeting: r.random_greeting !== false,
+    rest_days: r.rest_days ?? 28,
+    serving_grams: r.serving_grams != null ? Number(r.serving_grams) : 12.5,
   };
 }

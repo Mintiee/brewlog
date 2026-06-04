@@ -25,10 +25,10 @@ function daysAgoMs(n: number): number {
 }
 
 export const SEED_BREWERS: Brewer[] = [
-  { id: "v60",     name: "Hario V60",        short: "V60",     dose: 15, ratio: 16.0, temp: 96, grind: 22, pours: 4, bypass: false },
-  { id: "origami", name: "Origami Air",       short: "Origami", dose: 15, ratio: 16.7, temp: 94, grind: 20, pours: 3, bypass: false },
-  { id: "kalita",  name: "Kalita Wave 155",   short: "Kalita",  dose: 17, ratio: 15.0, temp: 93, grind: 18, pours: 4, bypass: false },
-  { id: "oxo",     name: "OXO Rapid Brewer",  short: "OXO",     dose: 22, ratio: 16.5, temp: 94, grind: 24, pours: 1, bypass: true },
+  { id: "v60",     name: "Hario V60",        short: "V60",     dose: 15, water: 240, ratio: 16.0, temp: 96, grind: 22, pours: 4, bypass: false },
+  { id: "origami", name: "Origami Air",       short: "Origami", dose: 15, water: 250, ratio: 16.7, temp: 94, grind: 20, pours: 3, bypass: false },
+  { id: "kalita",  name: "Kalita Wave 155",   short: "Kalita",  dose: 17, water: 255, ratio: 15.0, temp: 93, grind: 18, pours: 4, bypass: false },
+  { id: "oxo",     name: "OXO Rapid Brewer",  short: "OXO",     dose: 22, water: 363, ratio: 16.5, temp: 94, grind: 24, pours: 1, bypass: true },
 ];
 
 export const SEED_COFFEES: Coffee[] = [
@@ -144,4 +144,6 @@ export const SEED_CONFIG: Config = {
   default_water: "Third Wave",
   taster2: "Kris",
   random_greeting: true,
+  rest_days: 28,
+  serving_grams: 12.5,
 };

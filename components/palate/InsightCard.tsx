@@ -19,7 +19,20 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
     if (!llmEnabled) return;
     let cancelled = false;
 
+    const LS_KEY = "brew_insight";
+    const today = new Date().toISOString().slice(0, 10);
+
     async function run() {
+      // Same-day short-circuit: skip the network round-trip entirely if we already
+      // have today's insight cached locally. (The server also caps to once/day.)
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw) {
+          const c = JSON.parse(raw) as { date: string; text: string };
+          if (c.date === today && c.text) { setText(c.text); setLoading(false); return; }
+        }
+      } catch { /* ignore malformed cache */ }
+
       setLoading(true);
       setFailed(false);
       setText(null);
@@ -50,6 +63,7 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
           if (sentence) {
             setText(sentence);
             setLoading(false);
+            try { localStorage.setItem(LS_KEY, JSON.stringify({ date: today, text: sentence })); } catch { /* ignore */ }
           } else {
             setFailed(true);
           }

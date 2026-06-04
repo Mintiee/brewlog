@@ -1,5 +1,5 @@
 "use client";
-import { coffeeStatus, freshColor } from "@/lib/domain";
+import { coffeeStatus, freshColor, getRestWindow, getPeakWindow } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
 import type { Coffee, Brew } from "@/lib/types";
 
@@ -18,8 +18,9 @@ export function FreshBar({ coffee, brews }: FreshBarProps) {
       </div>
     );
   }
-  const total = coffee.peak_days;
-  const restPct = (coffee.rest_days / total) * 100;
+  const rest = getRestWindow();
+  const total = Math.max(getPeakWindow(), rest + 1);
+  const restPct = (rest / total) * 100;
   const nowPct = Math.min(100, (st.day / total) * 100);
   return (
     <div style={{ marginTop: 9 }}>
@@ -30,7 +31,7 @@ export function FreshBar({ coffee, brews }: FreshBarProps) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
         <span style={{ fontSize: 11.5, color: freshColor(st.state), fontWeight: 600 }}>{st.label}</span>
-        <span className="label" style={{ fontSize: 9.5 }}>peak wk {Math.round(coffee.rest_days / 7)}–{Math.round(coffee.peak_days / 7)}</span>
+        <span className="label" style={{ fontSize: 9.5 }}>peak wk {Math.round(rest / 7)}–{Math.round(total / 7)}</span>
       </div>
     </div>
   );

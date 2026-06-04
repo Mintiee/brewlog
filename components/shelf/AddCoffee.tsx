@@ -4,7 +4,6 @@ import { originCode } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
-import { Stepper } from "@/components/ui/Stepper";
 import { Segmented } from "@/components/ui/Segmented";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Field } from "./Field";
@@ -21,9 +20,29 @@ interface ReviewForm {
   varietal: string;
   process: string;
   roast: string;
-  roastDaysAgo: number | string;
+  roastedAt: string;        // ISO YYYY-MM-DD; defaults to today
   needsRoastDate: boolean;
   notes: string;
+}
+
+/** Local YYYY-MM-DD (not UTC) so the date picker matches the device's "today". */
+function todayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** N days ago as local YYYY-MM-DD. */
+function daysAgoIso(n: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 interface AddCoffeeProps {
@@ -50,7 +69,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
         setForm(null);
       } else {
         setPhase("review");
-        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastDaysAgo: 3, needsRoastDate: false, notes: "" });
+        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayIso(), needsRoastDate: false, notes: "" });
         setSource("manual");
       }
       setScanPct(0);
@@ -85,10 +104,11 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
     setTimeout(() => {
       if (!data || !data.roaster) {
         // fall through to manual entry
-        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastDaysAgo: 3, needsRoastDate: false, notes: "" });
+        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayIso(), needsRoastDate: false, notes: "" });
         setSource("manual");
       } else {
         const notes = Array.isArray((data as any).notes) ? (data as any).notes : [];
+        const scannedDaysAgo = (data as any).roastDaysAgo;
         setForm({
           roaster: (data as any).roaster || "",
           name: (data as any).name || "",
@@ -97,7 +117,8 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
           varietal: (data as any).varietal || "",
           process: (data as any).process || "Washed",
           roast: ROAST_LEVELS.includes((data as any).roast) ? (data as any).roast : "light",
-          roastDaysAgo: fromUrl ? "" : ((data as any).roastDaysAgo != null ? (data as any).roastDaysAgo : 4),
+          // A link rarely carries the roast date → default to today and flag for the user.
+          roastedAt: fromUrl ? todayIso() : daysAgoIso(scannedDaysAgo != null ? Number(scannedDaysAgo) : 4),
           needsRoastDate: !!fromUrl,
           notes: notes.join(", "),
         });
@@ -108,20 +129,16 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
 
   function startManual() {
     setSource("manual");
-    setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastDaysAgo: 3, needsRoastDate: false, notes: "" });
+    setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayIso(), needsRoastDate: false, notes: "" });
     setPhase("review");
   }
 
   function commit() {
     if (!form) return;
     const notes = form.notes ? form.notes.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const daysAgo = Number(form.roastDaysAgo) || 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const roastedAt = new Date(today.getTime() - daysAgo * 86400000);
-    const roasted_at = roastedAt.toISOString().slice(0, 10);
+    const roasted_at = form.roastedAt || todayIso();
     const c: Coffee = {
-      id: "c" + Date.now(),
+      id: crypto.randomUUID(),
       roaster: form.roaster || "Unknown",
       name: form.name || "Untitled",
       origin: form.origin || "—",
@@ -277,15 +294,20 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
                 background: missing.roast ? "var(--accent-soft)" : "transparent",
                 boxShadow: missing.roast ? "0 0 0 3px var(--accent-soft)" : "none",
               }}>
-                <Stepper
-                  icon="timer"
-                  label={missing.roast ? "Roasted · needs you" : "Roasted"}
-                  value={Number(form.roastDaysAgo) || 0}
-                  unit="days ago"
-                  step={1}
-                  min={0}
-                  max={120}
-                  onChange={(v) => setForm((f) => f ? { ...f, roastDaysAgo: v, needsRoastDate: false } : f)}
+                <div className="label" style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="timer" size={13} stroke={1.8} /> {missing.roast ? "Roasted · needs you" : "Roast date"}
+                </div>
+                <input
+                  type="date"
+                  value={form.roastedAt}
+                  max={todayIso()}
+                  onChange={(e) => setForm((f) => f ? { ...f, roastedAt: e.target.value, needsRoastDate: false } : f)}
+                  style={{
+                    width: "100%", padding: "12px 14px", borderRadius: 13,
+                    background: "var(--surface)", border: "1px solid var(--line)",
+                    color: "var(--ink)", outline: "none",
+                    fontFamily: "var(--font-mono)", fontSize: 15, boxSizing: "border-box",
+                  }}
                 />
                 {missing.roast && (
                   <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--accent)", fontSize: 12, fontWeight: 600, marginTop: -2 }}>

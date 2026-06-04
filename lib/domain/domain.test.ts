@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
+  setRestWindow, setServingGrams,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -151,6 +152,22 @@ describe("sinceText", () => {
   it("Xm ago", () => { expect(sinceText(Date.now() - 720000)).toBe("12m ago"); });
   it("Xh Ym ago", () => { expect(sinceText(Date.now() - 3840000)).toBe("1h 4m ago"); });
   it("X days ago", () => { expect(sinceText(Date.now() - 2 * 86400000)).toBe("2 days ago"); });
+});
+
+describe("global settings (setRestWindow / setServingGrams)", () => {
+  it("rest window drives coffeeStatus for all coffees", () => {
+    const c = makeCoffee({ roasted_at: daysAgoDate(10) });
+    expect(coffeeStatus(c, []).label).toBe("Ready in 18d"); // default 28
+    setRestWindow(14);
+    expect(coffeeStatus(c, []).label).toBe("Ready in 4d");  // 14 - 10
+    setRestWindow(28); // restore for other tests
+  });
+  it("serving size drives cupsLeft", () => {
+    setServingGrams(20);
+    expect(cupsLeft(100)).toBeCloseTo(5);
+    setServingGrams(12.5); // restore
+    expect(cupsLeft(125)).toBeCloseTo(10);
+  });
 });
 
 describe("defaultsFor", () => {

@@ -49,7 +49,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep }: BrewFlowProps = {}) 
     setBrewer(b);
     setRecipe(r);
     const newBrew: Brew = {
-      id: "b" + Date.now(),
+      id: crypto.randomUUID(),
       household_id: profile.household_id,
       coffee_id: coffee!.id,
       brewer_id: b.id,
