@@ -55,13 +55,21 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   const active = activeGrams(coffee, brews);
   const statusLabel = st.state === "peak" ? "In peak" : st.state === "resting" ? "Resting" : st.state === "frozen" ? "Frozen" : "Past peak";
 
-  const toggleFreezer = () => { onUpdate({ ...coffee, frozen_grams: 0 }); onClose(); };
+  // Local YYYY-MM-DD (avoid UTC drift), matching how roasted_at is stored.
+  const isoToday = () => {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  // Coming out of the freezer resumes aging from today.
+  const toggleFreezer = () => { onUpdate({ ...coffee, frozen_grams: 0, thawed_at: isoToday() }); onClose(); };
   const setArchived = (v: boolean) => { onUpdate({ ...coffee, archived: v }); onClose(); };
   const startFreeze = () => {
     setAmt(Math.max(10, Math.min(active, Math.round(active / 2 / 10) * 10)));
     setFreezing(true);
   };
-  const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt }); onClose(); };
+  // Going into the freezer pauses aging. Keep the original freeze date if already
+  // frozen; clear any prior thaw (this is the active freeze cycle).
+  const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || isoToday(), thawed_at: null }); onClose(); };
   const startEdit = () => {
     setEf({
       roaster: coffee.roaster,

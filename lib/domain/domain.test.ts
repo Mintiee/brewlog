@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
+  effectiveDaysAgo, restDaysAt,
   setRestWindow, setServingGrams,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
@@ -24,7 +25,8 @@ function makeCoffee(overrides: Partial<Coffee> = {}): Coffee {
     id: "c1", household_id: "h1", roaster: "Test", name: "Test", origin: "Ethiopia",
     region: "Sidama", varietal: "Heirloom", process: "Washed", roast: "light",
     roasted_at: daysAgoDate(0),
-    rest_days: 28, peak_days: 56, grams: 250, frozen_grams: 0, archived: false,
+    rest_days: 28, peak_days: 56, grams: 250, frozen_grams: 0,
+    frozen_at: null, thawed_at: null, archived: false,
     notes: [], color: "#aaa", cc: "et",
     ...overrides,
   };
@@ -36,11 +38,38 @@ function makeBrew(overrides: Partial<Brew> = {}): Brew {
     dose: 15, water: 240, bypass: 0, temp: 96, grind: 22, ratio: 16,
     water_type: "Filtered", started_at: String(Date.now()), rated_at: String(Date.now()),
     logged_by: "me", pending: false,
+    rest_days: null,
     stars: 4, stars2: null, taster1: "You", taster2: null,
     acidity: 3, sweetness: 3, body: 3, clarity: 4, note: null,
     ...overrides,
   };
 }
+
+describe("freeze-adjusted age (effectiveDaysAgo / restDaysAt)", () => {
+  it("matches calendar age when never frozen", () => {
+    const c = makeCoffee({ roasted_at: daysAgoDate(30) });
+    expect(effectiveDaysAgo(c)).toBe(30);
+  });
+
+  it("pauses aging while frozen (still in the freezer)", () => {
+    // Roasted 50d ago, frozen 40d ago and never taken out → aged ~10d.
+    const c = makeCoffee({ roasted_at: daysAgoDate(50), frozen_at: daysAgoDate(40), thawed_at: null, frozen_grams: 100, grams: 100 });
+    expect(effectiveDaysAgo(c)).toBe(10);
+  });
+
+  it("subtracts only the frozen span once thawed", () => {
+    // Roasted 50d ago, frozen 40d→20d ago (20d frozen), then out → aged 30d.
+    const c = makeCoffee({ roasted_at: daysAgoDate(50), frozen_at: daysAgoDate(40), thawed_at: daysAgoDate(20) });
+    expect(effectiveDaysAgo(c)).toBe(30);
+  });
+
+  it("restDaysAt snapshots pre-freeze rest for a brew pulled from the freezer", () => {
+    const now = Date.now();
+    const c = makeCoffee({ roasted_at: daysAgoDate(50), frozen_at: daysAgoDate(40), thawed_at: null });
+    // Brewed now, straight from the freezer: rest ≈ days roast→freeze = 10.
+    expect(restDaysAt(c, now)).toBe(10);
+  });
+});
 
 describe("roastedDaysAgo", () => {
   it("returns 0 for today", () => {

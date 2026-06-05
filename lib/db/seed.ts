@@ -12,7 +12,8 @@ export async function seedHousehold(service: any, householdId: string, userId: s
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
     varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
-    frozen_grams: c.frozen_grams, archived: c.archived, notes: c.notes, color: c.color, cc: c.cc,
+    frozen_grams: c.frozen_grams, frozen_at: c.frozen_at, thawed_at: c.thawed_at,
+    archived: c.archived, notes: c.notes, color: c.color, cc: c.cc,
   }));
 
   const { data: insertedCoffees, error: coffeeErr } = await service
@@ -36,6 +37,7 @@ export async function seedHousehold(service: any, householdId: string, userId: s
       dose: b.dose, water: b.water, bypass: b.bypass, temp: b.temp,
       grind: b.grind, ratio: b.ratio, water_type: b.water_type,
       started_at: new Date(parseInt(b.started_at)).toISOString(),
+      rest_days: b.rest_days,
       rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
       logged_by: userId,
       stars: b.stars, stars2: b.stars2, taster1: b.taster1, taster2: b.taster2,

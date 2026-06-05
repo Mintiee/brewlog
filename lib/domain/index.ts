@@ -39,8 +39,37 @@ export function roastedDaysAgo(coffee: Coffee): number {
   return Math.max(0, Math.round((today.getTime() - roastedAt.getTime()) / 86400000));
 }
 
+// Milliseconds this coffee spent frozen between roast and `toMs`. Freezing pauses
+// aging, so this span is subtracted from calendar age. Single freeze cycle:
+// frozen_at → thawed_at (or up to `toMs` if still frozen).
+function frozenSpanMs(coffee: Coffee, toMs: number): number {
+  if (!coffee.frozen_at) return 0;
+  const fz = parseLocalDate(coffee.frozen_at).getTime();
+  if (toMs <= fz) return 0;
+  const thawMs = coffee.thawed_at ? parseLocalDate(coffee.thawed_at).getTime() : toMs;
+  return Math.max(0, Math.min(thawMs, toMs) - fz);
+}
+
+// Freeze-adjusted days the beans had rested at a given moment.
+export function restDaysAt(coffee: Coffee, atMs: number): number {
+  const roastedAt = parseLocalDate(coffee.roasted_at).getTime();
+  return Math.max(0, Math.round((atMs - roastedAt - frozenSpanMs(coffee, atMs)) / 86400000));
+}
+
+// Freeze-adjusted rest at the moment this brew was pulled.
+export function restDaysAtBrew(coffee: Coffee, brew: Brew): number {
+  return restDaysAt(coffee, parseTs(brew.started_at));
+}
+
+// Freeze-adjusted age of the coffee as of now — drives freshness (resting/peak/past).
+export function effectiveDaysAgo(coffee: Coffee): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return restDaysAt(coffee, today.getTime());
+}
+
 export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
-  const d = roastedDaysAgo(coffee);
+  const d = effectiveDaysAgo(coffee);
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
   // Global windows (one knob for all coffees) — see setRestWindow.

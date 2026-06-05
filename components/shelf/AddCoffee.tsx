@@ -151,6 +151,8 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
       peak_days: 56,
       grams: 250,
       frozen_grams: 0,
+      frozen_at: null,
+      thawed_at: null,
       archived: false,
       notes,
       color: coffeeColor(notes),

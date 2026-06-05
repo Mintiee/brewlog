@@ -22,6 +22,10 @@ export interface Coffee {
   peak_days: number;  // default 56
   grams: number;
   frozen_grams: number;
+  /** ISO date beans went into the freezer (aging pauses while frozen). null = never frozen. */
+  frozen_at: string | null;
+  /** ISO date beans came back out (aging resumes). null = still frozen or never frozen. */
+  thawed_at: string | null;
   archived: boolean;
   notes: string[];
   color: string;       // dominant-family hex
@@ -41,6 +45,8 @@ export interface Brew {
   ratio: number;
   water_type: string;
   started_at: string;    // epoch ms as string (from DB) or ms number
+  /** Freeze-adjusted days the beans had rested when this brew was pulled (snapshot). */
+  rest_days: number | null;
   rated_at: string | null;
   logged_by: string;     // profile id
   pending: boolean;

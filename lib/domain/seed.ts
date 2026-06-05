@@ -4,7 +4,7 @@
  * labels reproduce correctly regardless of when the app is loaded.
  */
 import type { Coffee, Brew, Brewer, Config } from "@/lib/types";
-import { defaultsFor } from "@/lib/domain";
+import { defaultsFor, restDaysAt } from "@/lib/domain";
 
 function daysAgoDate(n: number): string {
   const d = new Date();
@@ -36,42 +36,42 @@ export const SEED_COFFEES: Coffee[] = [
     id: "sey-hamasho", household_id: "seed", roaster: "Sey", name: "Hamasho",
     origin: "Ethiopia", region: "Sidama, Bensa", varietal: "Heirloom", process: "Washed",
     roast: "light", roasted_at: daysAgoDate(34), rest_days: 28, peak_days: 56,
-    grams: 250, frozen_grams: 0, archived: false,
+    grams: 250, frozen_grams: 0, frozen_at: null, thawed_at: null, archived: false,
     notes: ["Jasmine", "Bergamot", "White peach"], color: "#d98fb0", cc: "et",
   },
   {
     id: "onyx-geo", household_id: "seed", roaster: "Onyx", name: "Geometry",
     origin: "Blend", region: "Colombia · Ethiopia", varietal: "Caturra · Heirloom", process: "Washed",
     roast: "medium-light", roasted_at: daysAgoDate(30), rest_days: 28, peak_days: 56,
-    grams: 340, frozen_grams: 0, archived: false,
+    grams: 340, frozen_grams: 0, frozen_at: null, thawed_at: null, archived: false,
     notes: ["Milk chocolate", "Cherry", "Almond"], color: "#b07d52", cc: "co",
   },
   {
     id: "bw-guji", household_id: "seed", roaster: "Black & White", name: "Ethiopia Guji",
     origin: "Ethiopia", region: "Guji, Hambela", varietal: "Heirloom", process: "Natural",
     roast: "light", roasted_at: daysAgoDate(45), rest_days: 28, peak_days: 56,
-    grams: 340, frozen_grams: 0, archived: false,
+    grams: 340, frozen_grams: 0, frozen_at: null, thawed_at: null, archived: false,
     notes: ["Blueberry", "Cocoa", "Wine"], color: "#a886c4", cc: "et",
   },
   {
     id: "tw-desarrollo", household_id: "seed", roaster: "Tim Wendelboe", name: "El Desarrollo · Lot 14",
     origin: "Colombia", region: "Cundinamarca", varietal: "Castillo", process: "Washed",
     roast: "light", roasted_at: daysAgoDate(18), rest_days: 28, peak_days: 56,
-    grams: 250, frozen_grams: 0, archived: false,
+    grams: 250, frozen_grams: 0, frozen_at: null, thawed_at: null, archived: false,
     notes: ["Red apple", "Caramel", "Black tea"], color: "#d97a6a", cc: "co",
   },
   {
     id: "hydrangea-gesha", household_id: "seed", roaster: "Hydrangea", name: "Hacienda La Esmeralda",
     origin: "Panama", region: "Boquete", varietal: "Gesha", process: "Washed",
     roast: "light", roasted_at: daysAgoDate(14), rest_days: 28, peak_days: 56,
-    grams: 100, frozen_grams: 100, archived: false,
+    grams: 100, frozen_grams: 100, frozen_at: daysAgoDate(4), thawed_at: null, archived: false,
     notes: ["Jasmine", "Bergamot", "Honeysuckle"], color: "#d98fb0", cc: "pa",
   },
   {
     id: "heart-brisas", household_id: "seed", roaster: "Heart", name: "Las Brisas",
     origin: "Costa Rica", region: "Tarrazú", varietal: "Caturra", process: "Honey",
     roast: "medium", roasted_at: daysAgoDate(60), rest_days: 28, peak_days: 56,
-    grams: 340, frozen_grams: 0, archived: false,
+    grams: 340, frozen_grams: 0, frozen_at: null, thawed_at: null, archived: false,
     notes: ["Brown sugar", "Plum", "Walnut"], color: "#e0a55f", cc: "cr",
   },
 ];
@@ -122,6 +122,7 @@ export const SEED_BREWS: Brew[] = seedRows.map(([daysAgo, cid, bid, stars, acidi
     ratio: def.ratio,
     water_type: WATERS[i % 2],
     started_at: String(startMs),
+    rest_days: restDaysAt(coffee, startMs),
     rated_at: String(startMs + 3600000),
     logged_by: "me",
     pending: false,

@@ -151,6 +151,8 @@ function rowToCoffee(r: any): Coffee {
     peak_days: r.peak_days,
     grams: r.grams,
     frozen_grams: r.frozen_grams,
+    frozen_at: r.frozen_at ?? null,
+    thawed_at: r.thawed_at ?? null,
     archived: r.archived,
     notes: r.notes ?? [],
     color: coffeeColor(r.notes ?? []), // derived on read — always reflects current notes
@@ -165,7 +167,8 @@ function coffeeToRow(c: Partial<Coffee>) {
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
     varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
-    frozen_grams: c.frozen_grams, archived: c.archived, notes: c.notes,
+    frozen_grams: c.frozen_grams, frozen_at: c.frozen_at ?? null, thawed_at: c.thawed_at ?? null,
+    archived: c.archived, notes: c.notes,
     color: c.notes ? coffeeColor(c.notes) : c.color, // keep column non-null; no longer authoritative
     cc: c.cc,
   };
@@ -181,6 +184,7 @@ function rowToBrew(r: any): Brew {
     dose: r.dose, water: r.water, bypass: r.bypass, temp: r.temp,
     grind: r.grind, ratio: r.ratio, water_type: r.water_type,
     started_at: new Date(r.started_at).getTime().toString(),
+    rest_days: r.rest_days ?? null,
     rated_at: r.rated_at ? new Date(r.rated_at).getTime().toString() : null,
     logged_by: r.logged_by,
     pending: r.rated_at == null,
@@ -203,6 +207,8 @@ function brewToRow(b: Partial<Brew>) {
     dose: b.dose, water: b.water, bypass: b.bypass, temp: b.temp,
     grind: b.grind, ratio: b.ratio, water_type: b.water_type,
     started_at: b.started_at ? new Date(parseInt(b.started_at)).toISOString() : undefined,
+    // Only write rest_days when present — keep rating-only patch updates from nulling it.
+    ...(b.rest_days !== undefined ? { rest_days: b.rest_days } : {}),
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,

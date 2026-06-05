@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { Brew, Brewer, Recipe } from "@/lib/types";
 import { useApp } from "@/lib/store/AppContext";
+import { restDaysAt } from "@/lib/domain";
 import { Icon } from "@/components/ui";
 import { StepWhat } from "./StepWhat";
 import { StepHow } from "./StepHow";
@@ -51,6 +52,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   function logCoffee(b: Brewer, r: Recipe) {
     setBrewer(b);
     setRecipe(r);
+    const startedAt = Date.now();
     const newBrew: Brew = {
       id: crypto.randomUUID(),
       household_id: profile.household_id,
@@ -64,7 +66,10 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       bypass: r.bypass || 0,
       ratio: (r.water + (r.bypass || 0)) / r.dose,
       pending: true,
-      started_at: String(Date.now()),
+      started_at: String(startedAt),
+      // Snapshot the freeze-adjusted rest now, so it stays correct if the
+      // coffee is later re-frozen or its dates edited.
+      rest_days: coffee ? restDaysAt(coffee, startedAt) : null,
       rated_at: null,
       logged_by: profile.id,
       stars: null,
