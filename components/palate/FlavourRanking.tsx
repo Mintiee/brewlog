@@ -43,7 +43,7 @@ export function FlavourRanking({ brews, coffees }: FlavourRankingProps) {
 
   return (
     <div className="card" style={{ padding: "16px 18px" }}>
-      <div className="label" style={{ marginBottom: 14 }}>Flavours you&apos;re enjoying · avg rating</div>
+      <div className="label" style={{ marginBottom: 14 }}>Flavours you&apos;re enjoying</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {rows.map((r) => {
           const col = familyColor(r.fam);
