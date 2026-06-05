@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
-import { brewRating, roastedDaysAgo } from "@/lib/domain";
+import { brewRating, roastedDaysAgo, localISODate } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface BrewingTipsProps {
@@ -183,21 +183,24 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
     if (!llmEnabled) return;
     let cancelled = false;
 
-    const LS_KEY = "brew_tips_v1";
-    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const LS_KEY = "brew_tips_v2";  // bumped: switch cache key from rolling ms to local-day index
     const MIN_BREWS = 5;
+    // Local calendar-day index (not UTC, not a rolling window), so a weekly
+    // refresh rolls over at local midnight and lands on the morning of the 7th day.
+    const tzOffsetMin = new Date().getTimezoneOffset();
+    const localDayNum = Math.floor((Date.now() - tzOffsetMin * 60000) / 86400000);
 
     const rated = brews
       .filter((b) => b.stars != null)
       .sort((a, b) => Number(b.started_at) - Number(a.started_at));
     if (rated.length < MIN_BREWS) return; // too little signal — keep heuristic
 
-    // Weekly local cache: skip the network round-trip if we refreshed in the last 7 days.
+    // Weekly local cache: skip the network round-trip until 7 local days have passed.
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
-        const c = JSON.parse(raw) as { ts: number; tips: Tip[] };
-        if (c.ts && Date.now() - c.ts < WEEK_MS && Array.isArray(c.tips) && c.tips.length) {
+        const c = JSON.parse(raw) as { day: number; tips: Tip[] };
+        if (typeof c.day === "number" && localDayNum - c.day < 7 && Array.isArray(c.tips) && c.tips.length) {
           setLlmTips(c.tips);
           return;
         }
@@ -212,7 +215,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
         const res = await fetch("/api/tips", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stats, brews: digest }),
+          body: JSON.stringify({ stats, brews: digest, date: localISODate(Date.now()), tzOffsetMin }),
         });
         // 204 / error → keep the heuristic tips already on screen.
         if (res.status === 204 || !res.ok) return;
@@ -225,7 +228,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
           : [];
         if (!cancelled && tips.length) {
           setLlmTips(tips);
-          try { localStorage.setItem(LS_KEY, JSON.stringify({ ts: Date.now(), tips })); } catch { /* ignore */ }
+          try { localStorage.setItem(LS_KEY, JSON.stringify({ day: localDayNum, tips })); } catch { /* ignore */ }
         }
       } catch { /* keep heuristic */ }
     })();

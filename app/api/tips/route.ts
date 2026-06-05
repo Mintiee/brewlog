@@ -28,7 +28,13 @@ Output ONLY a JSON array — no prose, no markdown fences, nothing else. Each el
 const TIPS_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-5.5" } as const;
 
 const MIN_BREWS = 3;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Local calendar-day index of a timestamp, shifted by the client's timezone
+// offset (minutes, per Date.prototype.getTimezoneOffset: positive west of UTC).
+// Lets a UTC server reason about the user's local week boundary.
+function localDayNum(ms: number, tzOffsetMin: number): number {
+  return Math.floor((ms - tzOffsetMin * 60000) / 86400000);
+}
 
 interface Tip {
   icon: string;
@@ -69,15 +75,19 @@ export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { stats, brews } = await req.json();
+  const { stats, brews, tzOffsetMin } = await req.json();
   if (!Array.isArray(brews) || brews.length < MIN_BREWS) {
     // Not enough signal — client shows heuristic tips instead.
     return new NextResponse(null, { status: 204 });
   }
+  const offset = typeof tzOffsetMin === "number" ? tzOffsetMin : 0;
 
   const service = createServiceClient();
 
-  // Weekly cache: at most one LLM call per household per week.
+  // Weekly cache: at most one LLM call per household per local week. Regenerate
+  // once 7 local days have passed since the cached tips were generated, so the
+  // refresh lands on the morning of the 7th local day rather than drifting by
+  // generation time-of-day or UTC.
   // (If the table doesn't exist yet, `data` is null and we proceed to generate;
   //  the upsert will fail and we degrade to 204 → heuristic tips.)
   const { data: cached } = await service
@@ -86,7 +96,7 @@ export async function POST(req: NextRequest) {
     .eq("household_id", hk.householdId)
     .single();
 
-  if (cached && Date.now() - new Date(cached.generated_at).getTime() < WEEK_MS) {
+  if (cached && localDayNum(Date.now(), offset) - localDayNum(new Date(cached.generated_at).getTime(), offset) < 7) {
     return NextResponse.json({ tips: cached.tips, cached: true });
   }
 
