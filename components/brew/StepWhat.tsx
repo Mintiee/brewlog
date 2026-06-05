@@ -60,7 +60,7 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
         background: "var(--surface)", borderRadius: "var(--r-tile)", padding: "16px 17px", cursor: "pointer",
         border: "1px solid var(--line)", opacity: dim ? 0.72 : 1,
       }}>
-        <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={48} radius={13} />
+        <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={48} radius={13} process={c.process} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px 10px", color: "var(--ink-faint)", fontSize: 10.5 }}>
             <span className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</span>
@@ -111,7 +111,7 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
                   background: "var(--accent-soft)", border: "1px solid color-mix(in srgb, var(--accent) 38%, transparent)",
                   borderRadius: "var(--r-tile)", padding: "13px 14px", cursor: "pointer", color: "var(--ink)",
                 }}>
-                  <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={44} radius={12} />
+                  <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={44} radius={12} process={c.process} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-faint)", fontSize: 11 }}>
                       <span className="label" style={{ color: "var(--ink-faint)" }}>{br ? br.short : ""}</span>

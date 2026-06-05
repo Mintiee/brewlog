@@ -17,7 +17,7 @@ export function CoffeePin({ coffee, brews, onChange }: CoffeePinProps) {
       background: "var(--surface)", border: "1px solid var(--line)",
       borderRadius: 16, padding: "12px 14px", cursor: "pointer", textAlign: "left",
     }}>
-      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={30} radius={9} />
+      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={30} radius={9} process={coffee.process} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
         <div style={{ fontSize: 15.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{coffee.name}</div>

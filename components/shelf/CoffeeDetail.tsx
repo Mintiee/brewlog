@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Stepper } from "@/components/ui/Stepper";
-import { Segmented } from "@/components/ui/Segmented";
+import { ProcessPicker } from "./ProcessPicker";
 import { FreshBar } from "./FreshBar";
 import { Field } from "./Field";
 import type { Coffee, Brew } from "@/lib/types";
@@ -90,7 +90,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       origin: ef.origin,
       region: ef.region || ef.origin,
       varietal: ef.varietal,
-      process: ef.process as Coffee["process"],
+      process: ef.process || "Washed",
       notes,
       grams: Number(ef.grams) || coffee.grams,
       roasted_at,
@@ -122,7 +122,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             <div style={{ flex: 1 }}><Field label="Varietal" value={ef.varietal} onChange={setE("varietal")} placeholder="Varietal" /></div>
             <div style={{ flex: 1 }}>
               <div className="label" style={{ marginBottom: 6 }}>Process</div>
-              <Segmented options={["Washed", "Natural", "Honey"]} value={ef.process} onChange={setE("process")} />
+              <ProcessPicker value={ef.process} onChange={setE("process")} />
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", marginBottom: 4 }}>
@@ -142,7 +142,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
     <Sheet open={!!coffee} onClose={onClose}>
       <div className="screen-pad" style={{ paddingTop: 8 }}>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={56} radius={13} />
+          <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={56} radius={13} process={coffee.process} />
           <div style={{ flex: 1 }}>
             <div className="label">{coffee.roaster}</div>
             <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{coffee.name}</div>

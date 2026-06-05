@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Monogram } from "./Monogram";
+import { processTexture } from "@/lib/flavour";
 
 interface OriginTileProps {
   code: string | null;
@@ -8,17 +9,20 @@ interface OriginTileProps {
   color: string;
   size?: number;
   radius?: number;
+  process?: string;
 }
 
-export function OriginTile({ code, roaster, color, size = 48, radius = 13 }: OriginTileProps) {
+export function OriginTile({ code, roaster, color, size = 48, radius = 13, process }: OriginTileProps) {
   const url = code ? `https://cdn.jsdelivr.net/gh/djaiss/mapsicon/all/${code}/vector.svg` : null;
   const [ok, setOk] = useState<boolean | null>(code ? null : false);
 
   if (ok === false || !url) {
-    return <Monogram roaster={roaster} color={color} size={size} radius={radius} />;
+    return <Monogram roaster={roaster} color={color} size={size} radius={radius} process={process} />;
   }
+  const tex = processTexture(process || "");
   return (
     <span style={{
+      position: "relative",
       width: size, height: size, borderRadius: radius, background: color, flexShrink: 0,
       boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.14), inset 0 -10px 18px rgba(0,0,0,0.12)",
       display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
@@ -32,6 +36,7 @@ export function OriginTile({ code, roaster, color, size = 48, radius = 13 }: Ori
         onError={() => setOk(false)}
         style={{ width: "62%", height: "62%", objectFit: "contain", opacity: 0.6, filter: "brightness(0)" }}
       />
+      {tex.backgroundImage && <span aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", ...tex }} />}
     </span>
   );
 }

@@ -1,5 +1,7 @@
 // Flavour-note categorisation — 3-tier: lexicon → learned cache → "other"
 
+import type { CSSProperties } from "react";
+
 // ---- Colour-space helpers (no external deps) ----
 
 function srgbToLinear(c: number): number {
@@ -71,22 +73,30 @@ const NOTE_ICONS: Array<[RegExp, FlavourFamily]> = [
   [/cinnamon|clove|nutmeg|cardamom|ginger|baking|anise|\bspice/, "spice"],
   [/wine|winey|boozy|\brum|ferment|funky|brandy|\bport\b|whisk|champagne|cognac|liqueur|sherry|booze/, "wine"],
   [/\btea|herbal|\bherb|mint|grass|grassy|green|vegetal|vegetable|tomato|tobacco|\bhay|savory|savoury|thyme|basil|sage|eucalyptus|cedar|pine|earth|leather|mushroom|woody|\bwood/, "leaf"],
+  // Non-flavour descriptors — LOWEST priority so a real flavour family always wins
+  // first (e.g. "juicy strawberry" → redfruit, not citrus). These keep otherwise-
+  // family-less notes (sparkly, silky, creamy…) from collapsing to grey.
+  [/sparkl|bright|lively|vibrant|\bzing|zesty|juic|\btart\b|tangy|sherbet|effervescen|snappy|\bclean\b|crisp/, "citrus"], // acidity / effervescence
+  [/creamy|buttery|milky|custard/, "nut"],                                                                              // dairy / creamy body
+  [/silky|velvety|smooth|\bround\b|\blush\b|full ?bod|\brich\b/, "sugar"],                                              // sweet / syrupy body
 ];
 
-// App-harmonised palette — warm, mid-luminance, readable on near-black --surface #1a1816.
+// App-harmonised palette — vivid yet readable on near-black --surface #1a1816.
+// The warm-brown cluster (choco/roast/nut/sugar/spice) is deliberately spread
+// across luminance + hue so similar coffees don't converge to the same brown.
 export const NOTE_COLORS: Record<FlavourFamily, string> = {
-  flower:     "#d98fb0", // dusty pink
-  citrus:     "#e0c14e", // warm lemon
-  yellowfruit:"#e0954e", // warm peach-orange
-  redfruit:   "#d76a58", // warm red
-  berry:      "#a886c4", // muted purple
-  choco:      "#a06a47", // medium brown
-  roast:      "#8a7060", // warm charcoal
-  nut:        "#cda877", // tan/caramel
-  sugar:      "#e0a55f", // amber
-  spice:      "#c77b4a", // terracotta
-  wine:       "#c06b7d", // wine/magenta
-  leaf:       "#93ad6d", // sage green
+  flower:     "#e885b6", // vivid dusty pink
+  citrus:     "#ecc233", // bright lemon
+  yellowfruit:"#ef8f33", // bright peach-orange
+  redfruit:   "#e25742", // bright red
+  berry:      "#a96fd6", // vivid purple
+  choco:      "#9c5a32", // rich medium brown
+  roast:      "#6c5348", // dark cool charcoal-brown
+  nut:        "#dcae6a", // light gold-tan
+  sugar:      "#f4a83a", // bright amber
+  spice:      "#d2662b", // bright terracotta
+  wine:       "#d2557d", // vivid wine-magenta
+  leaf:       "#8fc24c", // vivid sage green
   drop:       "#9c9385", // neutral grey
 };
 
@@ -132,6 +142,45 @@ export function familyColor(fam: FlavourFamily | string): string {
 
 export function familyLabel(fam: FlavourFamily | string): string {
   return FAMILY_LABEL[fam as FlavourFamily] ?? "Other";
+}
+
+// ---- Process visual encoding ----
+// Buckets a free-text process into one of four families, then maps each to a
+// pure-CSS overlay texture (no image assets) painted over a coffee tile.
+
+export type ProcessCategory = "washed" | "natural" | "honey" | "other";
+
+export function processCategory(process: string): ProcessCategory {
+  const p = (process || "").toLowerCase();
+  if (/honey|pulped|miel/.test(p)) return "honey";   // before "natural" — "honey natural" is a honey
+  if (/wash/.test(p)) return "washed";
+  if (/natural|\bdry|dried/.test(p)) return "natural";
+  return "other";
+}
+
+// Subtle overlay textures. Painted on a span layered above the tile fill, so they
+// read against any flavour colour while leaving flags/initials legible.
+export function processTexture(process: string): CSSProperties {
+  switch (processCategory(process)) {
+    case "natural": // speckled — evokes fruit/skin contact of dry processing
+      return {
+        backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.28) 1px, transparent 1.6px)",
+        backgroundSize: "5px 5px",
+      };
+    case "honey": // soft diagonal sheen — sticky/glossy
+      return {
+        backgroundImage:
+          "linear-gradient(135deg, rgba(255,255,255,0.32) 0%, transparent 42%, transparent 58%, rgba(255,255,255,0.16) 100%)",
+      };
+    case "other": // diagonal hatch — flags anything experimental/uncommon
+      return {
+        backgroundImage:
+          "repeating-linear-gradient(45deg, rgba(255,255,255,0.16) 0 1.5px, transparent 1.5px 5px)",
+      };
+    case "washed": // clean — no overlay
+    default:
+      return {};
+  }
 }
 
 export function isNoteKnown(note: string): boolean {

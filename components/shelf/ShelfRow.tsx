@@ -18,7 +18,7 @@ export function ShelfRow({ coffee, brews, onOpen }: ShelfRowProps) {
     <button onClick={() => onOpen(coffee)} className="card" style={{
       width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "center",
     }}>
-      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} />
+      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} process={coffee.process} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
         <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{coffee.name}</div>

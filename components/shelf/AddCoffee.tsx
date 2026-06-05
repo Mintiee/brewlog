@@ -4,7 +4,7 @@ import { originCode } from "@/lib/domain";
 import { coffeeColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
-import { Segmented } from "@/components/ui/Segmented";
+import { ProcessPicker } from "./ProcessPicker";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Field } from "./Field";
 import type { Coffee } from "@/lib/types";
@@ -144,7 +144,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
       origin: form.origin || "—",
       region: form.region || form.origin || "—",
       varietal: form.varietal || "—",
-      process: (form.process || "Washed") as Coffee["process"],
+      process: form.process || "Washed",
       roast: "light",
       roasted_at,
       rest_days: 28,
@@ -283,7 +283,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
                 <div style={{ flex: 1 }}><Field label="Varietal" value={form.varietal} onChange={set("varietal")} placeholder="Varietal" /></div>
                 <div style={{ flex: 1 }}>
                   <div className="label" style={{ marginBottom: 6 }}>Process</div>
-                  <Segmented options={["Washed", "Natural", "Honey"]} value={form.process} onChange={set("process")} />
+                  <ProcessPicker value={form.process} onChange={set("process")} />
                 </div>
               </div>
               <div style={{

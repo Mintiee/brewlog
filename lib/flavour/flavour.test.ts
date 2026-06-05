@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { noteIcon, coffeeColor, NOTE_COLORS } from "./index";
+import { noteIcon, coffeeColor, NOTE_COLORS, processCategory } from "./index";
 
 // ---- Lexicon spot-checks ----
 
@@ -42,6 +42,47 @@ describe("noteIcon — wheel-aligned taxonomy", () => {
   it("cinnamon stays in spice, not sugar", () => expect(noteIcon("cinnamon")).toBe("spice"));
   // pineapple should hit yellowfruit, not citrus
   it("pineapple → yellowfruit, not citrus", () => expect(noteIcon("pineapple")).toBe("yellowfruit"));
+});
+
+// ---- Non-flavour descriptors map to sensible families (no longer grey) ----
+
+describe("noteIcon — acidity / body / texture descriptors", () => {
+  // acidity / effervescence → citrus
+  it("sparkly → citrus", () => expect(noteIcon("sparkly")).toBe("citrus"));
+  it("bright → citrus", () => expect(noteIcon("bright")).toBe("citrus"));
+  it("juicy → citrus", () => expect(noteIcon("juicy")).toBe("citrus"));
+  it("zesty → citrus", () => expect(noteIcon("zesty")).toBe("citrus"));
+  it("crisp → citrus", () => expect(noteIcon("crisp")).toBe("citrus"));
+  it("clean → citrus", () => expect(noteIcon("clean")).toBe("citrus"));
+
+  // body / sweetness texture → sugar
+  it("silky → sugar", () => expect(noteIcon("silky")).toBe("sugar"));
+  it("syrupy → sugar", () => expect(noteIcon("syrupy")).toBe("sugar"));
+  it("velvety → sugar", () => expect(noteIcon("velvety")).toBe("sugar"));
+
+  // dairy / creamy texture → nut
+  it("creamy → nut", () => expect(noteIcon("creamy")).toBe("nut"));
+  it("buttery → nut", () => expect(noteIcon("buttery")).toBe("nut"));
+
+  // descriptor must not override a specific fruit family in a multi-word note
+  it("'juicy strawberry' still → redfruit", () => expect(noteIcon("juicy strawberry")).toBe("redfruit"));
+
+  // genuinely family-less words remain unknown (handed to the LLM / default)
+  it("complex → drop", () => expect(noteIcon("complex")).toBe("drop"));
+  it("balanced → drop", () => expect(noteIcon("balanced")).toBe("drop"));
+});
+
+// ---- processCategory ----
+
+describe("processCategory", () => {
+  it("Washed → washed", () => expect(processCategory("Washed")).toBe("washed"));
+  it("lowercase washed → washed", () => expect(processCategory("washed")).toBe("washed"));
+  it("Natural → natural", () => expect(processCategory("Natural")).toBe("natural"));
+  it("Dry → natural", () => expect(processCategory("Dry")).toBe("natural"));
+  it("Honey → honey", () => expect(processCategory("Honey")).toBe("honey"));
+  it("Anaerobic Honey → honey (honey wins)", () => expect(processCategory("Anaerobic Honey")).toBe("honey"));
+  it("Carbonic Maceration → other", () => expect(processCategory("Carbonic Maceration")).toBe("other"));
+  it("empty → other", () => expect(processCategory("")).toBe("other"));
 });
 
 // ---- coffeeColor ----

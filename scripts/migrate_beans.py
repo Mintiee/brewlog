@@ -68,20 +68,24 @@ NOTE_ICONS = [
     (r"cinnamon|clove|nutmeg|cardamom|ginger|baking|anise|\bspice", "spice"),
     (r"wine|winey|boozy|\brum|ferment|funky|brandy|\bport\b|whisk|champagne|cognac|liqueur|sherry|booze", "wine"),
     (r"\btea|herbal|\bherb|mint|grass|grassy|green|vegetal|vegetable|tomato|tobacco|\bhay|savory|savoury|thyme|basil|sage|eucalyptus|cedar|pine|earth|leather|mushroom|woody|\bwood", "leaf"),
+    # Non-flavour descriptors — LOWEST priority so a real flavour family wins first.
+    (r"sparkl|bright|lively|vibrant|\bzing|zesty|juic|\btart\b|tangy|sherbet|effervescen|snappy|\bclean\b|crisp", "citrus"),
+    (r"creamy|buttery|milky|custard", "nut"),
+    (r"silky|velvety|smooth|\bround\b|\blush\b|full ?bod|\brich\b", "sugar"),
 ]
 NOTE_COLORS = {
-    "flower":      "#d98fb0",  # dusty pink
-    "citrus":      "#e0c14e",  # warm lemon
-    "yellowfruit": "#e0954e",  # warm peach-orange
-    "redfruit":    "#d76a58",  # warm red
-    "berry":       "#a886c4",  # muted purple
-    "choco":       "#a06a47",  # medium brown
-    "roast":       "#8a7060",  # warm charcoal
-    "nut":         "#cda877",  # tan/caramel
-    "sugar":       "#e0a55f",  # amber
-    "spice":       "#c77b4a",  # terracotta
-    "wine":        "#c06b7d",  # wine/magenta
-    "leaf":        "#93ad6d",  # sage green
+    "flower":      "#e885b6",  # vivid dusty pink
+    "citrus":      "#ecc233",  # bright lemon
+    "yellowfruit": "#ef8f33",  # bright peach-orange
+    "redfruit":    "#e25742",  # bright red
+    "berry":       "#a96fd6",  # vivid purple
+    "choco":       "#9c5a32",  # rich medium brown
+    "roast":       "#6c5348",  # dark cool charcoal-brown
+    "nut":         "#dcae6a",  # light gold-tan
+    "sugar":       "#f4a83a",  # bright amber
+    "spice":       "#d2662b",  # bright terracotta
+    "wine":        "#d2557d",  # vivid wine-magenta
+    "leaf":        "#8fc24c",  # vivid sage green
     "drop":        "#9c9385",  # neutral grey
 }
 
@@ -93,12 +97,19 @@ def note_color(note):
     return NOTE_COLORS["drop"]
 
 def map_process(raw):
-    s = (raw or "").lower()
-    if "honey" in s:
+    # Process is free text. Normalise the common ones to canonical capitalisation,
+    # but preserve uncommon processes (Anaerobic, Carbonic Maceration, …) verbatim.
+    s = (raw or "").strip()
+    if not s:
+        return "Washed"
+    low = s.lower()
+    if "honey" in low:
         return "Honey"
-    if "natural" in s:
+    if low in ("washed", "fully washed", "wet"):
+        return "Washed"
+    if low in ("natural", "dry", "dried"):
         return "Natural"
-    return "Washed"
+    return s
 
 def parse_roast_date(raw):
     """Bean Conqueror exports DD.MM.YYYY. Return ISO YYYY-MM-DD or None."""

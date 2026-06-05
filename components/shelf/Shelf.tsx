@@ -107,7 +107,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
             </div>
             {emptyList.map((c) => (
               <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: "11px 14px", marginBottom: 8 }}>
-                <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={34} radius={9} />
+                <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={34} radius={9} process={c.process} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                   <div className="label" style={{ color: "var(--ink-faint)" }}>looks empty</div>
@@ -141,7 +141,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
                       background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 13, padding: "10px 14px", marginBottom: 8, opacity: 0.6,
                     }}
                   >
-                    <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={30} radius={8} />
+                    <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={30} radius={8} process={c.process} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                       <div className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</div>

@@ -1,6 +1,8 @@
 // Core domain types for Brew
 
-export type Process = "Washed" | "Natural" | "Honey";
+// Free text — common processes (Washed/Natural) are quick-picks in the UI, but
+// any string is allowed (Honey, Anaerobic, Carbonic Maceration, experimental…).
+export type Process = string;
 export type Roast = "light" | "medium-light" | "medium" | "medium-dark" | "dark";
 export type FreshState = "resting" | "peak" | "past" | "frozen";
 
