@@ -208,7 +208,7 @@ const OPENERS: Record<string, string[]> = {
   evening:   ["Evening", "Good evening", "Winding down", "Night owl", "Day's done", "Golden hour", "Easy now"],
   late:      ["Late night", "Still up?", "Midnight oil", "Can't sleep?", "One more?", "The witching hour"],
 };
-const TAILS = ["", "", "", "", ", friend", " — coffee o'clock", ", let's go", ", you", ", champ", ", you legend", " then"];
+const TAILS = ["", "", "", "", ", friend", " — coffee o'clock", ", let's go", ", champ", ", you legend", " then"];
 const VERBS = ["brewing", "pouring", "grinding", "drinking", "sipping", "chasing", "cupping", "making", "dialing in", "fancying"];
 const ADJ   = ["bright", "sweet", "fruity", "chocolatey", "clean", "funky", "juicy", "floral", "bold", "delicate", "wild", "cozy", "zippy", "jammy", "tea-like", "syrupy", "crisp", "punchy", "comforting", "honeyed", "boozy", "vibrant"];
 const NOUNS = ["cup", "pour", "bean", "brew", "ritual", "morning cup", "first cup", "one"];
@@ -245,10 +245,19 @@ function baseGreeting(): string {
   return "Good evening";
 }
 
+// Tails are vocatives/addendums (", champ", " then", " — coffee o'clock"). They
+// only read well after a plain greeting, so skip them when the opener is already
+// a question/exclamation ("Afternoon slump?", "Still up?") or already carries its
+// own comma clause ("Hello, sunshine") — otherwise we get "Afternoon slump?, champ".
+function withTail(opener: string, tail: string): string {
+  if (/[?!.]$/.test(opener) || opener.includes(",")) return opener;
+  return opener + tail;
+}
+
 export function makeIntro(randomGreeting: boolean): { greet: string; q: string } {
   if (!randomGreeting) return { greet: baseGreeting(), q: "What are you brewing?" };
   return {
-    greet: randOf(OPENERS[timeSlot()]) + randOf(TAILS),
+    greet: withTail(randOf(OPENERS[timeSlot()]), randOf(TAILS)),
     q: randOf(Q_TEMPLATES)(),
   };
 }
