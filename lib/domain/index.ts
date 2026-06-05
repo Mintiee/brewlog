@@ -148,6 +148,21 @@ export function ratingOwnerId(b: Brew): string {
   return b.rate_for ?? b.logged_by;
 }
 
+/** Does this brew's rating belong to `profile`? Identity is by NAME, not profile
+ *  id: anonymous re-logins mint duplicate same-name profiles (e.g. several
+ *  "Min-Taec"s), and they're all the same person. Falls back to id match when a
+ *  name can't be resolved (members not yet loaded). */
+export function rateBelongsTo(
+  b: Brew,
+  profile: { id: string; name: string },
+  members: { id: string; name: string }[],
+): boolean {
+  const ownerId = ratingOwnerId(b);
+  if (ownerId === profile.id) return true;
+  const ownerName = members.find((m) => m.id === ownerId)?.name;
+  return ownerName != null && ownerName === profile.name;
+}
+
 // ---------- Time helpers ----------
 
 export function sinceText(ts: string | number): string {

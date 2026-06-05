@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { AppProvider, useApp, type AppData } from "@/lib/store/AppContext";
-import { ratingOwnerId } from "@/lib/domain";
+import { rateBelongsTo } from "@/lib/domain";
 import { Icon, Splash } from "@/components/ui";
 import { BrewFlow } from "@/components/brew/BrewFlow";
 import { Shelf } from "@/components/shelf/Shelf";
@@ -66,7 +66,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
 }
 
 function Shell() {
-  const { coffees, brews, config, profile, llmEnabled, ready, addCoffee, updateCoffee, setConfig, lastError, clearError } = useApp();
+  const { coffees, brews, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, lastError, clearError } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -75,7 +75,7 @@ function Shell() {
 
   // Only brews that are mine to rate — ones I logged (and haven't sent away) or
   // that were handed to me. Brews I sent to someone else drop off my badge.
-  const pendingCount = brews.filter((b) => b.pending && ratingOwnerId(b) === profile.id).length;
+  const pendingCount = brews.filter((b) => b.pending && rateBelongsTo(b, profile, members)).length;
 
   // Tabs are statically imported (instant, flicker-free switching). Render them
   // on the client only via this mounted gate: the data is seeded from server

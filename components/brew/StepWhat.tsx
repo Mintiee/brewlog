@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
-import { coffeeStatus, activeGrams, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, ratingOwnerId } from "@/lib/domain";
+import { coffeeStatus, activeGrams, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { Icon, FreshDot, OriginTile } from "@/components/ui";
 
@@ -22,13 +22,15 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
   const [, setTick] = useState(0);
 
-  // The other household member (if any) — the "send to rate" target.
-  const otherMember = members.find((m) => m.id !== profile.id) ?? null;
+  // The other household member (if any) — the "send to rate" target. Matched by
+  // NAME, not id, so duplicate same-name profiles (anonymous re-logins) don't
+  // make me the "other" person.
+  const otherMember = members.find((m) => m.name !== profile.name) ?? null;
 
   // Only brews that are mine to rate: ones I logged and haven't sent away, or
   // ones handed to me. A sent brew leaves the sender's list and joins the target's.
   const pending = brews
-    .filter((b) => b.pending && ratingOwnerId(b) === profile.id)
+    .filter((b) => b.pending && rateBelongsTo(b, profile, members))
     .sort((a, b) => Number(b.started_at) - Number(a.started_at));
 
   useEffect(() => {
@@ -119,9 +121,12 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
               const c = coffees.find((x) => x.id === b.coffee_id);
               const br = brewerById(b.brewer_id);
               if (!c) return null;
-              const handedToMe = b.rate_for === profile.id;
-              const senderName = handedToMe ? (members.find((m) => m.id === b.logged_by)?.name ?? null) : null;
-              const canSend = !!onSend && !!otherMember && b.rate_for == null && b.logged_by === profile.id;
+              const loggerName = members.find((m) => m.id === b.logged_by)?.name ?? null;
+              const iLoggedIt = b.logged_by === profile.id || loggerName === profile.name;
+              // Handed to me = it's mine to rate, was sent (rate_for set), by someone else.
+              const handedToMe = b.rate_for != null && rateBelongsTo(b, profile, members) && loggerName !== profile.name;
+              const senderName = handedToMe ? loggerName : null;
+              const canSend = !!onSend && !!otherMember && b.rate_for == null && iLoggedIt;
               return (
                 <div key={b.id} style={{ display: "flex", flexDirection: "column" }}>
                   <button onClick={() => onRate(b)} style={{
