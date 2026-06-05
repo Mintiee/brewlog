@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, cupsLeft, originCode, roastDateText,
+  coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
@@ -21,7 +21,7 @@ interface EditForm {
   varietal: string;
   process: string;
   notes: string;
-  grams: number;
+  remaining: number;   // grams left now; stored bag size is back-computed as remaining + used
   roastDaysAgo: number;
 }
 
@@ -79,7 +79,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       varietal: coffee.varietal,
       process: coffee.process,
       notes: (coffee.notes || []).join(", "),
-      grams: coffee.grams || 250,
+      remaining,
       roastDaysAgo: st.day,
     });
     setEditing(true);
@@ -91,7 +91,10 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
     today.setHours(0, 0, 0, 0);
     const roastedAt = new Date(today.getTime() - ef.roastDaysAgo * 86400000);
     const roasted_at = roastedAt.toISOString().slice(0, 10);
-    const grams = Number.isFinite(Number(ef.grams)) ? Number(ef.grams) : coffee.grams;
+    // "Remaining" is what's left now; the stored bag size (grams) is remaining +
+    // what's already been brewed, so remainingGrams() reads back the edited value.
+    const newRemaining = Number.isFinite(Number(ef.remaining)) ? Number(ef.remaining) : remaining;
+    const grams = newRemaining + gramsUsed(coffee.id, brews);
     onUpdate({
       ...coffee,
       roaster: ef.roaster || "Unknown",
@@ -107,9 +110,9 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       color: coffeeColor(notes),
     });
     setEditing(false);
-    // An empty bag is almost certainly finished — offer to archive it right away
+    // Empty bag → almost certainly finished; offer to archive right away
     // (reuses the detail view's archive confirmation).
-    if (grams === 0) setConfirmingFinish(true);
+    if (newRemaining === 0) setConfirmingFinish(true);
   };
   const setE = (k: keyof EditForm) => (v: string | number) =>
     setEf((f) => f ? { ...f, [k]: v } : f);
@@ -139,7 +142,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", marginBottom: 4 }}>
             <Stepper icon="timer" label="Roasted" value={Number(ef.roastDaysAgo) || 0} unit="days ago" step={1} min={0} max={200} onChange={setE("roastDaysAgo")} />
-            <Stepper icon="scale" label="Bag size" value={Number(ef.grams) || 0} unit="g" step={2.5} min={0} max={1000} format={(v) => (v % 1 === 0 ? String(v) : v.toFixed(1))} onChange={setE("grams")} />
+            <Stepper icon="scale" label="Remaining" value={Number(ef.remaining) || 0} unit="g" step={2.5} min={0} max={1000} format={(v) => (v % 1 === 0 ? String(v) : v.toFixed(1))} onChange={setE("remaining")} />
           </div>
           <Field label="Tasting notes" value={ef.notes} onChange={setE("notes")} placeholder="comma, separated" />
           <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveEdit}>
