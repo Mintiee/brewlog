@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { StarsMini } from "@/components/ui";
 import { brewRating, daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
+import { processTexture } from "@/lib/flavour";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface JournalProps {
@@ -56,6 +57,7 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
               const c = coffees.find((x) => x.id === b.coffee_id);
               const br = config.brewers.find((x) => x.id === b.brewer_id);
               const rating = Math.round(brewRating(b));
+              const tex = c ? processTexture(c.process) : {};
 
               return (
                 <button
@@ -66,11 +68,12 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
                 >
                   <span
                     style={{
-                      width: 8,
+                      width: 10,
                       height: 38,
                       borderRadius: 4,
                       background: c ? c.color : "var(--accent)",
                       flexShrink: 0,
+                      ...tex,
                     }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
