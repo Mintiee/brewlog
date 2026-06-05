@@ -35,12 +35,14 @@ interface CoffeeDetailProps {
 
 export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: CoffeeDetailProps) {
   const [freezing, setFreezing] = useState(false);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
   const [amt, setAmt] = useState(0);
   const [editing, setEditing] = useState(false);
   const [ef, setEf] = useState<EditForm | null>(null);
 
   useEffect(() => {
     setFreezing(false);
+    setConfirmingFinish(false);
     setEditing(false);
   }, [coffee?.id]);
 
@@ -238,7 +240,19 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
                 <Icon name="snow" size={19} stroke={1.7} /> Take {frozen}g out of freezer
               </button>
             )}
-            <button className="btn btn-ghost" onClick={() => setArchived(true)}>Mark this bag finished</button>
+            {confirmingFinish ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ fontSize: 13.5, color: "var(--ink-dim)", textAlign: "center", lineHeight: 1.4 }}>
+                  Move this bag to archive?<br />This can&apos;t be undone from the shelf.
+                </div>
+                <button className="btn btn-soft" style={{ color: "var(--fade)", borderColor: "var(--fade)" }} onClick={() => { setArchived(true); }}>
+                  Yes, mark as finished
+                </button>
+                <button className="btn btn-ghost" onClick={() => setConfirmingFinish(false)}>Cancel</button>
+              </div>
+            ) : (
+              <button className="btn btn-ghost" onClick={() => setConfirmingFinish(true)}>Mark this bag finished</button>
+            )}
           </div>
         )}
       </div>

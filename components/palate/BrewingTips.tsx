@@ -93,6 +93,8 @@ export function BrewingTips({ brews, coffees, config }: BrewingTipsProps) {
   if (!tips.length) return null;
 
   return (
+    <>
+    <div className="label" style={{ margin: "6px 2px -2px" }}>Brewing tips</div>
     <div className="card" style={{ padding: "6px 18px" }}>
       {tips.map((t, i) => (
         <div
@@ -114,5 +116,6 @@ export function BrewingTips({ brews, coffees, config }: BrewingTipsProps) {
         </div>
       ))}
     </div>
+    </>
   );
 }

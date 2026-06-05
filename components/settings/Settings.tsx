@@ -245,28 +245,10 @@ export function Settings({
                   <span className="label" style={{ fontSize: 9 }}>switch</span>
                 </button>
               ))}
-            <button
-              onClick={onAddUser}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                padding: "12px 4px 4px",
-                background: "none",
-                border: "none",
-                borderTop: "1px solid var(--line)",
-                cursor: "pointer",
-                color: "var(--ink-dim)",
-                fontSize: 14,
-              }}
-            >
-              <Icon name="plus" size={16} stroke={2} /> Add another account
-            </button>
+            {/* TODO: restore when multi-account switching is built */}
           </div>
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 8, lineHeight: 1.5 }}>
             You and your household share one shelf and brew log — each rates and logs as themselves.
-            Stored on this device in the preview; synced to your household in the full app.
           </div>
         </SSection>
 

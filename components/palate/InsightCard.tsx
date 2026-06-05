@@ -77,7 +77,14 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
     return () => { cancelled = true; };
   }, [brews, coffees, llmEnabled]);
 
-  if (!llmEnabled) return null;
+  if (!llmEnabled) return (
+    <div className="card" style={{ padding: 18, opacity: 0.6 }}>
+      <div style={{ display: "flex", gap: 8, color: "var(--ink-faint)", alignItems: "center" }}>
+        <Icon name="spark" size={16} stroke={1.8} />
+        <span className="label">This fortnight · Add an AI key in Settings to enable</span>
+      </div>
+    </div>
+  );
   if (failed) return null;
 
   return (
@@ -89,9 +96,9 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
       </div>
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-          <div className="shimmer" style={{ height: 13, width: "100%", borderRadius: 7 }} />
-          <div className="shimmer" style={{ height: 13, width: "92%", borderRadius: 7 }} />
-          <div className="shimmer" style={{ height: 13, width: "70%", borderRadius: 7 }} />
+          <div className="shimmer" style={{ height: 13, width: "100%", borderRadius: 7, background: "var(--surface-3)" }} />
+          <div className="shimmer" style={{ height: 13, width: "92%", borderRadius: 7, background: "var(--surface-3)" }} />
+          <div className="shimmer" style={{ height: 13, width: "70%", borderRadius: 7, background: "var(--surface-3)" }} />
         </div>
       ) : (
         <p style={{ fontSize: 16, lineHeight: 1.5, fontWeight: 500, letterSpacing: "-0.01em", margin: 0, position: "relative", textWrap: "pretty" }}>

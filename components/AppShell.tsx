@@ -13,7 +13,7 @@ type Tab = "brew" | "shelf" | "palate" | "settings";
 const TABS = [
   { id: "brew" as Tab,   icon: "brew",  label: "Brew" },
   { id: "shelf" as Tab,  icon: "shelf", label: "Shelf" },
-  { id: "palate" as Tab, icon: "log",   label: "Palate" },
+  { id: "palate" as Tab, icon: "log",   label: "Log" },
 ];
 
 function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t: Tab) => void; pendingCount: number }) {
@@ -56,6 +56,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
         })}
       </div>
       {/* Safe-area spacer — solid bg so home-indicator zone matches the app, not the PWA chrome */}
+      <div style={{ height: "env(safe-area-inset-bottom, 0px)", background: "inherit" }} />
     </div>
   );
 }
@@ -117,6 +118,7 @@ function Shell() {
           resetKey={brewResetKey}
           startCoffee={brewStart}
           onStep={setBrewStep}
+          onGotoShelf={() => gotoTab("shelf")}
         />
       )}
       {tab === "shelf" && (

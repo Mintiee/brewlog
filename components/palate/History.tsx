@@ -27,8 +27,8 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
   return (
     <div className="screen">
       <div className="screen-pad" style={{ paddingTop: 8 }}>
-        <div className="label">{brews.length} brews</div>
-        <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 18 }}>Palate</h1>
+        <div className="label">{brews.length} {brews.length === 1 ? "brew" : "brews"}</div>
+        <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 18 }}>Log</h1>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {brews.length === 0 ? (
@@ -45,7 +45,6 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
             <>
               <InsightCard brews={brews} coffees={coffees} llmEnabled={llmEnabled} />
               <FlavourRanking brews={brews} coffees={coffees} />
-              <div className="label" style={{ margin: "6px 2px -2px" }}>Brewing tips</div>
               <BrewingTips brews={brews} coffees={coffees} config={config} />
               <div style={{ marginTop: 8 }}>
                 <Journal brews={brews} coffees={coffees} config={config} onOpen={setSelected} />

@@ -12,9 +12,10 @@ interface StepWhatProps {
   onPick: (c: Coffee) => void;
   onRate: (b: Brew) => void;
   onOpenBrew?: (b: Brew) => void;
+  onGotoShelf?: () => void;
 }
 
-export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }: StepWhatProps) {
+export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, onGotoShelf }: StepWhatProps) {
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
   const [, setTick] = useState(0);
 
@@ -31,15 +32,17 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }:
   const ready = sortByDay(decorated.filter((d) => d.st.ready && d.st.state !== "past"));
   const pastPeak = sortByDay(decorated.filter((d) => d.st.ready && d.st.state === "past"));
 
-  // Recent strip: last 14 days
+  // Recent strip: last 14 days — only render from the oldest day with a brew to today
   const byDay: Record<number, Brew[]> = {};
   brews.forEach((b) => {
     const d = daysAgoFromStartedAt(b.started_at);
     if (d <= 13) (byDay[d] = byDay[d] || []).push(b);
   });
+  const hasRecent = Object.keys(byDay).length > 0;
+  // Find the furthest-back day with a brew, then render from there → 0 (oldest left, today right)
+  const oldestFilledDay = hasRecent ? Math.max(...Object.keys(byDay).map(Number)) : 0;
   const days = [];
-  for (let d = 13; d >= 0; d--) days.push({ d, brews: (byDay[d] || []).slice(0, 4) });
-  const hasRecent = days.some((x) => x.brews.length > 0);
+  for (let d = oldestFilledDay; d >= 0; d--) days.push({ d, brews: (byDay[d] || []).slice(0, 4) });
 
   const rel = (d: number) => d === 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 
@@ -61,17 +64,17 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }:
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px 10px", color: "var(--ink-faint)", fontSize: 10.5 }}>
             <span className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="freshness">
-              <Icon name="bean" size={13} stroke={1.8} /> {st.day}d
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="days since roast">
+              <Icon name="bean" size={13} stroke={1.8} /> {st.day}d old
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title="last brewed">
-              <Icon name="timer" size={11} stroke={1.8} /> {last || "—"}
+              <Icon name="timer" size={11} stroke={1.8} /> {last ? `brewed ${last}` : "not brewed"}
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title="serves left">
-              <Icon name="drop" size={11} stroke={1.8} /> {serves}
+              <Icon name="drop" size={11} stroke={1.8} /> {serves} left
             </span>
           </div>
-          <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.015em", color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 }}>{c.name}</div>
+          <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.015em", color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 2 }}>{c.name}</div>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px 13px", marginTop: 8 }}>
             {c.notes.map((n) => (
               <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: noteColor(n) }}>
@@ -147,6 +150,23 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew }:
             {pastPeak.map((d, i) => renderRow(d, i, true))}
           </div>
         </>
+      )}
+
+      {ready.length < 3 && onGotoShelf && (
+        <button
+          onClick={onGotoShelf}
+          className="rise rise-5"
+          style={{
+            marginTop: 20, width: "100%", textAlign: "left",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: "var(--surface)", border: "1px solid var(--line)",
+            borderRadius: "var(--r-tile)", padding: "14px 17px",
+            cursor: "pointer", color: "var(--ink-dim)",
+          }}
+        >
+          <span style={{ fontSize: 14, fontWeight: 500 }}>Add more coffees to your shelf</span>
+          <Icon name="chev" size={16} stroke={1.8} />
+        </button>
       )}
 
       {hasRecent && (

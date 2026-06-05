@@ -16,9 +16,10 @@ interface BrewFlowProps {
   resetKey?: number;
   startCoffee?: { coffee: Coffee; nonce: number } | null;
   onStep?: (step: string) => void;
+  onGotoShelf?: () => void;
 }
 
-export function BrewFlow({ resetKey, startCoffee, onStep }: BrewFlowProps = {}) {
+export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
   const { coffees, brews, config, profile, startBrew, rateBrew, updateBrew, dismissBrew } = useApp();
 
   const [step, setStep] = useState<Step>("what");
@@ -129,6 +130,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep }: BrewFlowProps = {}) 
           onPick={(c) => { setCoffee(c); setStep("how"); }}
           onRate={openRate}
           onOpenBrew={setDetailBrew}
+          onGotoShelf={onGotoShelf}
         />
       )}
       {step === "how" && coffee && (
