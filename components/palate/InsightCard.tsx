@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Icon } from "@/components/ui";
-import { brewRating } from "@/lib/domain";
+import { brewRating, localISODate } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface InsightCardProps {
@@ -21,7 +21,11 @@ export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardP
     let cancelled = false;
 
     const LS_KEY = "brew_insight_v2";  // bumped: invalidates old local caches on deploy
-    const today = new Date().toISOString().slice(0, 10);
+    // Local calendar day (not UTC), so a fresh insight appears at local midnight
+    // rather than at UTC midnight (mid-morning in AU). Offset lets the server
+    // map its stored generated_at onto the same local day.
+    const today = localISODate(Date.now());
+    const tzOffsetMin = new Date().getTimezoneOffset();
     const FORTNIGHT_MS = 14 * 24 * 60 * 60 * 1000;
 
     async function run() {
@@ -63,7 +67,7 @@ export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardP
         const res = await fetch("/api/insight", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brews: digest }),
+          body: JSON.stringify({ brews: digest, date: today, tzOffsetMin }),
         });
         if (!res.ok) throw new Error("insight failed");
         const data = await res.json();

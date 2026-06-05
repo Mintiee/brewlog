@@ -17,27 +17,37 @@ Output ONLY one warm, conversational sentence of roughly 20 words or fewer — n
 // Most capable model per provider — this single sentence is worth it.
 const INSIGHT_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-5.5" } as const;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+// The local calendar day (YYYY-MM-DD) of a timestamp, shifted by the client's
+// timezone offset (minutes, as returned by Date.prototype.getTimezoneOffset:
+// positive west of UTC). Lets a UTC server reason in the user's local day.
+function localDay(ms: number, tzOffsetMin: number): string {
+  return new Date(ms - tzOffsetMin * 60000).toISOString().slice(0, 10);
+}
 
 export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { brews } = await req.json();
+  const { brews, date, tzOffsetMin } = await req.json();
   if (!Array.isArray(brews) || brews.length === 0) {
     return NextResponse.json({ error: "No brew data" }, { status: 400 });
   }
+  // Client's local "today" and offset; fall back to a UTC day if absent (older clients).
+  const offset = typeof tzOffsetMin === "number" ? tzOffsetMin : 0;
+  const clientToday = typeof date === "string" ? date : localDay(Date.now(), offset);
 
   const service = createServiceClient();
 
-  // Cache: at most one LLM call per household per day (caps API spend across devices/remounts).
+  // Cache: at most one LLM call per household per local calendar day. Regenerate
+  // when the cached insight was generated on an earlier local day than the
+  // client's "today" — so a new note lands at the user's local midnight.
   const { data: cached } = await service
     .from("household_insight")
     .select("text,generated_at")
     .eq("household_id", hk.householdId)
     .single();
 
-  if (cached && Date.now() - new Date(cached.generated_at).getTime() < DAY_MS) {
+  if (cached && localDay(new Date(cached.generated_at).getTime(), offset) === clientToday) {
     return NextResponse.json({ text: cached.text, cached: true });
   }
 
