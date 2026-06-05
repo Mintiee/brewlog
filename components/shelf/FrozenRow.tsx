@@ -16,7 +16,7 @@ export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
   const st = coffeeStatus(coffee, brews);
   return (
     <button onClick={() => onOpen(coffee)} className="card" style={{
-      width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "center",
+      width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "flex-start",
     }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 46 }}>
         <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} process={coffee.process} />
