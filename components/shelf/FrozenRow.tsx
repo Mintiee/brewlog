@@ -18,7 +18,10 @@ export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
     <button onClick={() => onOpen(coffee)} className="card" style={{
       width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "center",
     }}>
-      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} process={coffee.process} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 46 }}>
+        <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} process={coffee.process} />
+        {coffee.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{coffee.origin}</span>}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
         <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{coffee.name}</div>
