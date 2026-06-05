@@ -21,7 +21,9 @@ interface BrewFlowProps {
 }
 
 export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
-  const { coffees, brews, config, profile, startBrew, rateBrew, updateBrew, dismissBrew } = useApp();
+  const { coffees, brews, config, profile, members, startBrew, rateBrew, updateBrew, dismissBrew } = useApp();
+  // The other household member (if any) — the target for "send to rate".
+  const otherMember = members.find((m) => m.id !== profile.id) ?? null;
 
   const [step, setStep] = useState<Step>("what");
   const [coffee, setCoffee] = useState(coffees[0] ?? null);
@@ -66,6 +68,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       bypass: r.bypass || 0,
       ratio: (r.water + (r.bypass || 0)) / r.dose,
       pending: true,
+      rate_for: null,
       started_at: String(startedAt),
       // Snapshot the freeze-adjusted rest now, so it stays correct if the
       // coffee is later re-frozen or its dates edited.
@@ -125,6 +128,13 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     backHome();
   }
 
+  // Hand the just-logged brew to the other member to rate — it leaves my pending
+  // list and surfaces only on theirs.
+  function sendToRate() {
+    if (rateTarget && otherMember) updateBrew(rateTarget.id, { rate_for: otherMember.id });
+    backHome();
+  }
+
   return (
     <div className="screen" ref={scrollRef}>
       {step === "what" && (
@@ -132,8 +142,11 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           coffees={coffees}
           brews={brews}
           config={config}
+          profile={profile}
+          members={members}
           onPick={(c) => { setCoffee(c); setStep("how"); }}
           onRate={openRate}
+          onSend={(b) => { if (otherMember) updateBrew(b.id, { rate_for: otherMember.id }); }}
           onOpenBrew={setDetailBrew}
           onGotoShelf={onGotoShelf}
         />
@@ -179,6 +192,16 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           }}>
             Already had it? Rate now
           </button>
+          {otherMember && (
+            <button className="rise rise-3" onClick={sendToRate} style={{
+              marginTop: 14, background: "none", border: "1px solid var(--line)", borderRadius: 999,
+              cursor: "pointer", color: "var(--ink-dim)", fontFamily: "var(--font-ui)",
+              fontSize: 13.5, fontWeight: 600, padding: "10px 18px",
+              display: "inline-flex", alignItems: "center", gap: 7,
+            }}>
+              <Icon name="chev" size={15} stroke={2} /> Send to {otherMember.name} to rate
+            </button>
+          )}
         </div>
       )}
       {step === "done" && (

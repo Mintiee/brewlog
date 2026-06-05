@@ -1,6 +1,7 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { AppProvider, useApp, type AppData } from "@/lib/store/AppContext";
+import { ratingOwnerId } from "@/lib/domain";
 import { Icon, Splash } from "@/components/ui";
 import { BrewFlow } from "@/components/brew/BrewFlow";
 import { Shelf } from "@/components/shelf/Shelf";
@@ -72,7 +73,9 @@ function Shell() {
   const [brewStart, setBrewStart] = useState<{ coffee: Coffee; nonce: number } | null>(null);
   const [brewStep, setBrewStep] = useState("what");
 
-  const pendingCount = brews.filter((b) => b.pending).length;
+  // Only brews that are mine to rate — ones I logged (and haven't sent away) or
+  // that were handed to me. Brews I sent to someone else drop off my badge.
+  const pendingCount = brews.filter((b) => b.pending && ratingOwnerId(b) === profile.id).length;
 
   // Tabs are statically imported (instant, flicker-free switching). Render them
   // on the client only via this mounted gate: the data is seeded from server

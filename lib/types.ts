@@ -50,6 +50,9 @@ export interface Brew {
   rated_at: string | null;
   logged_by: string;     // profile id
   pending: boolean;
+  /** When set, this brew was handed off to that profile to rate — it leaves the
+   *  sender's pending list and shows only for the target. null = shared pending. */
+  rate_for: string | null;
   // rating fields (null until rated)
   stars: number | null;
   stars2: number | null;

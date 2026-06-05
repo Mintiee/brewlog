@@ -106,6 +106,18 @@ export async function fetchProfile(userId: string, client?: DB): Promise<Profile
   return { id: data.id, household_id: data.household_id, name: data.name };
 }
 
+/** All profiles in the caller's household (RLS scopes this to their household).
+ *  Used to resolve the other member as a "send to rate" target and to label
+ *  who a handed-off brew came from. */
+export async function fetchHouseholdProfiles(client?: DB): Promise<Profile[]> {
+  const sb = client ?? createClient();
+  const { data, error } = await sb.from("profiles").select("*");
+  if (error) return [];
+  return (data ?? []).map((r: { id: string; household_id: string; name: string }) => ({
+    id: r.id, household_id: r.household_id, name: r.name,
+  }));
+}
+
 export async function updateProfileName(id: string, name: string): Promise<void> {
   const sb = createClient();
   const { error } = await sb.from("profiles").update({ name }).eq("id", id);
@@ -188,6 +200,7 @@ function rowToBrew(r: any): Brew {
     rated_at: r.rated_at ? new Date(r.rated_at).getTime().toString() : null,
     logged_by: r.logged_by,
     pending: r.rated_at == null,
+    rate_for: r.rate_for ?? null,
     stars: r.stars, stars2: r.stars2,
     taster1: r.taster1, taster2: r.taster2,
     acidity: r.acidity, sweetness: r.sweetness, body: r.body, clarity: r.clarity,
@@ -209,6 +222,9 @@ function brewToRow(b: Partial<Brew>) {
     started_at: b.started_at ? new Date(parseInt(b.started_at)).toISOString() : undefined,
     // Only write rest_days when present — keep rating-only patch updates from nulling it.
     ...(b.rest_days !== undefined ? { rest_days: b.rest_days } : {}),
+    // Only write rate_for when present in the patch, so unrelated updates don't
+    // null it; an explicit null (cleared on rate) still writes through.
+    ...(b.rate_for !== undefined ? { rate_for: b.rate_for } : {}),
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,

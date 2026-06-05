@@ -4,7 +4,7 @@ import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { SEED_CONFIG } from "@/lib/domain/seed";
 import { createClient } from "@/lib/supabase/browser";
 import {
-  fetchCoffees, fetchBrews, fetchConfig, fetchProfile,
+  fetchCoffees, fetchBrews, fetchConfig, fetchProfile, fetchHouseholdProfiles,
   insertBrew, updateBrew as dbUpdateBrew, deleteBrew, upsertCoffee, upsertConfig,
   fetchAiKeyStatus, fetchLearnedNotes,
 } from "@/lib/db";
@@ -23,6 +23,7 @@ interface AppState {
   brews: Brew[];
   config: Config;
   profile: Profile;
+  members: Profile[];      // all profiles in the household (self + others)
   llmEnabled: boolean;
   aiProvider?: string;
   ready: boolean;          // true once data has loaded (or seeded)
@@ -69,6 +70,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const [brews, setBrews] = useState<Brew[]>(initialData?.brews ?? []);
   const [config, setConfigState] = useState<Config>(initialData?.config ?? SEED_CONFIG);
   const [profile, setProfileState] = useState<Profile>(initialData?.profile ?? SEED_PROFILE);
+  const [members, setMembers] = useState<Profile[]>(initialData?.profile ? [initialData.profile] : []);
   const [llmEnabled, setLlmEnabled] = useState(!!initialData?.aiStatus?.set);
   const [aiProvider, setAiProvider] = useState<string | undefined>(initialData?.aiStatus?.provider);
   const [ready, setReady] = useState(!!initialData);
@@ -87,15 +89,17 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
         if (!user) { setReady(true); return; }
         setAuthed(true);
         try {
-          const [p, c, b, cfg, aiStatus, notes] = await Promise.all([
+          const [p, c, b, cfg, aiStatus, notes, mem] = await Promise.all([
             fetchProfile(user.id),
             fetchCoffees(),
             fetchBrews(),
             fetchConfig(),
             fetchAiKeyStatus(),
             fetchLearnedNotes(),
+            fetchHouseholdProfiles(),
           ]);
           if (p) setProfileState(p);
+          if (mem.length) setMembers(mem);
           // Authed: adopt the fetched data even when empty — an authed user with no
           // coffees/brews should see an empty shelf/journal, NOT the seed/dummy fallback.
           setCoffees(c);
@@ -113,11 +117,44 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       if (event === "SIGNED_OUT") {
         setCoffees([]); setBrews([]); setConfigState(SEED_CONFIG);
         applyConfigToDomain(SEED_CONFIG);
-        setProfileState(SEED_PROFILE); setLlmEnabled(false); setAuthed(false);
+        setProfileState(SEED_PROFILE); setMembers([]); setLlmEnabled(false); setAuthed(false);
       }
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Re-pull household data (brews + coffees) — server is the source of truth.
+  // Used by the foreground refresh so a brew sent from another device appears
+  // without a full reload. Local optimistic writes have persisted by then.
+  const refresh = useCallback(async () => {
+    if (!authed) return;
+    try {
+      const [c, b] = await Promise.all([fetchCoffees(), fetchBrews()]);
+      setCoffees(c);
+      setBrews(b);
+    } catch { /* transient — keep current state */ }
+  }, [authed]);
+
+  // On the seeded first-load path the household members aren't prefetched, so
+  // pull them once; and refresh data whenever the app returns to the foreground
+  // (throttled), so handed-off brews surface without a manual reload.
+  useEffect(() => {
+    if (!authed) return;
+    fetchHouseholdProfiles().then((m) => { if (m.length) setMembers(m); }).catch(() => {});
+    let last = Date.now();
+    const onForeground = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - last < 10000) return; // throttle bursts of focus/visibility events
+      last = Date.now();
+      refresh();
+    };
+    document.addEventListener("visibilitychange", onForeground);
+    window.addEventListener("focus", onForeground);
+    return () => {
+      document.removeEventListener("visibilitychange", onForeground);
+      window.removeEventListener("focus", onForeground);
+    };
+  }, [authed, refresh]);
 
   // ---- Optimistic mutations (update local state immediately; sync to DB if authed) ----
 
@@ -155,7 +192,9 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   }, [authed]);
 
   const rateBrew = useCallback((id: string, rating: Partial<Brew>) => {
-    const patch = { ...rating, pending: false, rated_at: String(Date.now()) };
+    // Rating always clears the handoff flag — once rated it's no longer "awaiting"
+    // anyone, and the rater is recorded as taster1 by the caller (StepRate).
+    const patch = { ...rating, pending: false, rated_at: String(Date.now()), rate_for: null };
     setBrews((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } : x));
     if (authed) dbUpdateBrew(id, patch).catch(console.error);
   }, [authed]);
@@ -183,7 +222,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, config, profile, llmEnabled, aiProvider, ready, lastError,
+      coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, lastError,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, setConfig, setProfile, clearError,
     }}>
       {children}

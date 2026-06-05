@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import type { Coffee, Brew, Config } from "@/lib/types";
-import { coffeeStatus, activeGrams, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro } from "@/lib/domain";
+import type { Coffee, Brew, Config, Profile } from "@/lib/types";
+import { coffeeStatus, activeGrams, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, ratingOwnerId } from "@/lib/domain";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { Icon, FreshDot, OriginTile } from "@/components/ui";
 
@@ -9,17 +9,27 @@ interface StepWhatProps {
   coffees: Coffee[];
   brews: Brew[];
   config: Config;
+  profile: Profile;
+  members: Profile[];
   onPick: (c: Coffee) => void;
   onRate: (b: Brew) => void;
+  onSend?: (b: Brew) => void;
   onOpenBrew?: (b: Brew) => void;
   onGotoShelf?: () => void;
 }
 
-export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, onGotoShelf }: StepWhatProps) {
+export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf }: StepWhatProps) {
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
   const [, setTick] = useState(0);
 
-  const pending = brews.filter((b) => b.pending).sort((a, b) => Number(b.started_at) - Number(a.started_at));
+  // The other household member (if any) — the "send to rate" target.
+  const otherMember = members.find((m) => m.id !== profile.id) ?? null;
+
+  // Only brews that are mine to rate: ones I logged and haven't sent away, or
+  // ones handed to me. A sent brew leaves the sender's list and joins the target's.
+  const pending = brews
+    .filter((b) => b.pending && ratingOwnerId(b) === profile.id)
+    .sort((a, b) => Number(b.started_at) - Number(a.started_at));
 
   useEffect(() => {
     if (!pending.length) return;
@@ -109,29 +119,44 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
               const c = coffees.find((x) => x.id === b.coffee_id);
               const br = brewerById(b.brewer_id);
               if (!c) return null;
+              const handedToMe = b.rate_for === profile.id;
+              const senderName = handedToMe ? (members.find((m) => m.id === b.logged_by)?.name ?? null) : null;
+              const canSend = !!onSend && !!otherMember && b.rate_for == null && b.logged_by === profile.id;
               return (
-                <button key={b.id} onClick={() => onRate(b)} style={{
-                  display: "flex", alignItems: "center", gap: 14, textAlign: "left", width: "100%",
-                  background: "var(--accent-soft)", border: "1px solid color-mix(in srgb, var(--accent) 38%, transparent)",
-                  borderRadius: "var(--r-tile)", padding: "13px 14px", cursor: "pointer", color: "var(--ink)",
-                }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 44 }}>
-                    <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={44} radius={12} process={c.process} />
-                    {c.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{c.origin}</span>}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-faint)", fontSize: 11 }}>
-                      <span className="label" style={{ color: "var(--ink-faint)" }}>{br ? br.short : ""}</span>
-                      <span className="mono">{sinceText(b.started_at)}</span>
+                <div key={b.id} style={{ display: "flex", flexDirection: "column" }}>
+                  <button onClick={() => onRate(b)} style={{
+                    display: "flex", alignItems: "center", gap: 14, textAlign: "left", width: "100%",
+                    background: "var(--accent-soft)", border: "1px solid color-mix(in srgb, var(--accent) 38%, transparent)",
+                    borderRadius: "var(--r-tile)", padding: "13px 14px", cursor: "pointer", color: "var(--ink)",
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 44 }}>
+                      <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={44} radius={12} process={c.process} />
+                      {c.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{c.origin}</span>}
                     </div>
-                    <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.015em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{c.name}</div>
-                  </div>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
-                    background: "var(--accent)", color: "#1a0f06", fontWeight: 600, fontSize: 13.5,
-                    padding: "9px 14px", borderRadius: 999 }}>
-                    Rate <Icon name="chev" size={15} stroke={2.2} />
-                  </span>
-                </button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-faint)", fontSize: 11 }}>
+                        <span className="label" style={{ color: "var(--ink-faint)" }}>{br ? br.short : ""}</span>
+                        <span className="mono">{sinceText(b.started_at)}</span>
+                        {senderName && <span className="mono" style={{ color: "var(--accent)" }}>· from {senderName}</span>}
+                      </div>
+                      <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.015em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{c.name}</div>
+                    </div>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
+                      background: "var(--accent)", color: "#1a0f06", fontWeight: 600, fontSize: 13.5,
+                      padding: "9px 14px", borderRadius: 999 }}>
+                      Rate <Icon name="chev" size={15} stroke={2.2} />
+                    </span>
+                  </button>
+                  {canSend && (
+                    <button onClick={() => onSend!(b)} style={{
+                      alignSelf: "flex-end", background: "none", border: "none", cursor: "pointer",
+                      color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 12.5, fontWeight: 600,
+                      padding: "7px 6px 2px", display: "inline-flex", alignItems: "center", gap: 5,
+                    }}>
+                      Send to {otherMember!.name} to rate <Icon name="chev" size={13} stroke={2} />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

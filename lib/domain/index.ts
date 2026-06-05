@@ -141,6 +141,13 @@ export function pendingBrews(brews: Brew[]): Brew[] {
     .sort((a, b) => parseTs(b.started_at) - parseTs(a.started_at));
 }
 
+/** Whose "waiting to rate" list a brew belongs in: the person it was handed off
+ *  to (rate_for) if set, otherwise the person who logged it. A logged brew is
+ *  the logger's to rate until they send it to someone else. */
+export function ratingOwnerId(b: Brew): string {
+  return b.rate_for ?? b.logged_by;
+}
+
 // ---------- Time helpers ----------
 
 export function sinceText(ts: string | number): string {
