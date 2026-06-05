@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, cupsLeft, originCode,
+  coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, cupsLeft, originCode, roastDateText,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
@@ -163,6 +163,9 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             <div key={k} style={{ background: "var(--surface)", padding: "13px 15px" }}>
               <div className="label">{k}</div>
               <div style={{ fontSize: 15, fontWeight: 600, marginTop: 3, color: k === "Status" ? freshColor(st.state) : "var(--ink)" }}>{v}</div>
+              {k === "Roasted" && (
+                <div className="label" style={{ marginTop: 2 }}>{roastDateText(coffee.roasted_at)}</div>
+              )}
             </div>
           ))}
         </div>

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { activeGrams, coffeeStatus, frozenGramsOf } from "@/lib/domain";
+import { activeGrams, coffeeStatus, frozenGramsOf, remainingGrams, avgDailyGrams, formatWeight, formatDaysWorth } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { FreshDot } from "@/components/ui/FreshDot";
@@ -26,6 +26,9 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
 
   const live = coffees.filter((c) => !c.archived);
   const archived = coffees.filter((c) => c.archived);
+  const totalGrams = live.reduce((s, c) => s + remainingGrams(c, brews), 0);
+  const perDay = avgDailyGrams(brews);
+  const worth = perDay > 0 ? formatDaysWorth(totalGrams / perDay) : null;
   const activeList = live
     .filter((c) => activeGrams(c, brews) > 0)
     .map((c) => ({ c, st: coffeeStatus(c, brews) }));
@@ -52,7 +55,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
     <div className="screen">
       <div className="screen-pad" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 8 }}>
         <div>
-          <div className="label">{live.length} on the shelf</div>
+          <div className="label">{live.length} on the shelf · {formatWeight(totalGrams)}{worth ? ` · ${worth}` : ""}</div>
           <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3 }}>Shelf</h1>
         </div>
         <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>

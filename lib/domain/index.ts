@@ -131,6 +131,56 @@ export function daysAgoFromStartedAt(startedAt: string | number): number {
   return Math.floor((Date.now() - ms) / 86400000);
 }
 
+export function roastDateText(iso: string): string {
+  // Format "YYYY-MM-DD" as a local date (avoids UTC ±1-day drift) e.g. "23 May 2025"
+  return parseLocalDate(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// ---------- Shelf consumption estimate ----------
+
+/** Average grams of coffee consumed per day, household-wide, over the last
+ *  `windowDays` (or the shorter span of available brew history). Counts all
+ *  brews — the dose was consumed regardless of whether the brew was rated.
+ *  Returns 0 when there's no brew history in the window. */
+export function avgDailyGrams(brews: Brew[], windowDays = 14): number {
+  if (!brews.length) return 0;
+  const now = Date.now();
+  const cutoff = now - windowDays * 86400000;
+  let sum = 0;
+  let earliest = now;
+  for (const b of brews) {
+    const ts = parseTs(b.started_at);
+    if (ts < earliest) earliest = ts;
+    if (ts >= cutoff) sum += b.dose || 0;
+  }
+  if (sum === 0) return 0;
+  const span = Math.min(windowDays, Math.max(1, Math.ceil((now - earliest) / 86400000)));
+  return sum / span;
+}
+
+export function formatWeight(grams: number): string {
+  if (grams >= 1000) {
+    const kg = grams / 1000;
+    // trim trailing zeros: 2.10 -> "2.1", 2.00 -> "2"
+    return `${parseFloat(kg.toFixed(2))}kg`;
+  }
+  return `${Math.round(grams)}g`;
+}
+
+export function formatDaysWorth(days: number): string {
+  if (days > 365) return "plenty of coffee";
+  if (days > 60) {
+    const n = Math.round(days / 30);
+    return `~${n} month${n === 1 ? "" : "s"} of coffee`;
+  }
+  if (days >= 14) {
+    const n = Math.round(days / 7);
+    return `~${n} week${n === 1 ? "" : "s"} of coffee`;
+  }
+  const n = Math.round(days);
+  return `~${n} day${n === 1 ? "" : "s"} of coffee`;
+}
+
 // ---------- Recipe defaults ----------
 
 const ROAST_TEMP_NUDGE: Record<string, number> = {
