@@ -4,6 +4,7 @@ import { Icon, Segmented } from "@/components/ui";
 import { InsightCard } from "./InsightCard";
 import { FlavourRanking } from "./FlavourRanking";
 import { RoasterRanking } from "./RoasterRanking";
+import { ProcessRanking } from "./ProcessRanking";
 import { RestRanking } from "./RestRanking";
 import { BrewingTips } from "./BrewingTips";
 import { Journal } from "./Journal";
@@ -74,6 +75,7 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
                 <InsightCard brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
                 <FlavourRanking brews={rated} coffees={coffees} />
                 <RoasterRanking brews={rated} coffees={coffees} />
+                <ProcessRanking brews={rated} coffees={coffees} />
                 <RestRanking brews={rated} />
                 <BrewingTips brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
               </div>
