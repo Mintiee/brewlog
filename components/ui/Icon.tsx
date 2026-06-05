@@ -19,9 +19,12 @@ function p(s = 1.7) {
 export function Icon({ name, size = 22, stroke = 1.7, style, className }: IconProps) {
   const ps = p(stroke);
   const paths: Record<string, React.ReactNode> = {
-    brew: <g {...ps}><path d="M5.5 6.5h13l-3.1 6a2.2 2.2 0 0 1-1.95 1.2h-2.9a2.2 2.2 0 0 1-1.95-1.2L5.5 6.5Z"/><path d="M12 13.7v2.3"/><path d="M8.7 16h6.6l-.7 3.1a1.6 1.6 0 0 1-1.56 1.24h-2.5A1.6 1.6 0 0 1 9.4 19.1L8.7 16Z"/></g>,
-    shelf: <g {...ps}><path d="M7.2 9 8.5 6.1A1.6 1.6 0 0 1 9.96 5.2h4.08A1.6 1.6 0 0 1 15.5 6.1L16.8 9"/><rect x="6.4" y="9" width="11.2" height="11.4" rx="2.2"/><path d="M10 13.4h4"/></g>,
-    log: <g {...ps}><path d="M5 19V5"/><path d="M9 19v-6"/><path d="M13 19v-9"/><path d="M17 19V8"/><path d="M5 19h14"/></g>,
+    // Brew nav — pour-over dripper (with handle) above a handled server
+    brew: <g {...ps}><path d="M6 4.8H15l-3.3 4.6H9.3L6 4.8Z"/><path d="M15 4.8l1.6 1.3-1.9 1.4"/><path d="M7.5 9.9H13.5"/><path d="M7.7 11.3h5.6l.8 6.1a1.7 1.7 0 0 1-1.69 1.9H8.59A1.7 1.7 0 0 1 6.9 17.4L7.7 11.3Z"/><path d="M13.3 12.6c2 .2 2.1 3.4 0 3.8"/></g>,
+    // Shelf nav — simple coffee bag with a folded top and seam
+    shelf: <g {...ps}><path d="M7.7 4.8 H14.3 Q14.8 4.8 14.8 5.3 V7.4 H7.2 V5.3 Q7.2 4.8 7.7 4.8 Z"/><path d="M7.2 7.4 L6.6 18.4 Q6.6 19.2 7.4 19.2 H14.6 Q15.4 19.2 15.4 18.4 L14.8 7.4"/><path d="M9 11h4"/></g>,
+    // Log nav — journal / notebook with ruled lines
+    log: <g {...ps}><rect x="6" y="4.8" width="12" height="14.4" rx="1.8"/><path d="M9 4.8v14.4"/><path d="M11.4 9h4M11.4 12h4M11.4 15h2.6"/></g>,
     star: <path d="M12 3.6l2.45 5.18 5.55.7-4.1 3.85 1.06 5.57L12 16.9l-4.96 2.0 1.06-5.57-4.1-3.85 5.55-.7L12 3.6Z" fill="currentColor" stroke="none"/>,
     starO: <path d="M12 3.6l2.45 5.18 5.55.7-4.1 3.85 1.06 5.57L12 16.9l-4.96 2.0 1.06-5.57-4.1-3.85 5.55-.7L12 3.6Z" {...ps}/>,
     plus: <g {...ps}><path d="M12 5v14M5 12h14"/></g>,
@@ -57,6 +60,15 @@ export function Icon({ name, size = 22, stroke = 1.7, style, className }: IconPr
     snow: <g {...ps}><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M12 6.6 9.9 4.9M12 6.6l2.1-1.7M12 17.4l-2.1 1.7M12 17.4l2.1 1.7M5.8 9.3 5 6.9M5.8 9.3 3.4 9.7M18.2 14.7l.8 2.4M18.2 14.7l2.4-.4M18.2 9.3l2.4.4M18.2 9.3 19 6.9M5.8 14.7l-2.4.4M5.8 14.7 5 17.1"/></g>,
     link: <g {...ps}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></g>,
     key: <g {...ps}><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3"/></g>,
+    // ---- Brewer silhouettes (selectable method tiles) ----
+    // V60 — steep open cone with ridge lines on a small base
+    dripperV60: <g {...ps}><path d="M5.5 7h13l-6.5 10.5L5.5 7Z"/><path d="M9 7l1.4 8.6M15 7l-1.4 8.6"/><path d="M9.6 17.5h4.8"/></g>,
+    // Gabi Master — handled funnel necking into a lower cone cup on a flat base
+    dripperGabi: <g {...ps}><path d="M7 5.8h10l-3 5.2h-4L7 5.8Z"/><path d="M7.2 6.6c-2.2.6-2.2 3 .2 3.7"/><path d="M8 12.4h8"/><path d="M9 12.4h6l-1.6 5h-2.8L9 12.4Z"/><path d="M7 18.4h10"/></g>,
+    // OXO — plunger brewer: wide flat press cap on a stem over a stacked-chamber body
+    dripperOxo: <g {...ps}><path d="M9 4h6"/><path d="M12 4v2"/><rect x="9" y="6" width="6" height="13.4" rx="1.6"/><path d="M9 10.6h6M9 14.6h6"/></g>,
+    // Generic cone fallback for any unmatched brewer
+    dripper: <g {...ps}><path d="M6 8h12l-3 6h-6L6 8Z"/><path d="M12 14v2"/><path d="M9.6 16h4.8"/></g>,
   };
 
   return (

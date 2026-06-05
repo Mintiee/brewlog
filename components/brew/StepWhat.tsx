@@ -92,7 +92,7 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
   return (
     <div className="screen-pad">
       <div className="rise rise-1" style={{ paddingTop: 8 }}>
-        <div className="h-greet">{intro.greet}.</div>
+        <div className="h-greet">{intro.greet}{/[?!.]$/.test(intro.greet) ? "" : "."}</div>
         <h1 className="h-ask" style={{ marginTop: 4 }}>{intro.q}</h1>
       </div>
 

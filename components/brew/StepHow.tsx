@@ -13,6 +13,17 @@ interface StepHowProps {
   onLog: (brewer: Brewer, recipe: Recipe) => void;
 }
 
+// Pick a brewer-shaped icon by matching the user-facing label (`short`) and id.
+// Matching is normalized + substring because user-created brewers get a timestamp
+// id ("b" + Date.now()), so `short` ("V60", "Gabi", "OXO") is the reliable signal.
+function brewerIcon(b: Brewer): string {
+  const key = `${b.short} ${b.id}`.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (key.includes("v60")) return "dripperV60";
+  if (key.includes("gabi")) return "dripperGabi";
+  if (key.includes("oxo")) return "dripperOxo";
+  return "dripper";
+}
+
 export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHowProps) {
   const recipeFromBrew = (b: Brew): Recipe =>
     ({ dose: b.dose, ratio: b.ratio, water: b.water, bypass: b.bypass || 0, temp: b.temp, grind: b.grind, water_type: b.water_type });
@@ -80,7 +91,7 @@ export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHo
               border: `1px solid ${on ? "var(--ink)" : "var(--line)"}`,
               transition: "all .15s ease", display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
             }}>
-              <Icon name="brew" size={22} stroke={1.5} />
+              <Icon name={brewerIcon(b)} size={22} stroke={1.5} />
               <span style={{ fontSize: 13, fontWeight: 600 }}>{b.short}</span>
             </button>
           );
