@@ -172,10 +172,11 @@ export function processTexture(process: string): CSSProperties {
         backgroundImage:
           "linear-gradient(135deg, rgba(255,255,255,0.32) 0%, transparent 42%, transparent 58%, rgba(255,255,255,0.16) 100%)",
       };
-    case "other": // diagonal hatch — flags anything experimental/uncommon
+    case "other": // dense dark cross-hatch — aggressively flags experimental/uncommon
       return {
         backgroundImage:
-          "repeating-linear-gradient(45deg, rgba(255,255,255,0.16) 0 1.5px, transparent 1.5px 5px)",
+          "repeating-linear-gradient(45deg, rgba(0,0,0,0.32) 0 1px, transparent 1px 4px), " +
+          "repeating-linear-gradient(-45deg, rgba(0,0,0,0.32) 0 1px, transparent 1px 4px)",
       };
     case "washed": // clean — no overlay
     default:
