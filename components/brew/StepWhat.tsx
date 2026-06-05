@@ -57,7 +57,7 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
     const serves = servesN % 1 === 0 ? String(servesN) : servesN.toFixed(1);
     return (
       <button key={c.id} onClick={() => onPick(c)} className={`rise rise-${Math.min(i + 2, 5)}`} style={{
-        display: "flex", alignItems: "flex-start", gap: 15, textAlign: "left", color: "var(--ink)",
+        display: "flex", alignItems: "center", gap: 15, textAlign: "left", color: "var(--ink)",
         background: "var(--surface)", borderRadius: "var(--r-tile)", padding: "16px 17px", cursor: "pointer",
         border: "1px solid var(--line)", opacity: dim ? 0.72 : 1,
       }}>
