@@ -82,8 +82,8 @@ describe("processCategory", () => {
   it("lowercase washed → washed", () => expect(processCategory("washed")).toBe("washed"));
   it("Natural → natural", () => expect(processCategory("Natural")).toBe("natural"));
   it("Dry → natural", () => expect(processCategory("Dry")).toBe("natural"));
-  it("Honey → honey", () => expect(processCategory("Honey")).toBe("honey"));
-  it("Anaerobic Honey → honey (honey wins)", () => expect(processCategory("Anaerobic Honey")).toBe("honey"));
+  it("Honey → other (honey folds into other)", () => expect(processCategory("Honey")).toBe("other"));
+  it("Anaerobic Honey → other", () => expect(processCategory("Anaerobic Honey")).toBe("other"));
   it("Carbonic Maceration → other", () => expect(processCategory("Carbonic Maceration")).toBe("other"));
   it("empty → other", () => expect(processCategory("")).toBe("other"));
 });

@@ -148,14 +148,13 @@ export function familyLabel(fam: FlavourFamily | string): string {
 // Buckets a free-text process into one of four families, then maps each to a
 // pure-CSS overlay texture (no image assets) painted over a coffee tile.
 
-export type ProcessCategory = "washed" | "natural" | "honey" | "other";
+export type ProcessCategory = "washed" | "natural" | "other";
 
 export function processCategory(process: string): ProcessCategory {
   const p = (process || "").toLowerCase();
-  if (/honey|pulped|miel/.test(p)) return "honey";   // before "natural" — "honey natural" is a honey
   if (/wash/.test(p)) return "washed";
   if (/natural|\bdry|dried/.test(p)) return "natural";
-  return "other";
+  return "other";   // honey, anaerobic, experimental — everything less clean than natural
 }
 
 // Subtle overlay textures. Painted on a span layered above the tile fill, so they
@@ -167,12 +166,7 @@ export function processTexture(process: string): CSSProperties {
         backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.28) 1px, transparent 1.6px)",
         backgroundSize: "5px 5px",
       };
-    case "honey": // soft diagonal sheen — sticky/glossy
-      return {
-        backgroundImage:
-          "linear-gradient(135deg, rgba(255,255,255,0.32) 0%, transparent 42%, transparent 58%, rgba(255,255,255,0.16) 100%)",
-      };
-    case "other": // dense dark cross-hatch — aggressively flags experimental/uncommon
+    case "other": // dense dark cross-hatch — aggressively flags honey/experimental/uncommon
       return {
         backgroundImage:
           "repeating-linear-gradient(45deg, rgba(0,0,0,0.32) 0 1px, transparent 1px 4px), " +
