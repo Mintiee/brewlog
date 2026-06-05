@@ -174,7 +174,7 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
               {coffee ? coffee.name : brew.coffee_id}
             </div>
             <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>
-              {dateLabel}{brew.rest_days != null ? ` · rested ${brew.rest_days}d` : ""}
+              {dateLabel} · 1:{brew.ratio.toFixed(1)}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
@@ -191,7 +191,7 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
           {([
             ["Dose", `${brew.dose}g`],
             ["Water", `${brew.water}mL`],
-            ["Ratio", `1:${brew.ratio.toFixed(1)}`],
+            ["Rested", brew.rest_days != null ? `${brew.rest_days}d` : "—"],
             ["Temp", `${brew.temp}°C`],
             ["Grind", `${brew.grind}${config.grinder.unit}`],
             ["Water type", brew.water_type || "—"],
