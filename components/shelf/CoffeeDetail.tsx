@@ -260,18 +260,9 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
         ) : thawing ? (
           <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="card" style={{ padding: "16px 18px" }}>
-              <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <span className="label">Out of the freezer</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span className="mono" style={{ fontSize: 12, color: "var(--ink-dim)" }}>{thawFmt(thawAmt)}g of {frozen}g</span>
-                  <button onClick={() => setThawing(false)} aria-label="Cancel" style={{
-                    background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%",
-                    width: 28, height: 28, color: "var(--ink-dim)", cursor: "pointer", flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Icon name="close" size={15} stroke={2} />
-                  </button>
-                </div>
+              <div className="label" style={{ marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
+                <span>Out of the freezer</span>
+                <span className="mono">{thawFmt(thawAmt)}g of {frozen}g</span>
               </div>
               <input
                 type="range" className="range"
