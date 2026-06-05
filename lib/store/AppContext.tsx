@@ -45,43 +45,68 @@ const AppContext = createContext<(AppState & AppActions) | null>(null);
 
 const SEED_PROFILE: Profile = { id: "me", household_id: "seed", name: "You" };
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [coffees, setCoffees] = useState<Coffee[]>([]);
-  const [brews, setBrews] = useState<Brew[]>([]);
-  const [config, setConfigState] = useState<Config>(SEED_CONFIG);
-  const [profile, setProfileState] = useState<Profile>(SEED_PROFILE);
-  const [llmEnabled, setLlmEnabled] = useState(false);
-  const [aiProvider, setAiProvider] = useState<string | undefined>();
-  const [ready, setReady] = useState(false);
-  const [authed, setAuthed] = useState(false);
+/** Server-prefetched payload (built in app/page.tsx) used to seed initial state. */
+export interface AppData {
+  profile: Profile | null;
+  coffees: Coffee[];
+  brews: Brew[];
+  config: Config | null;
+  aiStatus: { set: boolean; provider?: string } | null;
+  notes: Record<string, string>;
+}
+
+export function AppProvider({ children, initialData }: { children: ReactNode; initialData?: AppData }) {
+  // When the server prefetched data, push config/notes into the domain modules
+  // once (during the first render, via the initializer) so freshness/serving
+  // calculations are already correct on first paint — no blank screen, no client
+  // round-trips on first load.
+  useState(() => {
+    if (initialData?.config) applyConfigToDomain(initialData.config);
+    if (initialData?.notes) setLearnedNotes(initialData.notes as Record<string, import("@/lib/flavour").FlavourFamily>);
+  });
+
+  const [coffees, setCoffees] = useState<Coffee[]>(initialData?.coffees ?? []);
+  const [brews, setBrews] = useState<Brew[]>(initialData?.brews ?? []);
+  const [config, setConfigState] = useState<Config>(initialData?.config ?? SEED_CONFIG);
+  const [profile, setProfileState] = useState<Profile>(initialData?.profile ?? SEED_PROFILE);
+  const [llmEnabled, setLlmEnabled] = useState(!!initialData?.aiStatus?.set);
+  const [aiProvider, setAiProvider] = useState<string | undefined>(initialData?.aiStatus?.provider);
+  const [ready, setReady] = useState(!!initialData);
+  const [authed, setAuthed] = useState(!!initialData?.profile);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  // Check auth + load data
+  // Check auth + load data — only when the server did NOT prefetch (demo/unauthed
+  // path, or Supabase unconfigured). The authed first-load path is fully seeded above.
   useEffect(() => {
     const sb = createClient();
-    sb.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) { setReady(true); return; }
-      setAuthed(true);
-      try {
-        const [p, c, b, cfg, aiStatus, notes] = await Promise.all([
-          fetchProfile(),
-          fetchCoffees(),
-          fetchBrews(),
-          fetchConfig(),
-          fetchAiKeyStatus(),
-          fetchLearnedNotes(),
-        ]);
-        if (p) setProfileState(p);
-        // Authed: adopt the fetched data even when empty — an authed user with no
-        // coffees/brews should see an empty shelf/journal, NOT the seed/dummy fallback.
-        setCoffees(c);
-        setBrews(b);
-        if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
-        if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
-        if (notes) setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>);
-      } catch { /* fall through to seed data */ }
-      setReady(true);
-    });
+    if (!initialData) {
+      // getSession() reads the cookie locally (no network round-trip); RLS still
+      // enforces real access on the queries below.
+      sb.auth.getSession().then(async ({ data: { session } }) => {
+        const user = session?.user;
+        if (!user) { setReady(true); return; }
+        setAuthed(true);
+        try {
+          const [p, c, b, cfg, aiStatus, notes] = await Promise.all([
+            fetchProfile(user.id),
+            fetchCoffees(),
+            fetchBrews(),
+            fetchConfig(),
+            fetchAiKeyStatus(),
+            fetchLearnedNotes(),
+          ]);
+          if (p) setProfileState(p);
+          // Authed: adopt the fetched data even when empty — an authed user with no
+          // coffees/brews should see an empty shelf/journal, NOT the seed/dummy fallback.
+          setCoffees(c);
+          setBrews(b);
+          if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
+          if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
+          if (notes) setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>);
+        } catch { /* fall through to seed data */ }
+        setReady(true);
+      });
+    }
 
     // Listen for auth state changes (sign in / sign out)
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {

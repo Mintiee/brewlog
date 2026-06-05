@@ -8,3 +8,4 @@ export { Sheet } from "./Sheet";
 export { Monogram } from "./Monogram";
 export { OriginTile } from "./OriginTile";
 export { ImagePicker } from "./ImagePicker";
+export { Splash } from "./Splash";

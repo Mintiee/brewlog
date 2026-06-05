@@ -3,15 +3,23 @@
  * All queries are household-scoped; RLS enforces access.
  */
 import { createClient } from "@/lib/supabase/browser";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { coffeeColor } from "@/lib/flavour";
 import { SEED_BREWERS } from "@/lib/domain/seed";
 
+/**
+ * Each read accepts an optional Supabase client. Pass a server client (from
+ * lib/supabase/server) to prefetch during SSR; omit it on the client, where the
+ * browser anon client is used. RLS scopes every query to the household either way.
+ */
+type DB = SupabaseClient;
+
 // ---- Coffees ----
 
-export async function fetchCoffees(): Promise<Coffee[]> {
-  const sb = createClient();
-  const { data, error } = await sb.from("coffees").select("*").order("created_at", { ascending: false });
+export async function fetchCoffees(client?: DB): Promise<Coffee[]> {
+  const sb = client ?? createClient();
+  const { data, error } = await sb.from("coffees").select("*").order("created_at", { ascending: false }).limit(200);
   if (error) throw error;
   return (data ?? []).map(rowToCoffee);
 }
@@ -32,11 +40,11 @@ export async function upsertCoffee(coffee: Coffee): Promise<Coffee> {
 
 // ---- Brews ----
 
-export async function fetchBrews(): Promise<Brew[]> {
-  const sb = createClient();
-  // No date filter — fetch all brews so backdated entries survive reload.
-  // This is a small personal dataset; the full history is fine to load.
-  const { data, error } = await sb.from("brews").select("*").order("started_at", { ascending: false });
+export async function fetchBrews(client?: DB): Promise<Brew[]> {
+  const sb = client ?? createClient();
+  // Newest first, bounded so the payload doesn't grow without limit as history
+  // accumulates. 200 covers a long personal history; add load-more if ever needed.
+  const { data, error } = await sb.from("brews").select("*").order("started_at", { ascending: false }).limit(200);
   if (error) throw error;
   return (data ?? []).map(rowToBrew);
 }
@@ -62,8 +70,8 @@ export async function deleteBrew(id: string): Promise<void> {
 
 // ---- Config ----
 
-export async function fetchConfig(): Promise<Config | null> {
-  const sb = createClient();
+export async function fetchConfig(client?: DB): Promise<Config | null> {
+  const sb = client ?? createClient();
   const { data, error } = await sb.from("config").select("*").single();
   if (error && error.code !== "PGRST116") throw error;
   return data ? rowToConfig(data) : null;
@@ -89,11 +97,11 @@ export async function upsertConfig(config: Config, householdId: string): Promise
 
 // ---- Profile + Household ----
 
-export async function fetchProfile(): Promise<Profile | null> {
-  const sb = createClient();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return null;
-  const { data, error } = await sb.from("profiles").select("*").eq("id", user.id).single();
+export async function fetchProfile(userId: string, client?: DB): Promise<Profile | null> {
+  // userId is passed in (from the caller's already-resolved session) so this no
+  // longer makes its own getUser() round-trip.
+  const sb = client ?? createClient();
+  const { data, error } = await sb.from("profiles").select("*").eq("id", userId).single();
   if (error) return null;
   return { id: data.id, household_id: data.household_id, name: data.name };
 }
@@ -106,8 +114,8 @@ export async function updateProfileName(id: string, name: string): Promise<void>
 
 // ---- Learned notes ----
 
-export async function fetchLearnedNotes(): Promise<Record<string, string>> {
-  const sb = createClient();
+export async function fetchLearnedNotes(client?: DB): Promise<Record<string, string>> {
+  const sb = client ?? createClient();
   const { data } = await sb.from("learned_notes").select("note,family");
   const map: Record<string, string> = {};
   (data ?? []).forEach((r: { note: string; family: string }) => { map[r.note] = r.family; });
@@ -116,8 +124,8 @@ export async function fetchLearnedNotes(): Promise<Record<string, string>> {
 
 // ---- AI key status (read-only from client — never returns the key itself) ----
 
-export async function fetchAiKeyStatus(): Promise<{ set: boolean; provider?: string } | null> {
-  const sb = createClient();
+export async function fetchAiKeyStatus(client?: DB): Promise<{ set: boolean; provider?: string } | null> {
+  const sb = client ?? createClient();
   const { data, error } = await sb.from("household_ai").select("provider").single();
   if (error && error.code !== "PGRST116") throw error;
   if (!data) return { set: false };

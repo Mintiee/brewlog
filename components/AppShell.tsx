@@ -1,7 +1,7 @@
 "use client";
-import { useState, useCallback } from "react";
-import { AppProvider, useApp } from "@/lib/store/AppContext";
-import { Icon } from "@/components/ui";
+import { useState, useCallback, useEffect } from "react";
+import { AppProvider, useApp, type AppData } from "@/lib/store/AppContext";
+import { Icon, Splash } from "@/components/ui";
 import { BrewFlow } from "@/components/brew/BrewFlow";
 import { Shelf } from "@/components/shelf/Shelf";
 import { History } from "@/components/palate/History";
@@ -71,6 +71,14 @@ function Shell() {
 
   const pendingCount = brews.filter((b) => b.pending).length;
 
+  // Tabs are statically imported (instant, flicker-free switching). Render them
+  // on the client only via this mounted gate: the data is seeded from server
+  // props, but the tab UIs do date-relative rendering (e.g. the "Recently" strip
+  // in StepWhat uses `new Date()`), so SSR-ing them would risk hydration
+  // mismatches. Server output is the Splash — identical to loading.tsx.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const gotoTab = useCallback((t: Tab) => {
     if (t === "brew") setBrewResetKey((k) => k + 1);
     setTab(t);
@@ -102,10 +110,8 @@ function Shell() {
 
   const users = [profile];
 
-  if (!ready) {
-    return (
-      <div className="brew-root" style={{ position: "fixed", inset: 0, background: "var(--bg)" }} />
-    );
+  if (!ready || !mounted) {
+    return <Splash />;
   }
 
   return (
@@ -194,9 +200,9 @@ function Shell() {
   );
 }
 
-export function AppShell() {
+export function AppShell({ initialData }: { initialData?: AppData }) {
   return (
-    <AppProvider>
+    <AppProvider initialData={initialData}>
       <Shell />
     </AppProvider>
   );

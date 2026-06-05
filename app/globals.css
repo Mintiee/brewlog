@@ -196,6 +196,15 @@ button { color: inherit; font-family: inherit; }
 }
 .shimmer { animation: shimmer 1.6s ease infinite; }
 
+/* splash logo — gentle breathing pulse that stays clearly visible (never dims
+   to skeleton levels), so the icon + wordmark read against the warm-black bg */
+@keyframes splashPulse {
+  0%, 100% { opacity: 0.78; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.025); }
+}
+.splash-mark { animation: splashPulse 2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .splash-mark { animation: none; opacity: 1; } }
+
 /* pip buttons (Scale5) */
 .pip { border: none; cursor: pointer; padding: 0; }
 
