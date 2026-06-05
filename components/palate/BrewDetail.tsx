@@ -173,7 +173,9 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
             <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
               {coffee ? coffee.name : brew.coffee_id}
             </div>
-            <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>{dateLabel}</div>
+            <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>
+              {dateLabel}{brew.rest_days != null ? ` · rested ${brew.rest_days}d` : ""}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <button onClick={startEdit} style={btnClose}>
