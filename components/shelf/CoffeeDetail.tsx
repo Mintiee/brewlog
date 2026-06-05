@@ -174,6 +174,9 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
               {k === "Roasted" && (
                 <div className="label" style={{ marginTop: 2 }}>{roastDateText(coffee.roasted_at)}</div>
               )}
+              {k === "Status" && st.state === "frozen" && coffee.frozen_at && (
+                <div className="label" style={{ marginTop: 2 }}>since {roastDateText(coffee.frozen_at)}</div>
+              )}
             </div>
           ))}
         </div>
@@ -196,7 +199,6 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             {frozen > 0 && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <span className="dot" style={{ background: "var(--frozen)" }} /> {frozen}g frozen
-                {coffee.frozen_at && <span style={{ color: "var(--ink-faint)" }}>· since {roastDateText(coffee.frozen_at)}</span>}
               </span>
             )}
           </div>
