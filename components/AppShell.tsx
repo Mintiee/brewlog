@@ -59,8 +59,9 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
           );
         })}
       </div>
-      {/* Safe-area spacer — solid bg so home-indicator zone matches the app, not the PWA chrome */}
-      <div style={{ height: "min(env(safe-area-inset-bottom, 0px), 8px)", background: "inherit" }} />
+      {/* Safe-area spacer — transparent so it shows the nav bar's single translucent
+          + blurred background (an inherited bg would double the layer and look more opaque). */}
+      <div style={{ height: "min(env(safe-area-inset-bottom, 0px), 8px)", background: "transparent" }} />
     </div>
   );
 }
