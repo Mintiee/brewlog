@@ -139,7 +139,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", marginBottom: 4 }}>
             <Stepper icon="timer" label="Roasted" value={Number(ef.roastDaysAgo) || 0} unit="days ago" step={1} min={0} max={200} onChange={setE("roastDaysAgo")} />
-            <Stepper icon="scale" label="Bag size" value={Number(ef.grams) || 0} unit="g" step={10} min={0} max={1000} onChange={setE("grams")} />
+            <Stepper icon="scale" label="Bag size" value={Number(ef.grams) || 0} unit="g" step={2.5} min={0} max={1000} format={(v) => (v % 1 === 0 ? String(v) : v.toFixed(1))} onChange={setE("grams")} />
           </div>
           <Field label="Tasting notes" value={ef.notes} onChange={setE("notes")} placeholder="comma, separated" />
           <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveEdit}>
