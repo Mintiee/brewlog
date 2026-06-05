@@ -12,7 +12,7 @@ interface StepRateProps {
   profile: Profile;
   config: Config;
   onSave: (rating: object) => void;
-  onDiscard: () => void;
+  onDiscard?: () => void;
 }
 
 export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave, onDiscard }: StepRateProps) {

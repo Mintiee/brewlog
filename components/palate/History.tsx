@@ -8,8 +8,10 @@ import { RestRanking } from "./RestRanking";
 import { BrewingTips } from "./BrewingTips";
 import { Journal } from "./Journal";
 import { BrewDetail } from "./BrewDetail";
+import { StepRate } from "@/components/brew/StepRate";
+import { Sheet } from "@/components/ui/Sheet";
 import { useApp } from "@/lib/store/AppContext";
-import type { Brew, Coffee, Config } from "@/lib/types";
+import type { Brew, Coffee, Config, Recipe } from "@/lib/types";
 
 interface HistoryProps {
   brews: Brew[];
@@ -19,9 +21,18 @@ interface HistoryProps {
 }
 
 export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
-  const { updateBrew, dismissBrew } = useApp();
+  const { updateBrew, dismissBrew, rateBrew, profile } = useApp();
   const [selected, setSelected] = useState<Brew | null>(null);
+  const [rating, setRating] = useState<Brew | null>(null);
   const [view, setView] = useState<"journal" | "stats">("journal");
+
+  // Derive the brewer + recipe a pending brew was logged with, so StepRate can
+  // open straight from the journal popup.
+  const rateBrewer = rating ? (config.brewers.find((b) => b.id === rating.brewer_id) ?? config.brewers[0]) : null;
+  const rateRecipe: Recipe | null = rating
+    ? { dose: rating.dose, water: rating.water, temp: rating.temp, grind: rating.grind, water_type: rating.water_type, bypass: rating.bypass || 0, ratio: rating.ratio }
+    : null;
+  const rateCoffee = rating ? coffees.find((c) => c.id === rating.coffee_id) ?? null : null;
 
   // The Journal lists every brew (rated + unrated), matching the Recently strip.
   // Stats stay rated-only so unrated brews don't skew rankings/insight/tips.
@@ -79,7 +90,23 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
         onClose={() => setSelected(null)}
         onUpdate={handleUpdate}
         onDelete={dismissBrew}
+        onRate={(b) => { setSelected(null); setRating(b); }}
       />
+
+      {/* Rate an unrated brew straight from the journal popup. */}
+      <Sheet open={!!rating} onClose={() => setRating(null)}>
+        {rating && rateBrewer && rateRecipe && rateCoffee && (
+          <StepRate
+            coffee={rateCoffee}
+            brewer={rateBrewer}
+            recipe={rateRecipe}
+            brew={rating}
+            profile={profile}
+            config={config}
+            onSave={(r) => { rateBrew(rating.id, r as Partial<Brew>); setRating(null); }}
+          />
+        )}
+      </Sheet>
     </div>
   );
 }

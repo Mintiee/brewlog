@@ -26,9 +26,10 @@ interface BrewDetailProps {
   onClose: () => void;
   onUpdate: (id: string, patch: Partial<Brew>) => void;
   onDelete?: (id: string) => void;
+  onRate?: (b: Brew) => void;
 }
 
-export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete }: BrewDetailProps) {
+export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete, onRate }: BrewDetailProps) {
   const [editing, setEditing] = useState(false);
   const [ef, setEf] = useState<EditForm | null>(null);
   // Captured when editing starts (avoids an impure Date.now() in render); caps
@@ -241,7 +242,12 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
         )}
 
         <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 10 }}>
-          <button className="btn btn-accent" onClick={startEdit}>
+          {brew.pending && onRate && (
+            <button className="btn btn-accent" onClick={() => onRate(brew)}>
+              <Icon name="star" size={19} stroke={1.7} /> Rate this brew
+            </button>
+          )}
+          <button className={brew.pending && onRate ? "btn btn-soft" : "btn btn-accent"} onClick={startEdit}>
             <Icon name="edit" size={19} stroke={1.7} /> Edit this brew
           </button>
           {onDelete && (
