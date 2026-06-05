@@ -11,7 +11,7 @@ import type { Coffee } from "@/lib/types";
 type Tab = "brew" | "shelf" | "palate" | "settings";
 
 /** Minimum time the splash stays on screen once mounted (ms) — tune to taste. */
-const SPLASH_FLOOR_MS = 650;
+const SPLASH_FLOOR_MS = 1200;
 
 const TABS = [
   { id: "brew" as Tab,   icon: "brew",  label: "Brew" },
