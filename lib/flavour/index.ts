@@ -195,13 +195,35 @@ export function unknownNotes(notes: string[]): string[] {
   );
 }
 
+// ---- Gamut mapping ----
+// Bring an OKLab colour into sRGB by scaling chroma toward the neutral axis
+// (preserving hue + lightness) rather than clipping channels (which dulls + skews
+// hue). Binary-searches the largest in-gamut chroma scale.
+function oklabToGamutLinear(L: number, a: number, b: number): [number, number, number] {
+  const Lc = Math.min(1, Math.max(0, L));
+  const inGamut = (t: number) => {
+    const [r, g, bl] = oklabToLinear(Lc, a * t, b * t);
+    const e = 0.0001;
+    return r >= -e && r <= 1 + e && g >= -e && g <= 1 + e && bl >= -e && bl <= 1 + e;
+  };
+  if (inGamut(1)) return oklabToLinear(Lc, a, b);
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (inGamut(mid)) lo = mid; else hi = mid;
+  }
+  return oklabToLinear(Lc, a * lo, b * lo);
+}
+
 // ---- Multi-note blend ----
-// Derives a single colour for a coffee from all its tasting notes using a
-// frequency-weighted OKLCH blend. Mean chroma is preserved (no collapse to grey);
-// hue is the weighted vector sum of each family's hue, with a dominant-family
-// fallback when hues cancel. Order-independent.
+// Derives a single colour for a coffee from all its tasting notes. Each family's
+// frequency share is raised to DOMINANCE (>1) so the dominant note steers the hue
+// and lightness instead of every coffee averaging to the same mud. Chroma is the
+// (dominance-weighted) mean and the final colour is gamut-mapped to stay vivid.
+// Order-independent.
 
 const DEFAULT_COLOR = "#cf9a5a";
+const DOMINANCE = 2.2;        // >1 ⇒ the most frequent family dominates; higher = more distinct
 const HUE_CANCEL_EPS = 0.002; // OKLCH chroma units — threshold for near-zero vector sum
 
 export function coffeeColor(notes: string[]): string {
@@ -209,17 +231,22 @@ export function coffeeColor(notes: string[]): string {
   const families = notes.map(noteIcon).filter((f) => f !== "drop");
   if (families.length === 0) return DEFAULT_COLOR;
 
-  // Frequency tally — dominant family pulls the hue hardest
+  // Frequency tally, dominance-weighted. Sort by family key so the result is
+  // fully order-independent (incl. the dominant-family tiebreak below).
   const counts: Partial<Record<FlavourFamily, number>> = {};
   for (const f of families) counts[f] = (counts[f] ?? 0) + 1;
   const total = families.length;
+  const entries = (Object.entries(counts) as [FlavourFamily, number][])
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([fam, count]) => ({ fam, w: (count / total) ** DOMINANCE }));
+  const wsum = entries.reduce((acc, e) => acc + e.w, 0);
 
   let Lout = 0, Cout = 0, aVec = 0, bVec = 0;
-  let domFam: FlavourFamily = families[0];
+  let domFam: FlavourFamily = entries[0].fam;
   let domWeight = 0;
 
-  for (const [fam, count] of Object.entries(counts) as [FlavourFamily, number][]) {
-    const w = count / total;
+  for (const { fam, w: rawW } of entries) {
+    const w = rawW / wsum;
     if (w > domWeight) { domWeight = w; domFam = fam; }
 
     const [lr, lg, lb] = hexToLinear(NOTE_COLORS[fam]);
@@ -248,6 +275,6 @@ export function coffeeColor(notes: string[]): string {
     bOut = Cout * Math.sin(hOut);
   }
 
-  const [r, g, b] = oklabToLinear(Lout, aOut, bOut);
+  const [r, g, b] = oklabToGamutLinear(Lout, aOut, bOut);
   return linearToHex(r, g, b);
 }
