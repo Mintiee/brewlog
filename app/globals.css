@@ -215,3 +215,33 @@ button { color: inherit; font-family: inherit; }
   border-radius: 4px;
 }
 :focus:not(:focus-visible) { outline: none; }
+
+/* Portrait lock — iOS PWAs ignore the manifest "orientation" field and expose
+   no JS lock API, so we cover the screen when a touch phone is held landscape.
+   Scoped to coarse pointers with no hover (phones, not desktops) and short
+   viewports (excludes tablets, whose landscape height is well above 600px). */
+.rotate-lock { display: none; }
+@media (orientation: landscape) and (pointer: coarse) and (hover: none) and (max-height: 600px) {
+  .rotate-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .rotate-lock-glyph {
+    font-size: 46px;
+    line-height: 1;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .rotate-lock-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .rotate-lock-sub { font-size: 13.5px; color: var(--ink-dim); max-width: 260px; line-height: 1.45; }
+}

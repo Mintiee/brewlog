@@ -208,6 +208,14 @@ function Shell() {
           <Icon name="gear" size={19} stroke={1.8} />
         </button>
       )}
+
+      {/* iOS ignores the manifest's portrait orientation, so we gate landscape
+          on touch phones with a CSS-only overlay (see .rotate-lock in globals). */}
+      <div className="rotate-lock" aria-hidden="true">
+        <span className="rotate-lock-glyph">⟲</span>
+        <div className="rotate-lock-title">Rotate to portrait</div>
+        <div className="rotate-lock-sub">Brew is designed to be held upright.</div>
+      </div>
     </div>
   );
 }
