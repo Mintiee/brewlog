@@ -14,28 +14,30 @@ interface StepHowProps {
 }
 
 export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHowProps) {
-  // Recipe for a brewer: last brew of this coffee on that brewer, else generic defaults.
-  function recipeFor(b: Brewer): Recipe {
-    const last = brews
-      .filter((x) => x.coffee_id === coffee.id && !x.pending && x.brewer_id === b.id)
-      .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0];
-    return last
-      ? { dose: last.dose, ratio: last.ratio, water: last.water, bypass: last.bypass || 0, temp: last.temp, grind: last.grind, water_type: last.water_type }
-      : { ...defaultsFor(coffee, b), water_type: config.default_water };
-  }
+  const recipeFromBrew = (b: Brew): Recipe =>
+    ({ dose: b.dose, ratio: b.ratio, water: b.water, bypass: b.bypass || 0, temp: b.temp, grind: b.grind, water_type: b.water_type });
 
-  // Default to the most recent brew of this coffee — both brewer and recipe.
+  // Most recent brew of this coffee on a given brewer (incl. the just-logged pending one).
+  const lastBrewOn = (brewerId: string) =>
+    brews
+      .filter((x) => x.coffee_id === coffee.id && x.brewer_id === brewerId)
+      .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
+
+  // Default to the single most recent brew of this coffee — brewer and recipe from the same brew.
   const lastForCoffee = brews
-    .filter((x) => x.coffee_id === coffee.id && !x.pending)
+    .filter((x) => x.coffee_id === coffee.id)
     .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
   const initialBrewer = (lastForCoffee && config.brewers.find((b) => b.id === lastForCoffee.brewer_id)) || config.brewers[0];
 
   const [brewer, setBrewer] = useState<Brewer>(initialBrewer);
-  const [r, setR] = useState<Recipe>(() => recipeFor(initialBrewer));
+  const [r, setR] = useState<Recipe>(() =>
+    lastForCoffee ? recipeFromBrew(lastForCoffee) : { ...defaultsFor(coffee, initialBrewer), water_type: config.default_water }
+  );
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
-    setR(recipeFor(b));
+    const last = lastBrewOn(b.id);
+    setR(last ? recipeFromBrew(last) : { ...defaultsFor(coffee, b), water_type: config.default_water });
   }
 
   const total = r.water + (r.bypass || 0);
