@@ -19,8 +19,8 @@ function p(s = 1.7) {
 export function Icon({ name, size = 22, stroke = 1.7, style, className }: IconProps) {
   const ps = p(stroke);
   const paths: Record<string, React.ReactNode> = {
-    // Brew nav — pour-over dripper (with handle) above a handled server
-    brew: <g {...ps}><path d="M6 4.8H15l-3.3 4.6H9.3L6 4.8Z"/><path d="M15 4.8l1.6 1.3-1.9 1.4"/><path d="M7.5 9.9H13.5"/><path d="M7.7 11.3h5.6l.8 6.1a1.7 1.7 0 0 1-1.69 1.9H8.59A1.7 1.7 0 0 1 6.9 17.4L7.7 11.3Z"/><path d="M13.3 12.6c2 .2 2.1 3.4 0 3.8"/></g>,
+    // Brew nav — generic pour-over cone
+    brew: <g {...ps}><path d="M5.5 6.5h13l-6.5 11-6.5-11Z"/><path d="M12 17.5v2.5"/><path d="M9.5 20h5"/></g>,
     // Shelf nav — simple coffee bag with a folded top and seam
     shelf: <g {...ps}><path d="M7.7 4.8 H14.3 Q14.8 4.8 14.8 5.3 V7.4 H7.2 V5.3 Q7.2 4.8 7.7 4.8 Z"/><path d="M7.2 7.4 L6.6 18.4 Q6.6 19.2 7.4 19.2 H14.6 Q15.4 19.2 15.4 18.4 L14.8 7.4"/><path d="M9 11h4"/></g>,
     // Log nav — journal / notebook with ruled lines
