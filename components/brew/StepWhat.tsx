@@ -203,6 +203,10 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
               );
             })}
           </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+            <span className="label" style={{ fontSize: 9, color: "var(--ink-ghost)" }}>{oldestFilledDay > 0 ? rel(oldestFilledDay) : ""}</span>
+            <span className="label" style={{ fontSize: 9, color: "var(--ink-faint)" }}>today</span>
+          </div>
         </div>
       )}
 
