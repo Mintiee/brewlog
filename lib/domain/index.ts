@@ -168,17 +168,10 @@ export function formatWeight(grams: number): string {
 }
 
 export function formatDaysWorth(days: number): string {
-  if (days > 365) return "plenty of coffee";
-  if (days > 60) {
-    const n = Math.round(days / 30);
-    return `~${n} month${n === 1 ? "" : "s"} of coffee`;
-  }
-  if (days >= 14) {
-    const n = Math.round(days / 7);
-    return `~${n} week${n === 1 ? "" : "s"} of coffee`;
-  }
-  const n = Math.round(days);
-  return `~${n} day${n === 1 ? "" : "s"} of coffee`;
+  if (days > 365) return "plenty left";
+  if (days > 60) return `~${Math.round(days / 30)}m left`;
+  if (days >= 14) return `~${Math.round(days / 7)}w left`;
+  return `~${Math.round(days)}d left`;
 }
 
 // ---------- Recipe defaults ----------

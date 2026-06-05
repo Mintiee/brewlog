@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import type { Coffee, Brew, Config } from "@/lib/types";
 import { coffeeStatus, activeGrams, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro } from "@/lib/domain";
-import { noteIcon, noteColor } from "@/lib/flavour";
+import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { Icon, FreshDot, OriginTile } from "@/components/ui";
 
 interface StepWhatProps {
@@ -65,13 +65,13 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px 10px", color: "var(--ink-faint)", fontSize: 10.5 }}>
             <span className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="days since roast">
-              <Icon name="bean" size={13} stroke={1.8} /> {st.day}d old
+              <Icon name="bean" size={13} stroke={1.8} /> {st.day}d
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title="last brewed">
-              <Icon name="timer" size={11} stroke={1.8} /> {last ? `brewed ${last}` : "not brewed"}
+              <Icon name="timer" size={11} stroke={1.8} /> {last ?? "new"}
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title="serves left">
-              <Icon name="drop" size={11} stroke={1.8} /> {serves} left
+              <Icon name="drop" size={11} stroke={1.8} /> {serves}
             </span>
           </div>
           <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.015em", color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 2 }}>{c.name}</div>
@@ -184,7 +184,10 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
                   onClick={() => tappable && onOpenBrew!(day.brews[0])}
                   role={tappable ? "button" : undefined}
                   style={{
-                    width: 19, height: 19, borderRadius: 5, overflow: "hidden", display: "flex", flexShrink: 0,
+                    width: 19, height: 19, borderRadius: 5, overflow: "hidden", flexShrink: 0,
+                    display: "grid", gap: 1, background: "rgba(12,11,10,0.35)",
+                    gridTemplateColumns: day.brews.length === 4 ? "1fr 1fr" : `repeat(${Math.max(day.brews.length, 1)}, 1fr)`,
+                    gridTemplateRows: day.brews.length === 4 ? "1fr 1fr" : "1fr",
                     marginLeft: weekStart ? 8 : 0,
                     border: day.brews.length ? "none" : "1px solid var(--line)",
                     boxShadow: day.brews.length ? "inset 0 0 0 1px rgba(255,255,255,0.1)" : "none",
@@ -193,7 +196,8 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
                 >
                   {day.brews.map((b, j) => {
                     const c = coffees.find((x) => x.id === b.coffee_id);
-                    return <span key={j} style={{ flex: 1, background: c ? c.color : "var(--ink-ghost)", borderLeft: j ? "1px solid rgba(12,11,10,0.35)" : "none" }} />;
+                    const tex = c ? processTexture(c.process) : {};
+                    return <span key={j} style={{ backgroundColor: c ? c.color : "var(--ink-ghost)", ...tex }} />;
                   })}
                 </span>
               );

@@ -47,6 +47,12 @@ __pycache__/
 /audit/
 /design_handoff_brew_app/
 
+# local-only docs / AI instructions (kept out of the release repo)
+/AGENTS.md
+/CLAUDE.md
+/DEPLOY.md
+/docs/ai/self-improve/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

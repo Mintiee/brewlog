@@ -55,7 +55,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
     <div className="screen">
       <div className="screen-pad" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 8 }}>
         <div>
-          <div className="label">{live.length} on the shelf · {formatWeight(totalGrams)}{worth ? ` · ${worth}` : ""}</div>
+          <div className="label">{live.length} coffee{live.length === 1 ? "" : "s"} · {formatWeight(totalGrams)}{worth ? ` · ${worth}` : ""}</div>
           <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3 }}>Shelf</h1>
         </div>
         <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>
