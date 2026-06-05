@@ -1,8 +1,8 @@
-// Minimal service worker — enough to make Brew installable on Android/desktop Chrome.
+// Minimal service worker — enough to make brewlog installable on Android/desktop Chrome.
 // (iOS installs via Add-to-Home-Screen and doesn't require this.)
 // A network-first passthrough with an offline fallback to the app shell.
 
-const CACHE = "brew-shell-v1";
+const CACHE = "brewlog-shell-v1";
 const SHELL = ["/"];
 
 self.addEventListener("install", (event) => {

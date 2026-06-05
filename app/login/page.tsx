@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div style={{ color: "var(--accent)", display: "inline-flex", marginBottom: 12 }}>
             <Icon name="brew" size={40} stroke={1.4} />
           </div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)" }}>Brew</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)" }}>brewlog</h1>
           <p style={{ fontSize: 13.5, color: "var(--ink-dim)", marginTop: 6 }}>Pour-over logging & shelf</p>
         </div>
 

@@ -39,6 +39,14 @@ yarn-error.log*
 # migration backups (DB dumps — not source)
 /scripts/backup-*.json
 
+# python script caches
+__pycache__/
+*.pyc
+
+# local-only dev artifacts (kept out of the release repo)
+/audit/
+/design_handoff_brew_app/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -18,10 +18,10 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Brew",
+  title: "brewlog",
   description: "Pour-over logging & shelf app",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Brew" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "brewlog" },
   icons: {
     icon: [
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },

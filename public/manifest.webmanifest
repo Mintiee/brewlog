@@ -1,6 +1,6 @@
 {
-  "name": "Brew",
-  "short_name": "Brew",
+  "name": "brewlog",
+  "short_name": "brewlog",
   "description": "Pour-over coffee logging & shelf",
   "start_url": "/",
   "display": "standalone",

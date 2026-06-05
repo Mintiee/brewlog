@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     if (url) {
       // URL extraction — server fetches the page, then extracts
-      const pageRes = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 Brew/1.0" }, signal: AbortSignal.timeout(8000) });
+      const pageRes = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 brewlog/1.0" }, signal: AbortSignal.timeout(8000) });
       const html = await pageRes.text();
       // Strip to text content (very basic; the LLM handles the noise)
       const text = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 4000);
