@@ -39,10 +39,11 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
     if (d <= 13) (byDay[d] = byDay[d] || []).push(b);
   });
   const hasRecent = Object.keys(byDay).length > 0;
-  // Find the furthest-back day with a brew, then render from there → 0 (oldest left, today right)
+  // Today fixed on the left; render back from today → the oldest day with a brew,
+  // so the strip grows rightward (newest-first) as history accumulates.
   const oldestFilledDay = hasRecent ? Math.max(...Object.keys(byDay).map(Number)) : 0;
   const days = [];
-  for (let d = oldestFilledDay; d >= 0; d--) days.push({ d, brews: (byDay[d] || []).slice(0, 4) });
+  for (let d = 0; d <= oldestFilledDay; d++) days.push({ d, brews: (byDay[d] || []).slice(0, 4) });
 
   const rel = (d: number) => d === 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 
@@ -172,10 +173,13 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
       {hasRecent && (
         <div className="rise rise-5" style={{ marginTop: 28 }}>
           <div className="label" style={{ marginBottom: 12 }}>Recently · last 2 weeks</div>
+          <div style={{ width: "fit-content" }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             {days.map((day, i) => {
               const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - day.d);
-              const weekStart = i > 0 && dt.getDay() === 1;
+              // Moving right = back in time, so a week boundary falls on the Sunday
+              // that ends the older week (the cell to its left is that week's Monday).
+              const weekStart = i > 0 && dt.getDay() === 0;
               const tappable = day.brews.length > 0 && !!onOpenBrew;
               return (
                 <span
@@ -203,9 +207,9 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
               );
             })}
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-            <span className="label" style={{ fontSize: 9, color: "var(--ink-ghost)" }}>{oldestFilledDay > 0 ? rel(oldestFilledDay) : ""}</span>
+          <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 5 }}>
             <span className="label" style={{ fontSize: 9, color: "var(--ink-faint)" }}>today</span>
+          </div>
           </div>
         </div>
       )}
