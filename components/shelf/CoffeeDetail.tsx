@@ -91,6 +91,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
     today.setHours(0, 0, 0, 0);
     const roastedAt = new Date(today.getTime() - ef.roastDaysAgo * 86400000);
     const roasted_at = roastedAt.toISOString().slice(0, 10);
+    const grams = Number.isFinite(Number(ef.grams)) ? Number(ef.grams) : coffee.grams;
     onUpdate({
       ...coffee,
       roaster: ef.roaster || "Unknown",
@@ -100,12 +101,15 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       varietal: ef.varietal,
       process: ef.process || "Washed",
       notes,
-      grams: Number(ef.grams) || coffee.grams,
+      grams,
       roasted_at,
       cc: originCode(ef.origin),
       color: coffeeColor(notes),
     });
     setEditing(false);
+    // An empty bag is almost certainly finished — offer to archive it right away
+    // (reuses the detail view's archive confirmation).
+    if (grams === 0) setConfirmingFinish(true);
   };
   const setE = (k: keyof EditForm) => (v: string | number) =>
     setEf((f) => f ? { ...f, [k]: v } : f);
@@ -135,7 +139,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", marginBottom: 4 }}>
             <Stepper icon="timer" label="Roasted" value={Number(ef.roastDaysAgo) || 0} unit="days ago" step={1} min={0} max={200} onChange={setE("roastDaysAgo")} />
-            <Stepper icon="scale" label="Bag size" value={Number(ef.grams) || 0} unit="g" step={10} min={50} max={1000} onChange={setE("grams")} />
+            <Stepper icon="scale" label="Bag size" value={Number(ef.grams) || 0} unit="g" step={10} min={0} max={1000} onChange={setE("grams")} />
           </div>
           <Field label="Tasting notes" value={ef.notes} onChange={setE("notes")} placeholder="comma, separated" />
           <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveEdit}>
