@@ -14,19 +14,28 @@ interface StepHowProps {
 }
 
 export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHowProps) {
-  const [brewer, setBrewer] = useState<Brewer>(config.brewers[0]);
-  const [r, setR] = useState<Recipe>(() => ({ ...defaultsFor(coffee, config.brewers[0]), water_type: config.default_water }));
+  // Recipe for a brewer: last brew of this coffee on that brewer, else generic defaults.
+  function recipeFor(b: Brewer): Recipe {
+    const last = brews
+      .filter((x) => x.coffee_id === coffee.id && !x.pending && x.brewer_id === b.id)
+      .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0];
+    return last
+      ? { dose: last.dose, ratio: last.ratio, water: last.water, bypass: last.bypass || 0, temp: last.temp, grind: last.grind, water_type: last.water_type }
+      : { ...defaultsFor(coffee, b), water_type: config.default_water };
+  }
+
+  // Default to the most recent brew of this coffee — both brewer and recipe.
+  const lastForCoffee = brews
+    .filter((x) => x.coffee_id === coffee.id && !x.pending)
+    .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
+  const initialBrewer = (lastForCoffee && config.brewers.find((b) => b.id === lastForCoffee.brewer_id)) || config.brewers[0];
+
+  const [brewer, setBrewer] = useState<Brewer>(initialBrewer);
+  const [r, setR] = useState<Recipe>(() => recipeFor(initialBrewer));
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
-    const last = brews
-      .filter((x) => x.coffee_id === coffee.id && !x.pending && x.brewer_id === b.id)
-      .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
-    if (last) {
-      setR({ dose: last.dose, ratio: last.ratio, water: last.water, bypass: last.bypass || 0, temp: last.temp, grind: last.grind, water_type: last.water_type });
-    } else {
-      setR({ ...defaultsFor(coffee, b), water_type: config.default_water });
-    }
+    setR(recipeFor(b));
   }
 
   const total = r.water + (r.bypass || 0);
