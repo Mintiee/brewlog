@@ -96,9 +96,10 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
                     <StarsMini value={rating} size={12} />
-                    {b.stars2 != null ? (
+                    {b.stars != null ? (
                       <span className="label" style={{ fontSize: 8.5, color: "var(--ink-faint)" }}>
-                        {b.taster1 || "you"} {b.stars} · {b.taster2 || config.taster2 || "partner"} {b.stars2}
+                        {b.taster1 || "you"} {b.stars}
+                        {b.stars2 != null ? ` · ${b.taster2 || config.taster2 || "partner"} ${b.stars2}` : ""}
                       </span>
                     ) : null}
                   </div>
