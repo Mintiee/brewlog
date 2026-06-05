@@ -64,8 +64,8 @@ const NOTE_ICONS: Array<[RegExp, FlavourFamily]> = [
   [/jasmine|floral|flower|honeysuckle|rose|lavender|blossom|elderflower|chamomile|hibiscus|geranium|violet|lilac|orange ?blossom|perfum|potpourri/, "flower"],
   [/\bcitrus|lemon|lime|\borange|grapefruit|bergamot|mandarin|tangerine|clementine|yuzu|pomelo|kumquat|zest/, "citrus"],
   [/peach|apricot|nectarine|mango|pineapple|papaya|passion|banana|melon|lychee|coconut|\bapple|\bpear|guava|tropical|stone ?fruit/, "yellowfruit"],
-  [/cherry|strawberr|raspberry|redcurrant|cranberry|pomegranate|red ?fruit|\bplum|jammy/, "redfruit"],
-  [/blueberry|blackberry|blackcurrant|\bcurrant|\bgrape|\bfig|\bdate|raisin|prune|sultana|mulberry|boysenberry|gooseberry|acai|elderberry|dried ?fruit|\bberry|\bberries/, "berry"],
+  [/cherr|strawberr|raspberr|redcurrant|cranberr|pomegranate|red ?fruit|\bplum|jammy/, "redfruit"],
+  [/blueberr|blackberr|blackcurrant|\bcurrant|\bgrape|\bfig|\bdate|raisin|prune|sultana|mulberr|boysenberr|gooseberr|acai|elderberr|dried ?fruit|purple ?fruit|dark ?fruit|\bberry|\bberries/, "berry"],
   [/chocolate|cocoa|cacao|fudge|mocha|brownie|truffle|cocoa ?nib/, "choco"],
   [/\broast|toast|smoke|smoky|burnt|\bash\b|char/, "roast"],
   [/almond|walnut|hazelnut|peanut|pecan|cashew|macadamia|marzipan|praline|\bnut|nutty|malt|biscuit|bread|cereal|graham|cracker|granola|\boat|shortbread|digestive/, "nut"],
@@ -216,29 +216,30 @@ function oklabToGamutLinear(L: number, a: number, b: number): [number, number, n
 }
 
 // ---- Multi-note blend ----
-// Derives a single colour for a coffee from all its tasting notes. Each family's
-// frequency share is raised to DOMINANCE (>1) so the dominant note steers the hue
-// and lightness instead of every coffee averaging to the same mud. Chroma is the
-// (dominance-weighted) mean and the final colour is gamut-mapped to stay vivid.
-// Order-independent.
+// Derives a single colour for a coffee from its tasting notes. Notes are listed
+// identity-first, so the headline (first) note leads the hue and lightness while
+// later notes only tint it — position weights decay geometrically by DECAY. This
+// keeps coffees distinct (a berry-led coffee reads purple even amongst a citrusy
+// shelf) instead of averaging to mud. Chroma is the weighted mean and the result
+// is gamut-mapped to stay vivid. Order is meaningful (headline first).
 
 const DEFAULT_COLOR = "#cf9a5a";
-const DOMINANCE = 2.2;        // >1 ⇒ the most frequent family dominates; higher = more distinct
+const DECAY = 0.45;           // weight of each successive note vs the previous (headline leads)
 const HUE_CANCEL_EPS = 0.002; // OKLCH chroma units — threshold for near-zero vector sum
 
 export function coffeeColor(notes: string[]): string {
-  // Map to families, strip unknowns/grey
+  // Map to families, strip unknowns/grey (so a generic headline like "Fruity"
+  // falls through to the first real flavour note).
   const families = notes.map(noteIcon).filter((f) => f !== "drop");
   if (families.length === 0) return DEFAULT_COLOR;
 
-  // Frequency tally, dominance-weighted. Sort by family key so the result is
-  // fully order-independent (incl. the dominant-family tiebreak below).
-  const counts: Partial<Record<FlavourFamily, number>> = {};
-  for (const f of families) counts[f] = (counts[f] ?? 0) + 1;
-  const total = families.length;
-  const entries = (Object.entries(counts) as [FlavourFamily, number][])
+  // Position-decay weights: the first note leads, repeats of a family accumulate.
+  // Sort by family key for a deterministic dominant-family tiebreak.
+  const fw: Partial<Record<FlavourFamily, number>> = {};
+  families.forEach((f, i) => { fw[f] = (fw[f] ?? 0) + DECAY ** i; });
+  const entries = (Object.entries(fw) as [FlavourFamily, number][])
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([fam, count]) => ({ fam, w: (count / total) ** DOMINANCE }));
+    .map(([fam, w]) => ({ fam, w }));
   const wsum = entries.reduce((acc, e) => acc + e.w, 0);
 
   let Lout = 0, Cout = 0, aVec = 0, bVec = 0;

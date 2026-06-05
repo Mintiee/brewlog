@@ -16,6 +16,9 @@ describe("noteIcon — wheel-aligned taxonomy", () => {
   it("maps red fruit → redfruit", () => expect(noteIcon("red fruit")).toBe("redfruit"));
   it("maps plum → redfruit", () => expect(noteIcon("plum")).toBe("redfruit"));
   it("maps blueberry → berry (dark fruit)", () => expect(noteIcon("blueberry")).toBe("berry"));
+  it("maps blueberries (plural) → berry", () => expect(noteIcon("Blueberries")).toBe("berry"));
+  it("maps cherries (plural) → redfruit", () => expect(noteIcon("Cherries")).toBe("redfruit"));
+  it("maps purple fruit → berry", () => expect(noteIcon("purple fruit")).toBe("berry"));
   it("maps blackberry → berry (dark fruit)", () => expect(noteIcon("blackberry")).toBe("berry"));
   it("maps dark fruit → berry", () => expect(noteIcon("blackcurrant")).toBe("berry"));
   it("maps chocolate → choco", () => expect(noteIcon("chocolate")).toBe("choco"));
@@ -107,10 +110,18 @@ describe("coffeeColor", () => {
     expect(withUnknown).toBe(withoutUnknown);
   });
 
-  it("result is order-independent", () => {
-    const ab = coffeeColor(["blueberry", "lemon"]);
-    const ba = coffeeColor(["lemon", "blueberry"]);
-    expect(ab).toBe(ba);
+  it("headline (first) note leads — order is meaningful", () => {
+    // berry-led should read distinctly more purple/blue than citrus-led
+    const berryLed = coffeeColor(["blueberry", "lemon"]);
+    const citrusLed = coffeeColor(["lemon", "blueberry"]);
+    expect(berryLed).not.toBe(citrusLed);
+    const blue = (h: string) => parseInt(h.slice(5, 7), 16);
+    // the berry-headlined blend carries more blue than the citrus-headlined one
+    expect(blue(berryLed)).toBeGreaterThan(blue(citrusLed));
+  });
+
+  it("a generic headline (e.g. 'fruity') falls through to the first real note", () => {
+    expect(coffeeColor(["fruity", "blueberry"])).toBe(coffeeColor(["blueberry"]));
   });
 
   it("hue-diverse blend stays saturated (anti-mud test)", () => {
