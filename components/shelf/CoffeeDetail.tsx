@@ -35,13 +35,16 @@ interface CoffeeDetailProps {
 
 export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: CoffeeDetailProps) {
   const [freezing, setFreezing] = useState(false);
+  const [thawing, setThawing] = useState(false);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
   const [amt, setAmt] = useState(0);
+  const [thawAmt, setThawAmt] = useState(0);
   const [editing, setEditing] = useState(false);
   const [ef, setEf] = useState<EditForm | null>(null);
 
   useEffect(() => {
     setFreezing(false);
+    setThawing(false);
     setConfirmingFinish(false);
     setEditing(false);
   }, [coffee?.id]);
@@ -54,14 +57,24 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
   const statusLabel = st.state === "peak" ? "In peak" : st.state === "resting" ? "Resting" : st.state === "frozen" ? "Frozen" : "Past peak";
+  const thawFmt = (v: number) => (v % 1 === 0 ? String(v) : v.toFixed(1));
 
   // Local YYYY-MM-DD (avoid UTC drift), matching how roasted_at is stored.
   const isoToday = () => {
     const d = new Date(); d.setHours(0, 0, 0, 0);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
-  // Coming out of the freezer resumes aging from today.
-  const toggleFreezer = () => { onUpdate({ ...coffee, frozen_grams: 0, thawed_at: isoToday() }); onClose(); };
+  // Coming out of the freezer. Defaults to all (set when the slider opens); a
+  // partial thaw leaves some frozen, so aging stays paused until the last gram is
+  // out (then thawed_at resumes aging, matching the single freeze-cycle model).
+  const startThaw = () => { setThawAmt(frozen); setThawing(true); };
+  const confirmThaw = () => {
+    const out = Math.min(Math.max(0, thawAmt), frozen);
+    const left = frozen - out;
+    if (left <= 0) onUpdate({ ...coffee, frozen_grams: 0, thawed_at: isoToday() });
+    else onUpdate({ ...coffee, frozen_grams: left });
+    onClose();
+  };
   const setArchived = (v: boolean) => { onUpdate({ ...coffee, archived: v }); onClose(); };
   const startFreeze = () => {
     setAmt(Math.max(10, Math.min(active, Math.round(active / 2 / 10) * 10)));
@@ -244,6 +257,27 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             </button>
             <button className="btn btn-ghost" onClick={() => setFreezing(false)}>Cancel</button>
           </div>
+        ) : thawing ? (
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="card" style={{ padding: "16px 18px" }}>
+              <div className="label" style={{ marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
+                <span>Out of the freezer</span>
+                <span className="mono">{thawFmt(thawAmt)}g of {frozen}g</span>
+              </div>
+              <input
+                type="range" className="range"
+                min={0} max={frozen} step={2.5} value={Math.min(thawAmt, frozen)}
+                onChange={(e) => setThawAmt(Number(e.target.value))}
+              />
+            </div>
+            <div className="mono" style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: -4 }}>
+              {thawFmt(frozen - Math.min(thawAmt, frozen))}g stays frozen · {(() => { const s = cupsLeft(thawAmt); return s % 1 === 0 ? String(s) : s.toFixed(1); })()} serves out
+            </div>
+            <button className="btn btn-accent" disabled={thawAmt <= 0} style={{ opacity: thawAmt <= 0 ? 0.4 : 1 }} onClick={confirmThaw}>
+              <Icon name="snow" size={19} stroke={1.8} /> Take {thawFmt(thawAmt)}g out
+            </button>
+            <button className="btn btn-ghost" onClick={() => setThawing(false)}>Cancel</button>
+          </div>
         ) : (
           <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
             {(active > 0 || frozen > 0) && (
@@ -257,8 +291,8 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
               </button>
             )}
             {frozen > 0 && (
-              <button className="btn btn-soft" onClick={toggleFreezer}>
-                <Icon name="snow" size={19} stroke={1.7} /> Take {frozen}g out of freezer
+              <button className="btn btn-soft" onClick={startThaw}>
+                <Icon name="snow" size={19} stroke={1.7} /> Take out of freezer
               </button>
             )}
             {confirmingFinish ? (
