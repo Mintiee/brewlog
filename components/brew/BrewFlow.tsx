@@ -170,7 +170,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           <div className="rise rise-1" style={{ fontSize: 20, fontWeight: 600, marginTop: 18 }}>Logged.</div>
           <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-faint)", marginTop: 6 }}>{coffee && coffee.name}</div>
           <div className="rise rise-2" style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5, maxWidth: 250, marginTop: 12 }}>
-            It&apos;ll be waiting on your home screen to rate once you&apos;ve had a cup.
+            We&apos;ll keep it on your home screen so you can rate it once you&apos;ve had a cup.
           </div>
           <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
             marginTop: 22, background: "none", border: "none", cursor: "pointer",

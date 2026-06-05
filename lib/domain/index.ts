@@ -22,7 +22,7 @@ export function getPeakWindow() { return peakWindow; }
 
 // ---------- Freshness ----------
 
-function parseLocalDate(iso: string): Date {
+export function parseLocalDate(iso: string): Date {
   // Parse "YYYY-MM-DD" as local midnight (not UTC) to avoid ±1 day timezone drift
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -156,13 +156,38 @@ export function sinceText(ts: string | number): string {
 }
 
 export function daysAgoFromStartedAt(startedAt: string | number): number {
-  const ms = parseTs(startedAt);
-  return Math.floor((Date.now() - ms) / 86400000);
+  // Compare calendar days in local time (not a rolling 24h window), so a brew
+  // logged late last night reads as "yesterday", not "today". Math.round (not
+  // floor) keeps it correct across DST boundaries, where two local midnights
+  // can be 23h apart. Mirrors roastedDaysAgo.
+  const d = new Date(parseTs(startedAt));
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((today.getTime() - d.getTime()) / 86400000));
 }
 
 export function roastDateText(iso: string): string {
   // Format "YYYY-MM-DD" as a local date (avoids UTC ±1-day drift) e.g. "23 May 2025"
   return parseLocalDate(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Local "YYYY-MM-DD" for a timestamp — matches how date columns (roasted_at,
+// frozen_at) are stored and avoids UTC ±1-day drift.
+export function localISODate(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Absolute journal date e.g. "Fri 6 Jun" (weekday + day + short month), adding
+// the year only when it differs from the current year.
+export function journalDateText(ms: number): string {
+  const d = new Date(ms);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-AU", {
+    weekday: "short", day: "numeric", month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
 }
 
 // ---------- Shelf consumption estimate ----------
@@ -239,6 +264,9 @@ const OPENERS: Record<string, string[]> = {
 };
 const TAILS = ["", "", "", "", ", friend", " — coffee o'clock", ", let's go", ", champ", ", you legend", " then"];
 const VERBS = ["brewing", "pouring", "grinding", "drinking", "sipping", "chasing", "cupping", "making", "dialing in", "fancying"];
+// Base-form verbs for templates that need the infinitive ("Let's brew…"); the
+// gerund VERBS above would read "Let's brewing…".
+const BASE_VERBS = ["brew", "pour", "grind", "make", "chase", "sip"];
 const ADJ   = ["bright", "sweet", "fruity", "chocolatey", "clean", "funky", "juicy", "floral", "bold", "delicate", "wild", "cozy", "zippy", "jammy", "tea-like", "syrupy", "crisp", "punchy", "comforting", "honeyed", "boozy", "vibrant"];
 const NOUNS = ["cup", "pour", "bean", "brew", "ritual", "morning cup", "first cup", "one"];
 
@@ -253,7 +281,7 @@ const Q_TEMPLATES: Array<() => string> = [
   () => `Feeling ${randOf(ADJ)} today?`,
   () => `${cap(randOf(ADJ))} today?`,
   () => `Time for something ${randOf(ADJ)}.`,
-  () => `Let's ${randOf(VERBS)} something ${randOf(ADJ)}.`,
+  () => `Let's ${randOf(BASE_VERBS)} something ${randOf(ADJ)}.`,
   () => `${cap(randOf(VERBS))} something ${randOf(ADJ)}?`,
   () => `Which ${randOf(NOUNS)} today?`,
   () => { const [a, b] = pick2(ADJ); return `${cap(a)} and ${b}?`; },

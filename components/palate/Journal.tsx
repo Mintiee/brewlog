@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { StarsMini } from "@/components/ui";
-import { brewRating, daysAgoFromStartedAt } from "@/lib/domain";
+import { brewRating, daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface JournalProps {
@@ -11,14 +11,9 @@ interface JournalProps {
   onOpen?: (b: Brew) => void;
 }
 
-function relDay(d: number): string {
-  if (d === 0) return "Today";
-  if (d === 1) return "Yesterday";
-  return `${d}d ago`;
-}
-
 interface Group {
   d: number;
+  ts: number;
   items: Brew[];
 }
 
@@ -36,7 +31,7 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
     sorted.forEach((b) => {
       const d = daysAgoFromStartedAt(b.started_at);
       if (!cur || cur.d !== d) {
-        cur = { d, items: [] };
+        cur = { d, ts: parseInt(b.started_at, 10), items: [] };
         result.push(cur);
       }
       cur.items.push(b);
@@ -54,7 +49,7 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
             className="mono"
             style={{ fontSize: 11.5, color: "var(--ink-faint)", marginBottom: 8, letterSpacing: "0.04em" }}
           >
-            {relDay(g.d)}
+            {journalDateText(g.ts)}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {g.items.map((b) => {

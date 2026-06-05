@@ -4,10 +4,11 @@ import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import { Stepper } from "@/components/ui/Stepper";
 import { Field } from "@/components/shelf/Field";
+import { journalDateText, localISODate, parseLocalDate } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface EditForm {
-  daysAgo: number;
+  date: string;
   dose: number;
   water: number;
   temp: number;
@@ -30,17 +31,20 @@ interface BrewDetailProps {
 export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete }: BrewDetailProps) {
   const [editing, setEditing] = useState(false);
   const [ef, setEf] = useState<EditForm | null>(null);
+  // Captured when editing starts (avoids an impure Date.now() in render); caps
+  // the date picker so brews can't be dated into the future.
+  const [todayISO, setTodayISO] = useState("");
 
   if (!brew) return null;
 
   const coffee = coffees.find((c) => c.id === brew.coffee_id);
   const brewer = config.brewers.find((b) => b.id === brew.brewer_id);
   const startMs = parseInt(brew.started_at, 10);
-  const daysAgoNow = Math.floor((Date.now() - startMs) / 86400000);
 
   const startEdit = () => {
+    setTodayISO(localISODate(Date.now()));
     setEf({
-      daysAgo: daysAgoNow,
+      date: localISODate(startMs),
       dose: brew.dose,
       water: brew.water,
       temp: brew.temp,
@@ -55,9 +59,8 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
 
   const saveEdit = () => {
     if (!ef) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const newStartMs = today.getTime() - ef.daysAgo * 86400000;
+    // Parse the picked "YYYY-MM-DD" as local midnight (not UTC) to avoid ±1-day drift.
+    const newStartMs = parseLocalDate(ef.date).getTime();
     const patch: Partial<Brew> = {
       dose: ef.dose,
       water: ef.water,
@@ -99,8 +102,23 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
           </div>
 
           <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
-            <Stepper icon="timer" label="Date" value={ef.daysAgo} unit="days ago"
-              step={1} min={0} max={365} onChange={setE("daysAgo")} />
+            <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 0", minWidth: 0 }}>
+              <div style={{ color: "var(--ink-faint)", display: "flex", flexShrink: 0 }}>
+                <Icon name="timer" size={18} stroke={1.6} />
+              </div>
+              <div className="label" style={{ flex: 1, minWidth: 0 }}>Date</div>
+              <input
+                type="date"
+                value={ef.date}
+                max={todayISO}
+                onChange={(e) => setE("date")(e.target.value)}
+                style={{
+                  background: "var(--surface-3)", border: "1px solid var(--line)", borderRadius: 10,
+                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15, fontWeight: 600,
+                  padding: "7px 10px", outline: "none", colorScheme: "dark", flexShrink: 0,
+                }}
+              />
+            </div>
             <div style={{ height: 1, background: "var(--line)" }} />
             <Stepper icon="scale" label="Dose" value={ef.dose} unit="g"
               step={0.1} min={5} max={40}
@@ -140,7 +158,7 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete 
 
   // Detail view
   const ratingStars = brew.stars ?? 0;
-  const dateLabel = daysAgoNow === 0 ? "Today" : daysAgoNow === 1 ? "Yesterday" : `${daysAgoNow}d ago`;
+  const dateLabel = journalDateText(startMs);
 
   return (
     <Sheet open={!!brew} onClose={onClose}>

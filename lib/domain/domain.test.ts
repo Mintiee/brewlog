@@ -3,7 +3,7 @@ import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
   effectiveDaysAgo, restDaysAt,
-  setRestWindow, setServingGrams,
+  setRestWindow, setServingGrams, daysAgoFromStartedAt,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -219,5 +219,37 @@ describe("defaultsFor", () => {
     const total = Math.round(22 * 16.5);
     expect(r.water + r.bypass).toBe(total);
     expect(r.water).toBe(Math.round(total * 0.55));
+  });
+});
+
+describe("daysAgoFromStartedAt — calendar days in local time", () => {
+  const localMidnight = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+
+  it("counts a brew logged late last night as 1 day ago, not 0", () => {
+    // The reported bug: a brew at 11pm yesterday read as "Today" because the old
+    // code compared a rolling 24h window. It must be "Yesterday" (1) at any
+    // time of day, in any timezone.
+    const d = localMidnight(); d.setDate(d.getDate() - 1); d.setHours(23, 0, 0, 0);
+    expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(1);
+  });
+
+  it("counts a brew logged just after midnight today as 0 days ago", () => {
+    const d = localMidnight(); d.setHours(0, 30, 0, 0);
+    expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(0);
+  });
+
+  it("counts a brew earlier today as 0 days ago", () => {
+    const d = localMidnight(); d.setHours(8, 0, 0, 0);
+    expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(0);
+  });
+
+  it("clamps a future timestamp to 0 (never negative)", () => {
+    const d = localMidnight(); d.setDate(d.getDate() + 1);
+    expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(0);
+  });
+
+  it("counts exactly N calendar days ago", () => {
+    const d = localMidnight(); d.setDate(d.getDate() - 5); d.setHours(14, 0, 0, 0);
+    expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(5);
   });
 });
