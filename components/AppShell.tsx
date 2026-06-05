@@ -10,6 +10,9 @@ import type { Coffee } from "@/lib/types";
 
 type Tab = "brew" | "shelf" | "palate" | "settings";
 
+/** Minimum time the splash stays on screen once mounted (ms) — tune to taste. */
+const SPLASH_FLOOR_MS = 650;
+
 const TABS = [
   { id: "brew" as Tab,   icon: "brew",  label: "Brew" },
   { id: "shelf" as Tab,  icon: "shelf", label: "Shelf" },
@@ -77,7 +80,16 @@ function Shell() {
   // in StepWhat uses `new Date()`), so SSR-ing them would risk hydration
   // mismatches. Server output is the Splash — identical to loading.tsx.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  // Minimum splash display so it reads as a deliberate splash, not a flash.
+  // Data is usually already seeded, so without this the splash vanishes in ~1
+  // frame. The clock starts at first client paint; total on-screen time is
+  // server TTFB + this floor.
+  const [floorDone, setFloorDone] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    const t = setTimeout(() => setFloorDone(true), SPLASH_FLOOR_MS);
+    return () => clearTimeout(t);
+  }, []);
 
   const gotoTab = useCallback((t: Tab) => {
     if (t === "brew") setBrewResetKey((k) => k + 1);
@@ -110,7 +122,7 @@ function Shell() {
 
   const users = [profile];
 
-  if (!ready || !mounted) {
+  if (!ready || !mounted || !floorDone) {
     return <Splash />;
   }
 
