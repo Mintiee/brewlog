@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Icon, Stepper } from "@/components/ui";
-import type { Config, Profile } from "@/lib/types";
+import { Icon, Stepper, Sheet } from "@/components/ui";
+import type { Config, Profile, Brewer } from "@/lib/types";
 
 /* ---- Local helpers ---- */
 
@@ -133,14 +133,28 @@ export function Settings({
   const removeBrewer = (i: number) =>
     config.brewers.length > 1 &&
     onConfig({ ...config, brewers: config.brewers.filter((_, j) => j !== i) });
-  const addBrewer = () =>
+  // Add-brewer popup: captures the brewer's seed recipe once, at creation. After that,
+  // each brew remembers its own parameters, so the seed is never edited again.
+  const blankDraft = (): Brewer => ({
+    id: "", name: "", short: "", dose: 15, water: 240, ratio: 16, temp: 94, grind: 5, pours: 3, bypass: false,
+  });
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState<Brewer>(blankDraft);
+  const openAddBrewer = () => { setDraft(blankDraft()); setAdding(true); };
+  const setD = (patch: Partial<Brewer>) => setDraft((d) => ({ ...d, ...patch }));
+  const commitBrewer = () => {
+    const name = draft.name.trim() || "New brewer";
+    const short = draft.short.trim() || name.slice(0, 6);
+    const water = draft.water ?? Math.round(draft.dose * 16);
     onConfig({
       ...config,
       brewers: [
         ...config.brewers,
-        { id: "b" + Date.now(), name: "New brewer", short: "New", dose: 15, water: 240, ratio: 16, temp: 94, grind: 5, pours: 3, bypass: false },
+        { ...draft, id: "b" + Date.now(), name, short, water, ratio: +(water / draft.dose).toFixed(2) },
       ],
     });
+    setAdding(false);
+  };
 
   const [newWater, setNewWater] = useState("");
   const [aiKey, setAiKey] = useState("");
@@ -312,27 +326,62 @@ export function Settings({
                   <Icon name="close" size={18} stroke={1.9} />
                 </button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
-                {(() => { const water = b.water ?? Math.round(b.dose * b.ratio); return (<>
-                <Stepper icon="scale" label="Dose" value={b.dose} unit="g" step={0.5} min={8} max={40} onChange={(v) => updBrewer(i, { dose: v, ratio: +(water / v).toFixed(2) })} />
-                <Stepper icon="drop" label="Water" value={water} unit="g" step={1} min={50} max={1000} onChange={(v) => updBrewer(i, { water: v, ratio: +(v / b.dose).toFixed(2) })} />
-                </>); })()}
-                <Stepper icon="thermo" label="Temp" value={b.temp} unit="°C" step={1} min={80} max={100} onChange={(v) => updBrewer(i, { temp: v })} />
-                <Stepper icon="grind" label="Grind"
-                  value={b.grind} unit={config.grinder.unit}
-                  step={config.grinder.grind_step ?? 1} min={config.grinder.grind_min ?? 0} max={config.grinder.grind_max ?? 50}
-                  format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
-                  onChange={(v) => updBrewer(i, { grind: v })} />
-              </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0 10px", borderTop: "1px solid var(--line)", marginTop: 4 }}>
                 <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-dim)" }}>Add water after brewing (bypass)</span>
                 <SToggle on={!!b.bypass} onChange={(v) => updBrewer(i, { bypass: v })} />
               </div>
             </div>
           ))}
-          <button className="btn btn-soft" onClick={addBrewer}>
+          <button className="btn btn-soft" onClick={openAddBrewer}>
             <Icon name="plus" size={18} stroke={2} /> Add a brewer
           </button>
+          <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
+            Each brew remembers its own recipe. The starting recipe below is only used the
+            first time you brew on a new brewer — after that, your last brew carries over.
+          </div>
+
+          <Sheet open={adding} onClose={() => setAdding(false)}>
+            <div className="screen-pad" style={{ paddingTop: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                <h2 style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-0.01em" }}>Add a brewer</h2>
+                <button onClick={() => setAdding(false)} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 34, height: 34, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="close" size={18} stroke={1.9} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+                <div style={{ flex: 2 }}>
+                  <SText value={draft.name} onChange={(v) => setD({ name: v })} placeholder="Name" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <SText value={draft.short} onChange={(v) => setD({ short: v })} placeholder="Short" />
+                </div>
+              </div>
+
+              <div className="label" style={{ marginBottom: 8 }}>Starting recipe</div>
+              <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
+                  <Stepper icon="scale" label="Dose" value={draft.dose} unit="g" step={0.5} min={8} max={40} onChange={(v) => setD({ dose: v })} />
+                  <Stepper icon="drop" label="Water" value={draft.water ?? 240} unit="g" step={1} min={50} max={1000} onChange={(v) => setD({ water: v })} />
+                  <Stepper icon="thermo" label="Temp" value={draft.temp} unit="°C" step={1} min={80} max={100} onChange={(v) => setD({ temp: v })} />
+                  <Stepper icon="grind" label="Grind"
+                    value={draft.grind} unit={config.grinder.unit}
+                    step={config.grinder.grind_step ?? 1} min={config.grinder.grind_min ?? 0} max={config.grinder.grind_max ?? 50}
+                    format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
+                    onChange={(v) => setD({ grind: v })} />
+                </div>
+              </div>
+
+              <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", marginBottom: 18 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-dim)" }}>Add water after brewing (bypass)</span>
+                <SToggle on={!!draft.bypass} onChange={(v) => setD({ bypass: v })} />
+              </div>
+
+              <button className="btn" onClick={commitBrewer} style={{ width: "100%", background: "var(--ink)", color: "var(--bg)", height: 52, borderRadius: 13 }}>
+                Add brewer
+              </button>
+            </div>
+          </Sheet>
         </SSection>
 
         {/* FRESHNESS */}

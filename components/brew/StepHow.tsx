@@ -23,6 +23,20 @@ export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHo
       .filter((x) => x.coffee_id === coffee.id && x.brewer_id === brewerId)
       .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
 
+  // Most recent brew on a given brewer, any coffee — the second-tier default
+  // when this coffee hasn't been brewed on this brewer yet.
+  const lastOnBrewer = (brewerId: string) =>
+    brews
+      .filter((x) => x.brewer_id === brewerId)
+      .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
+
+  // Recipe for a brewer with no history for this coffee: most recent brew on
+  // that brewer (any coffee) → the brewer's seed defaults.
+  const fallbackRecipe = (b: Brewer): Recipe => {
+    const onBrewer = lastOnBrewer(b.id);
+    return onBrewer ? recipeFromBrew(onBrewer) : { ...defaultsFor(coffee, b), water_type: config.default_water };
+  };
+
   // Default to the single most recent brew of this coffee — brewer and recipe from the same brew.
   const lastForCoffee = brews
     .filter((x) => x.coffee_id === coffee.id)
@@ -31,13 +45,13 @@ export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHo
 
   const [brewer, setBrewer] = useState<Brewer>(initialBrewer);
   const [r, setR] = useState<Recipe>(() =>
-    lastForCoffee ? recipeFromBrew(lastForCoffee) : { ...defaultsFor(coffee, initialBrewer), water_type: config.default_water }
+    lastForCoffee ? recipeFromBrew(lastForCoffee) : fallbackRecipe(initialBrewer)
   );
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
     const last = lastBrewOn(b.id);
-    setR(last ? recipeFromBrew(last) : { ...defaultsFor(coffee, b), water_type: config.default_water });
+    setR(last ? recipeFromBrew(last) : fallbackRecipe(b));
   }
 
   const total = r.water + (r.bypass || 0);

@@ -60,11 +60,14 @@ export interface Brewer {
   id: string;
   name: string;
   short: string;
+  // Recipe fields below are the brewer's *seed* — captured once when the brewer is added,
+  // and used only as the cold-start default until the first brew on this brewer exists.
+  // After that, each brew remembers its own parameters (see StepHow's fallback chain).
   dose: number;
-  water?: number;  // default water out (mL) — source of truth for recipe defaults (backfilled from dose×ratio)
+  water?: number;  // seed water out (mL); backfilled from dose×ratio for legacy brewers
   ratio: number;   // legacy / derived (water ÷ dose); kept for back-compat
   temp: number;
-  grind: number;   // default grind size for this brewer (within the grinder's range)
+  grind: number;   // seed grind size (within the grinder's range)
   pours: number;
   bypass: boolean;
 }
