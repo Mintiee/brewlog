@@ -65,13 +65,13 @@ export function StepWhat({ coffees, brews, config, onPick, onRate, onOpenBrew, o
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px 10px", color: "var(--ink-faint)", fontSize: 10.5 }}>
             <span className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="days since roast">
-              <Icon name="bean" size={13} stroke={1.8} /> {st.day}d
+              <Icon name="timer" size={12} stroke={1.8} /> {st.day}d
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title="last brewed">
-              <Icon name="timer" size={11} stroke={1.8} /> {last ?? "new"}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="last brewed">
+              <Icon name="brew" size={13} stroke={1.8} /> {last ?? "new"}
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title="serves left">
-              <Icon name="drop" size={11} stroke={1.8} /> {serves}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="serves left">
+              <Icon name="bean" size={13} stroke={1.8} /> {serves} left
             </span>
           </div>
           <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.015em", color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 2 }}>{c.name}</div>
