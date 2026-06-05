@@ -154,7 +154,7 @@ function Shell() {
       )}
       {tab === "palate" && (
         <History
-          brews={brews.filter((b) => !b.pending)}
+          brews={brews}
           coffees={coffees}
           config={config}
           llmEnabled={effectiveLlmEnabled}

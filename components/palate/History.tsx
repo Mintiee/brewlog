@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Icon, Segmented } from "@/components/ui";
 import { InsightCard } from "./InsightCard";
 import { FlavourRanking } from "./FlavourRanking";
@@ -22,6 +22,10 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
   const { updateBrew, dismissBrew } = useApp();
   const [selected, setSelected] = useState<Brew | null>(null);
   const [view, setView] = useState<"journal" | "stats">("journal");
+
+  // The Journal lists every brew (rated + unrated), matching the Recently strip.
+  // Stats stay rated-only so unrated brews don't skew rankings/insight/tips.
+  const rated = useMemo(() => brews.filter((b) => !b.pending), [brews]);
 
   const handleUpdate = (id: string, patch: Partial<Brew>) => {
     updateBrew(id, patch);
@@ -56,11 +60,11 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
               <Journal brews={brews} coffees={coffees} config={config} onOpen={setSelected} />
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <InsightCard brews={brews} coffees={coffees} config={config} llmEnabled={llmEnabled} />
-                <FlavourRanking brews={brews} coffees={coffees} />
-                <RoasterRanking brews={brews} coffees={coffees} />
-                <RestRanking brews={brews} />
-                <BrewingTips brews={brews} coffees={coffees} config={config} llmEnabled={llmEnabled} />
+                <InsightCard brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
+                <FlavourRanking brews={rated} coffees={coffees} />
+                <RoasterRanking brews={rated} coffees={coffees} />
+                <RestRanking brews={rated} />
+                <BrewingTips brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
               </div>
             )}
           </>
