@@ -1,19 +1,22 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
-import { brewRating } from "@/lib/domain";
+import { brewRating, roastedDaysAgo } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface BrewingTipsProps {
   brews: Brew[];
   coffees: Coffee[];
   config: Config;
+  llmEnabled: boolean;
 }
 
 interface Tip {
   icon: string;
   text: string;
 }
+
+// ---------- Heuristic tips (fallback when AI is off or the LLM path fails) ----------
 
 function buildTips(brews: Brew[], coffees: Coffee[], config: Config): Tip[] {
   const tips: Tip[] = [];
@@ -87,9 +90,150 @@ function buildTips(brews: Brew[], coffees: Coffee[], config: Config): Tip[] {
   return tips.slice(0, 3);
 }
 
-export function BrewingTips({ brews, coffees, config }: BrewingTipsProps) {
-  const tips = useMemo(() => buildTips(brews, coffees, config), [brews, coffees, config]);
+// ---------- Compact stats + rich digest for the LLM ----------
 
+function avgRating(arr: Brew[]): number {
+  return arr.length ? arr.reduce((s, b) => s + brewRating(b), 0) / arr.length : 0;
+}
+
+function meanAttr(arr: Brew[], k: "acidity" | "sweetness" | "body" | "clarity"): number | null {
+  const v = arr.filter((b) => b[k] != null);
+  return v.length ? v.reduce((s, b) => s + (b[k] as number), 0) / v.length : null;
+}
+
+/** A small authoritative stats block — enough to ground tips, not a full report. */
+function buildStats(rated: Brew[], coffees: Coffee[], config: Config): string {
+  const lines: string[] = [];
+  lines.push(`${rated.length} rated brews, overall average ${avgRating(rated).toFixed(1)}/5.`);
+
+  const g = config.grinder;
+  lines.push(`Grinder: ${g.name} (${g.unit}, grind range ${g.grind_min}–${g.grind_max}, step ${g.grind_step}).`);
+
+  // Per-brewer averages (only where there's enough signal)
+  const byBrewer: Record<string, Brew[]> = {};
+  rated.forEach((b) => { (byBrewer[b.brewer_id] = byBrewer[b.brewer_id] || []).push(b); });
+  const brewerRows = Object.entries(byBrewer)
+    .map(([id, a]) => {
+      const br = config.brewers.find((x) => x.id === id);
+      return { short: br?.short ?? id, avg: avgRating(a), n: a.length };
+    })
+    .filter((x) => x.n >= 2)
+    .sort((a, b) => b.avg - a.avg);
+  if (brewerRows.length) {
+    lines.push("By brewer (avg★, n): " + brewerRows.map((r) => `${r.short} ${r.avg.toFixed(1)} (${r.n})`).join(", ") + ".");
+  }
+
+  // Per-process averages
+  const byProc: Record<string, Brew[]> = {};
+  rated.forEach((b) => {
+    const c = coffees.find((x) => x.id === b.coffee_id);
+    if (c) (byProc[c.process] = byProc[c.process] || []).push(b);
+  });
+  const procRows = Object.entries(byProc)
+    .map(([p, a]) => ({ p, avg: avgRating(a), n: a.length }))
+    .filter((x) => x.n >= 2)
+    .sort((a, b) => b.avg - a.avg);
+  if (procRows.length) {
+    lines.push("By process (avg★, n): " + procRows.map((r) => `${r.p} ${r.avg.toFixed(1)} (${r.n})`).join(", ") + ".");
+  }
+
+  // Flavour lean of favourites vs lower-rated
+  const hi = rated.filter((b) => brewRating(b) >= 4);
+  const lo = rated.filter((b) => brewRating(b) <= 3);
+  if (hi.length >= 2 && lo.length >= 2) {
+    const parts: string[] = [];
+    (["acidity", "sweetness", "body", "clarity"] as const).forEach((k) => {
+      const h = meanAttr(hi, k);
+      const l = meanAttr(lo, k);
+      if (h != null && l != null) {
+        const d = h - l;
+        if (Math.abs(d) >= 0.4) parts.push(`${k} ${d > 0 ? "+" : ""}${d.toFixed(1)}`);
+      }
+    });
+    if (parts.length) {
+      lines.push(`Favourites (≥4★) vs lower (≤3★) flavour deltas: ${parts.join(", ")}.`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/** Rich per-brew lines: coffee, freshness, gear, full recipe, scores, note. */
+function buildDigest(rated: Brew[], coffees: Coffee[], config: Config): string[] {
+  return rated.slice(0, 16).map((b) => {
+    const c = coffees.find((x) => x.id === b.coffee_id);
+    const br = config.brewers.find((x) => x.id === b.brewer_id);
+    const coffeeLabel = c ? `${c.roaster} ${c.name} — ${c.origin || "?"}, ${c.process}, ${c.roast}` : b.coffee_id;
+    const age = c ? `${roastedDaysAgo(c)}d post-roast` : "age ?";
+    const brewer = br?.short ?? b.brewer_id;
+    const ratio = b.ratio ? `1:${b.ratio.toFixed(1)}` : "ratio ?";
+    const recipe = `${b.dose}g→${b.water}mL, ${b.temp}°, grind ${b.grind}, ${ratio}${b.bypass ? `, bypass ${b.bypass}mL` : ""}${b.water_type ? `, ${b.water_type}` : ""}`;
+    const scores = `acidity ${b.acidity ?? "-"}, sweetness ${b.sweetness ?? "-"}, body ${b.body ?? "-"}, clarity ${b.clarity ?? "-"}`;
+    const note = b.note ? ` — note: "${b.note}"` : "";
+    return `${coffeeLabel} (${age}) on ${brewer}: ${recipe} → rated ${brewRating(b).toFixed(1)}/5 (${scores})${note}`;
+  });
+}
+
+export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsProps) {
+  // Heuristic tips render immediately — they're the fallback and the placeholder.
+  const heuristic = useMemo(() => buildTips(brews, coffees, config), [brews, coffees, config]);
+  const [llmTips, setLlmTips] = useState<Tip[] | null>(null);
+
+  useEffect(() => {
+    if (!llmEnabled) return;
+    let cancelled = false;
+
+    const LS_KEY = "brew_tips_v1";
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const MIN_BREWS = 5;
+
+    const rated = brews
+      .filter((b) => b.stars != null)
+      .sort((a, b) => Number(b.started_at) - Number(a.started_at));
+    if (rated.length < MIN_BREWS) return; // too little signal — keep heuristic
+
+    // Weekly local cache: skip the network round-trip if we refreshed in the last 7 days.
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const c = JSON.parse(raw) as { ts: number; tips: Tip[] };
+        if (c.ts && Date.now() - c.ts < WEEK_MS && Array.isArray(c.tips) && c.tips.length) {
+          setLlmTips(c.tips);
+          return;
+        }
+      }
+    } catch { /* ignore malformed cache */ }
+
+    const stats = buildStats(rated.slice(0, 40), coffees, config);
+    const digest = buildDigest(rated, coffees, config);
+
+    (async () => {
+      try {
+        const res = await fetch("/api/tips", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stats, brews: digest }),
+        });
+        // 204 / error → keep the heuristic tips already on screen.
+        if (res.status === 204 || !res.ok) return;
+        const data = await res.json();
+        const tips: Tip[] = Array.isArray(data.tips)
+          ? data.tips
+              .filter((t: unknown): t is Tip =>
+                !!t && typeof t === "object" && typeof (t as Tip).text === "string" && (t as Tip).text.trim().length > 0)
+              .slice(0, 3)
+          : [];
+        if (!cancelled && tips.length) {
+          setLlmTips(tips);
+          try { localStorage.setItem(LS_KEY, JSON.stringify({ ts: Date.now(), tips })); } catch { /* ignore */ }
+        }
+      } catch { /* keep heuristic */ }
+    })();
+
+    return () => { cancelled = true; };
+  }, [brews, coffees, config, llmEnabled]);
+
+  const tips = llmTips ?? heuristic;
   if (!tips.length) return null;
 
   return (

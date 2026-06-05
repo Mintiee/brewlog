@@ -43,9 +43,9 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
             </div>
           ) : (
             <>
-              <InsightCard brews={brews} coffees={coffees} llmEnabled={llmEnabled} />
+              <InsightCard brews={brews} coffees={coffees} config={config} llmEnabled={llmEnabled} />
               <FlavourRanking brews={brews} coffees={coffees} />
-              <BrewingTips brews={brews} coffees={coffees} config={config} />
+              <BrewingTips brews={brews} coffees={coffees} config={config} llmEnabled={llmEnabled} />
               <div style={{ marginTop: 8 }}>
                 <Journal brews={brews} coffees={coffees} config={config} onOpen={setSelected} />
               </div>

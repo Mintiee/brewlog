@@ -2,15 +2,16 @@
 import { useState, useEffect } from "react";
 import { Icon } from "@/components/ui";
 import { brewRating } from "@/lib/domain";
-import type { Brew, Coffee } from "@/lib/types";
+import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface InsightCardProps {
   brews: Brew[];
   coffees: Coffee[];
+  config: Config;
   llmEnabled: boolean;
 }
 
-export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
+export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardProps) {
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -19,8 +20,9 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
     if (!llmEnabled) return;
     let cancelled = false;
 
-    const LS_KEY = "brew_insight";
+    const LS_KEY = "brew_insight_v2";  // bumped: invalidates old local caches on deploy
     const today = new Date().toISOString().slice(0, 10);
+    const FORTNIGHT_MS = 14 * 24 * 60 * 60 * 1000;
 
     async function run() {
       // Same-day short-circuit: skip the network round-trip entirely if we already
@@ -37,17 +39,24 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
       setFailed(false);
       setText(null);
 
-      const rated = brews.filter((b) => b.stars != null).slice(0, 18);
+      // "This fortnight": rated brews from the last 14 days, most recent first.
+      const cutoff = Date.now() - FORTNIGHT_MS;
+      const rated = brews
+        .filter((b) => b.stars != null && Number(b.started_at) >= cutoff)
+        .sort((a, b) => Number(b.started_at) - Number(a.started_at))
+        .slice(0, 18);
       const digest = rated.map((b) => {
         const c = coffees.find((x) => x.id === b.coffee_id);
+        const br = config.brewers.find((x) => x.id === b.brewer_id);
         const coffeeLabel = c
-          ? `${c.roaster} ${c.name} (${c.process})`
+          ? `${c.roaster} ${c.name} (${c.origin || "?"}, ${c.process}, ${c.roast})`
           : b.coffee_id;
-        const acidity = b.acidity ?? "-";
-        const sweetness = b.sweetness ?? "-";
-        const body = b.body ?? "-";
-        const clarity = b.clarity ?? "-";
-        return `${coffeeLabel} on ${b.brewer_id}: ${brewRating(b).toFixed(1)}/5 (acidity ${acidity}/5, sweetness ${sweetness}/5, body ${body}/5, clarity ${clarity}/5)`;
+        const brewer = br?.short ?? b.brewer_id;
+        const ratio = b.ratio ? `1:${b.ratio.toFixed(1)}` : "";
+        const recipe = `${b.temp}°, grind ${b.grind}${ratio ? `, ${ratio}` : ""}`;
+        const scores = `acidity ${b.acidity ?? "-"}/5, sweetness ${b.sweetness ?? "-"}/5, body ${b.body ?? "-"}/5, clarity ${b.clarity ?? "-"}/5`;
+        const note = b.note ? ` — "${b.note}"` : "";
+        return `${coffeeLabel} on ${brewer} (${recipe}): ${brewRating(b).toFixed(1)}/5 (${scores})${note}`;
       });
 
       try {
@@ -75,7 +84,7 @@ export function InsightCard({ brews, coffees, llmEnabled }: InsightCardProps) {
 
     run();
     return () => { cancelled = true; };
-  }, [brews, coffees, llmEnabled]);
+  }, [brews, coffees, config, llmEnabled]);
 
   if (!llmEnabled) return (
     <div className="card" style={{ padding: 18, opacity: 0.6 }}>

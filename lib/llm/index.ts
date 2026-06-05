@@ -15,6 +15,8 @@ export interface LLMRequest {
   /** Base64 data-URL of an image, e.g. "data:image/jpeg;base64,..." */
   image?: string;
   maxTokens?: number;
+  /** Override the model id. Defaults to a sensible per-provider choice. */
+  model?: string;
 }
 
 export async function complete(key: string, provider: Provider, req: LLMRequest): Promise<string> {
@@ -35,12 +37,14 @@ async function completeOpenAI(apiKey: string, req: LLMRequest): Promise<string> 
   userContent.push({ type: "text", text: req.prompt });
 
   const response = await client.chat.completions.create({
-    model: req.image ? "gpt-4o" : "gpt-4o-mini",
+    model: req.model ?? (req.image ? "gpt-4o" : "gpt-4o-mini"),
     messages: [
       { role: "system", content: req.system },
       { role: "user", content: userContent },
     ],
-    max_tokens: req.maxTokens ?? 512,
+    // GPT-5 family rejects `max_tokens`; `max_completion_tokens` is the current
+    // param and is also accepted by the gpt-4o models used elsewhere.
+    max_completion_tokens: req.maxTokens ?? 512,
   });
 
   return response.choices[0]?.message?.content ?? "";
@@ -66,14 +70,17 @@ async function completeAnthropic(apiKey: string, req: LLMRequest): Promise<strin
   userContent.push({ type: "text", text: req.prompt });
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: req.model ?? "claude-sonnet-4-6",
     system: req.system,
     messages: [{ role: "user", content: userContent }],
     max_tokens: req.maxTokens ?? 512,
   });
 
-  const block = response.content[0];
-  return block.type === "text" ? block.text : "";
+  // Return the first text block (robust to leading non-text blocks).
+  for (const block of response.content) {
+    if (block.type === "text") return block.text;
+  }
+  return "";
 }
 
 /**
