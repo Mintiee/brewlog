@@ -90,7 +90,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setRateTarget(newBrew);
     setStep("logged");
     if (logTimer.current) clearTimeout(logTimer.current);
-    logTimer.current = setTimeout(backHome, 2600);
+    logTimer.current = setTimeout(backHome, 4200);
   }
 
   function openRate(brew: Brew) {
