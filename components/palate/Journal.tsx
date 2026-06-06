@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { StarsMini } from "@/components/ui";
 import { brewRating, daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
 import { processTexture } from "@/lib/flavour";
@@ -18,7 +18,15 @@ interface Group {
   items: Brew[];
 }
 
+// Render-windowing only: the journal can hold a couple of years of brews, but
+// we lay out cards one calendar-day chunk at a time so the DOM stays light.
+// ~3 brews/day × 90 days ≈ 270 cards — generous yet snappy on a phone.
+// This windows the *display* only; Stats still see every fetched brew.
+const CHUNK_DAYS = 90;
+
 export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
+  const [windowDays, setWindowDays] = useState(CHUNK_DAYS);
+
   const groups = useMemo<Group[]>(() => {
     const sorted = [...brews].sort((a, b) => {
       const da = daysAgoFromStartedAt(a.started_at);
@@ -41,10 +49,24 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
     return result;
   }, [brews]);
 
+  // Day-groups within the current window (daysAgo < windowDays), and whether
+  // any older groups remain. Same comparison on both sides so a group never
+  // both shows and triggers "show older".
+  const visible = groups.filter((g) => g.d < windowDays);
+  const hidden = groups.filter((g) => g.d >= windowDays);
+  const hasMore = hidden.length > 0;
+
+  // Extend the window by one chunk. Snap past any gap to the next older brew
+  // first, so a long stretch with no brews never yields an empty "show older".
+  const showOlder = () => {
+    const nextOldest = hidden[0]?.d ?? windowDays;
+    setWindowDays(nextOldest + CHUNK_DAYS);
+  };
+
   return (
     <div>
       <div className="label" style={{ margin: "4px 2px 12px" }}>Journal</div>
-      {groups.map((g) => (
+      {visible.map((g) => (
         <div key={g.d} style={{ marginBottom: 16 }}>
           <div
             className="mono"
@@ -113,6 +135,19 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
           </div>
         </div>
       ))}
+      {hasMore && (
+        <button
+          onClick={showOlder}
+          style={{
+            width: "100%", marginTop: 4, padding: "11px 14px",
+            background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12,
+            color: "var(--ink-dim)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Show older brews
+        </button>
+      )}
     </div>
   );
 }
