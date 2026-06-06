@@ -160,7 +160,7 @@ function buildStats(rated: Brew[], coffees: Coffee[], config: Config): string {
 
 /** Rich per-brew lines: coffee, freshness, gear, full recipe, scores, note. */
 function buildDigest(rated: Brew[], coffees: Coffee[], config: Config): string[] {
-  return rated.slice(0, 16).map((b) => {
+  return rated.map((b) => {
     const c = coffees.find((x) => x.id === b.coffee_id);
     const br = config.brewers.find((x) => x.id === b.brewer_id);
     const coffeeLabel = c ? `${c.roaster} ${c.name} — ${c.origin || "?"}, ${c.process}, ${c.roast}` : b.coffee_id;
@@ -183,7 +183,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
     if (!llmEnabled) return;
     let cancelled = false;
 
-    const LS_KEY = "brew_tips_v3";  // bumped: tighter, lever-led tip copy
+    const LS_KEY = "brew_tips_v4";  // bumped: tighter copy + full-history input (no caps)
     const MIN_BREWS = 5;
     // Local calendar-day index (not UTC, not a rolling window), so a weekly
     // refresh rolls over at local midnight and lands on the morning of the 7th day.
@@ -207,7 +207,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
       }
     } catch { /* ignore malformed cache */ }
 
-    const stats = buildStats(rated.slice(0, 40), coffees, config);
+    const stats = buildStats(rated, coffees, config);
     const digest = buildDigest(rated, coffees, config);
 
     (async () => {

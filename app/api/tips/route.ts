@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const digest = (brews as string[]).slice(0, 20).join("\n");
+    const digest = (brews as string[]).join("\n");
     const statsBlock = typeof stats === "string" && stats.trim() ? `STATS:\n${stats.trim()}\n\n` : "";
     const raw = await complete(hk.key, hk.provider, {
       system: SYSTEM,
