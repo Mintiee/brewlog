@@ -235,6 +235,39 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete,
           </div>
         )}
 
+        {(() => {
+          const scales = [
+            { label: "Acidity", value: brew.acidity, low: "Flat", high: "Bright" },
+            { label: "Sweetness", value: brew.sweetness, low: "Dry", high: "Syrupy" },
+            { label: "Body", value: brew.body, low: "Light", high: "Heavy" },
+            { label: "Clarity", value: brew.clarity, low: "Muddy", high: "Clean" },
+          ].flatMap((s) => (s.value != null && s.value > 0 ? [{ ...s, value: s.value }] : []));
+          if (!scales.length) return null;
+          return (
+            <div style={{ marginTop: 18 }}>
+              <div className="label" style={{ marginBottom: 8 }}>Tasting</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {scales.map((s) => {
+                  const descriptor = s.value <= 2 ? s.low : s.value >= 4 ? s.high : `${s.low}–${s.high}`;
+                  return (
+                    <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "7px 0" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{s.label}</div>
+                        <div className="label" style={{ fontSize: 9, marginTop: 2 }}>{descriptor}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <span key={n} style={{ width: 18, height: 18, borderRadius: 6, background: n <= s.value ? "var(--accent)" : "var(--surface-3)" }} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {brew.note && (
           <div style={{ marginTop: 16, fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.55, fontStyle: "italic" }}>
             &ldquo;{brew.note}&rdquo;
