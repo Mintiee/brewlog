@@ -4,7 +4,11 @@ import { Icon, Segmented } from "@/components/ui";
 import { InsightCard } from "./InsightCard";
 import { FlavourRanking } from "./FlavourRanking";
 import { RoasterRanking } from "./RoasterRanking";
+import { OriginRanking } from "./OriginRanking";
 import { ProcessRanking } from "./ProcessRanking";
+import { BrewerRanking } from "./BrewerRanking";
+import { TasterDiff } from "./TasterDiff";
+import { RatingTrend } from "./RatingTrend";
 import { RestRanking } from "./RestRanking";
 import { BrewingTips } from "./BrewingTips";
 import { Journal } from "./Journal";
@@ -73,10 +77,14 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <InsightCard brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
+                <RatingTrend brews={rated} />
                 <FlavourRanking brews={rated} coffees={coffees} />
                 <RoasterRanking brews={rated} coffees={coffees} />
+                <OriginRanking brews={rated} coffees={coffees} />
                 <ProcessRanking brews={rated} coffees={coffees} />
+                <BrewerRanking brews={rated} config={config} />
                 <RestRanking brews={rated} />
+                <TasterDiff brews={rated} config={config} />
                 <BrewingTips brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
               </div>
             )}
