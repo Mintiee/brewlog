@@ -183,7 +183,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
     if (!llmEnabled) return;
     let cancelled = false;
 
-    const LS_KEY = "brew_tips_v2";  // bumped: switch cache key from rolling ms to local-day index
+    const LS_KEY = "brew_tips_v3";  // bumped: tighter, lever-led tip copy
     const MIN_BREWS = 5;
     // Local calendar-day index (not UTC, not a rolling window), so a weekly
     // refresh rolls over at local midnight and lands on the morning of the 7th day.

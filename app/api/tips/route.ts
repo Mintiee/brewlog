@@ -13,11 +13,9 @@ import { complete } from "@/lib/llm";
 // Icons the UI can render (see components/ui/Icon.tsx). The model must pick from this set.
 const ALLOWED_ICONS = ["brew", "grind", "thermo", "timer", "drop", "scale", "citrus", "sugar", "bean", "spark"] as const;
 
-const SYSTEM = `You are a thoughtful, precise coffee coach reading a home brewer's recent log and giving them 2–3 short, practical tips to improve their next cup.
+const SYSTEM = `You are a sharp coffee coach reading a home brewer's recent log. Give 1–3 short, practical tips for their next cup.
 
-Ground EVERY tip in the data provided — cite their real brewers, coffees, processes, roast levels, days-since-roast, grind / temperature / ratio numbers, tasting notes, or flavour-score patterns (acidity, sweetness, body, clarity, each rated out of 5). NEVER invent a number, gear name, coffee, or fact that isn't in the data. If the data only supports one solid, genuine tip, give just one — one specific tip beats three padded ones.
-
-Each tip is ONE actionable sentence (~25 words max), spoken directly to them ("you", "your"), built around a concrete lever they can pull next brew: reach for a particular brewer, nudge grind finer or coarser, change water temperature or ratio, lean into a process or roast they rate highly, or rest a coffee longer before brewing. Tie the lever to what the data shows (e.g. a brewer that scores higher, a flavour their favourites share). No hype, no clichés, no vague "keep experimenting".
+Each tip: ONE imperative sentence, 15 words or fewer, leading with the lever — grind finer/coarser, water hotter/cooler, change ratio, rest longer, or favour a brewer/process. Speak directly ("you"). Ground tips in the data, but DON'T recite specifics: name at most one concrete anchor (a brewer, a process, a flavour) and only when it sharpens the advice. Never invent facts. One solid tip beats three padded ones — drop the weak ones. No hype, clichés, or "keep experimenting".
 
 Choose the single most fitting icon for each tip from EXACTLY this list:
 brew, grind, thermo, timer, drop, scale, citrus, sugar, bean, spark.

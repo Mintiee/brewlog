@@ -1,18 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
 import { Icon, Segmented } from "@/components/ui";
-import { InsightCard } from "./InsightCard";
-import { FlavourRanking } from "./FlavourRanking";
-import { RoasterRanking } from "./RoasterRanking";
-import { OriginRanking } from "./OriginRanking";
-import { ProcessRanking } from "./ProcessRanking";
-import { VarietalRanking } from "./VarietalRanking";
-import { BrewerRanking } from "./BrewerRanking";
-import { TasterFaceoff } from "./TasterFaceoff";
-import { RatingTrend } from "./RatingTrend";
-import { OriginVolume, RoasterVolume, ProcessVolume } from "./VolumeCards";
-import { RestRanking } from "./RestRanking";
-import { BrewingTips } from "./BrewingTips";
+import { StatsView } from "./StatsView";
 import { Journal } from "./Journal";
 import { BrewDetail } from "./BrewDetail";
 import { StepRate } from "@/components/brew/StepRate";
@@ -77,22 +66,7 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
             {view === "journal" ? (
               <Journal brews={brews} coffees={coffees} config={config} onOpen={setSelected} />
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <InsightCard brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
-                <RatingTrend brews={rated} />
-                <OriginVolume brews={brews} coffees={coffees} />
-                <RoasterVolume brews={brews} coffees={coffees} />
-                <ProcessVolume brews={brews} coffees={coffees} />
-                <FlavourRanking brews={rated} coffees={coffees} />
-                <RoasterRanking brews={rated} coffees={coffees} />
-                <OriginRanking brews={rated} coffees={coffees} />
-                <ProcessRanking brews={rated} coffees={coffees} />
-                <VarietalRanking brews={rated} coffees={coffees} />
-                <BrewerRanking brews={rated} config={config} />
-                <RestRanking brews={rated} />
-                <TasterFaceoff brews={rated} coffees={coffees} config={config} />
-                <BrewingTips brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
-              </div>
+              <StatsView rated={rated} allBrews={brews} coffees={coffees} config={config} llmEnabled={llmEnabled} />
             )}
           </>
         )}
