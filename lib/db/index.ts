@@ -43,8 +43,9 @@ export async function upsertCoffee(coffee: Coffee): Promise<Coffee> {
 export async function fetchBrews(client?: DB): Promise<Brew[]> {
   const sb = client ?? createClient();
   // Newest first, bounded so the payload doesn't grow without limit as history
-  // accumulates. 200 covers a long personal history; add load-more if ever needed.
-  const { data, error } = await sb.from("brews").select("*").order("started_at", { ascending: false }).limit(200);
+  // accumulates. 2000 ≈ a couple of years of daily brewing; for true lifetime
+  // history, paginate the journal + aggregate stats server-side.
+  const { data, error } = await sb.from("brews").select("*").order("started_at", { ascending: false }).limit(2000);
   if (error) throw error;
   return (data ?? []).map(rowToBrew);
 }
