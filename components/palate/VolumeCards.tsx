@@ -28,31 +28,38 @@ function VolumeList({ title, rows }: { title: string; rows: Row[] }) {
   );
 }
 
-/** Most-brewed individual coffees (counts every brew, rated or not). */
-export function MostBrewed({ brews, coffees }: { brews: Brew[]; coffees: Coffee[] }) {
-  const rows = useMemo<Row[]>(() => {
-    const acc: Record<string, number> = {};
-    brews.forEach((b) => { acc[b.coffee_id] = (acc[b.coffee_id] || 0) + 1; });
-    return Object.entries(acc)
-      .map(([id, count]) => ({ key: id, label: coffees.find((c) => c.id === id)?.name ?? id, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [brews, coffees]);
-  return <VolumeList title="Most brewed" rows={rows} />;
+// Group brews by a key derived from the coffee, into volume rows (desc by count).
+function volumeByCoffee(brews: Brew[], coffees: Coffee[], keyOf: (c: Coffee) => string | null): Row[] {
+  const acc: Record<string, number> = {};
+  brews.forEach((b) => {
+    const c = coffees.find((x) => x.id === b.coffee_id);
+    const key = c ? keyOf(c) : null;
+    if (!key) return;
+    acc[key] = (acc[key] || 0) + 1;
+  });
+  return Object.entries(acc)
+    .map(([key, count]) => ({ key, label: key, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 /** Brew volume by origin country. */
 export function OriginVolume({ brews, coffees }: { brews: Brew[]; coffees: Coffee[] }) {
-  const rows = useMemo<Row[]>(() => {
-    const acc: Record<string, number> = {};
-    brews.forEach((b) => {
-      const origin = coffees.find((c) => c.id === b.coffee_id)?.origin?.trim();
-      if (!origin) return;
-      acc[origin] = (acc[origin] || 0) + 1;
-    });
-    return Object.entries(acc)
-      .map(([origin, count]) => ({ key: origin, label: origin, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [brews, coffees]);
+  const rows = useMemo(() => volumeByCoffee(brews, coffees, (c) => c.origin?.trim() || null), [brews, coffees]);
   return <VolumeList title="Cups by origin" rows={rows} />;
+}
+
+/** Brew volume by roaster. */
+export function RoasterVolume({ brews, coffees }: { brews: Brew[]; coffees: Coffee[] }) {
+  const rows = useMemo(() => volumeByCoffee(brews, coffees, (c) => c.roaster?.trim() || null), [brews, coffees]);
+  return <VolumeList title="Cups by roaster" rows={rows} />;
+}
+
+/** Brew volume by process — raw name, but anaerobic/anoxic variants lumped. */
+export function ProcessVolume({ brews, coffees }: { brews: Brew[]; coffees: Coffee[] }) {
+  const rows = useMemo(() => volumeByCoffee(brews, coffees, (c) => {
+    const p = (c.process || "").trim();
+    if (!p) return null;
+    return /anaerobic|anoxic/i.test(p) ? "Anaerobic" : p;
+  }), [brews, coffees]);
+  return <VolumeList title="Cups by process" rows={rows} />;
 }
