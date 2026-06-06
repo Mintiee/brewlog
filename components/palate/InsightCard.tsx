@@ -20,7 +20,7 @@ export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardP
     if (!llmEnabled) return;
     let cancelled = false;
 
-    const LS_KEY = "brew_insight_v2";  // bumped: invalidates old local caches on deploy
+    const LS_KEY = "brew_insight_v3";  // bumped: invalidates old local caches on deploy
     // Local calendar day (not UTC), so a fresh insight appears at local midnight
     // rather than at UTC midnight (mid-morning in AU). Offset lets the server
     // map its stored generated_at onto the same local day.
@@ -52,15 +52,20 @@ export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardP
       const digest = rated.map((b) => {
         const c = coffees.find((x) => x.id === b.coffee_id);
         const br = config.brewers.find((x) => x.id === b.brewer_id);
+        const place = c ? [c.origin, c.region].filter(Boolean).join(" ") : "";
         const coffeeLabel = c
-          ? `${c.roaster} ${c.name} (${c.origin || "?"}, ${c.process}, ${c.roast})`
+          ? `${c.roaster} ${c.name} (${place || "?"}${c.varietal ? `, ${c.varietal}` : ""}, ${c.process}, ${c.roast})`
           : b.coffee_id;
         const brewer = br?.short ?? b.brewer_id;
         const ratio = b.ratio ? `1:${b.ratio.toFixed(1)}` : "";
-        const recipe = `${b.temp}°, grind ${b.grind}${ratio ? `, ${ratio}` : ""}`;
+        const recipe = `${b.dose}g→${b.water}g${b.bypass ? ` +${b.bypass}g bypass` : ""}, ${b.temp}°, grind ${b.grind}${ratio ? `, ${ratio}` : ""}${b.water_type ? `, ${b.water_type}` : ""}`;
+        const rest = b.rest_days != null ? `, rested ${b.rest_days}d` : "";
         const scores = `acidity ${b.acidity ?? "-"}/5, sweetness ${b.sweetness ?? "-"}/5, body ${b.body ?? "-"}/5, clarity ${b.clarity ?? "-"}/5`;
+        const rating = b.stars2 != null
+          ? `${b.taster1 || "taster 1"} ${b.stars}/5, ${b.taster2 || config.taster2 || "taster 2"} ${b.stars2}/5`
+          : `${brewRating(b).toFixed(1)}/5`;
         const note = b.note ? ` — "${b.note}"` : "";
-        return `${coffeeLabel} on ${brewer} (${recipe}): ${brewRating(b).toFixed(1)}/5 (${scores})${note}`;
+        return `${coffeeLabel} on ${brewer} (${recipe}${rest}): ${rating} (${scores})${note}`;
       });
 
       try {
