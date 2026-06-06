@@ -6,8 +6,9 @@ import { FlavourRanking } from "./FlavourRanking";
 import { RoasterRanking } from "./RoasterRanking";
 import { OriginRanking } from "./OriginRanking";
 import { ProcessRanking } from "./ProcessRanking";
+import { VarietalRanking } from "./VarietalRanking";
 import { BrewerRanking } from "./BrewerRanking";
-import { TasterDiff } from "./TasterDiff";
+import { TasterFaceoff } from "./TasterFaceoff";
 import { RatingTrend } from "./RatingTrend";
 import { RestRanking } from "./RestRanking";
 import { BrewingTips } from "./BrewingTips";
@@ -82,9 +83,10 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
                 <RoasterRanking brews={rated} coffees={coffees} />
                 <OriginRanking brews={rated} coffees={coffees} />
                 <ProcessRanking brews={rated} coffees={coffees} />
+                <VarietalRanking brews={rated} coffees={coffees} />
                 <BrewerRanking brews={rated} config={config} />
                 <RestRanking brews={rated} />
-                <TasterDiff brews={rated} config={config} />
+                <TasterFaceoff brews={rated} coffees={coffees} config={config} />
                 <BrewingTips brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
               </div>
             )}

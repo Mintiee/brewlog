@@ -40,7 +40,10 @@ export function BrewerRanking({ brews, config }: BrewerRankingProps) {
             <div style={{ flex: 1, height: 8, background: "var(--ink-ghost)", borderRadius: 5, overflow: "hidden" }}>
               <div style={{ width: `${(r.avg / 5) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: 5 }} />
             </div>
-            <span className="num" style={{ fontSize: 12.5, color: "var(--ink-dim)", width: 30, textAlign: "right" }}>{r.avg.toFixed(1)}★</span>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", width: 40, flexShrink: 0, lineHeight: 1.15 }}>
+              <span className="num" style={{ fontSize: 12.5, color: "var(--ink-dim)" }}>{r.avg.toFixed(1)}★</span>
+              <span className="label" style={{ fontSize: 8.5, color: "var(--ink-faint)" }}>{r.n}×</span>
+            </span>
           </div>
         ))}
       </div>
