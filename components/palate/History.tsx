@@ -10,6 +10,7 @@ import { VarietalRanking } from "./VarietalRanking";
 import { BrewerRanking } from "./BrewerRanking";
 import { TasterFaceoff } from "./TasterFaceoff";
 import { RatingTrend } from "./RatingTrend";
+import { MostBrewed, OriginVolume } from "./VolumeCards";
 import { RestRanking } from "./RestRanking";
 import { BrewingTips } from "./BrewingTips";
 import { Journal } from "./Journal";
@@ -79,6 +80,8 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <InsightCard brews={rated} coffees={coffees} config={config} llmEnabled={llmEnabled} />
                 <RatingTrend brews={rated} />
+                <MostBrewed brews={brews} coffees={coffees} />
+                <OriginVolume brews={brews} coffees={coffees} />
                 <FlavourRanking brews={rated} coffees={coffees} />
                 <RoasterRanking brews={rated} coffees={coffees} />
                 <OriginRanking brews={rated} coffees={coffees} />
