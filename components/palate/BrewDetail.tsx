@@ -22,6 +22,7 @@ interface EditForm {
 interface BrewDetailProps {
   brew: Brew | null;
   coffees: Coffee[];
+  brews: Brew[];
   config: Config;
   onClose: () => void;
   onUpdate: (id: string, patch: Partial<Brew>) => void;
@@ -29,7 +30,7 @@ interface BrewDetailProps {
   onRate?: (b: Brew) => void;
 }
 
-export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete, onRate }: BrewDetailProps) {
+export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, onDelete, onRate }: BrewDetailProps) {
   const [editing, setEditing] = useState(false);
   const [ef, setEf] = useState<EditForm | null>(null);
   // Captured when editing starts (avoids an impure Date.now() in render); caps
@@ -37,6 +38,15 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete,
   const [todayISO, setTodayISO] = useState("");
 
   if (!brew) return null;
+
+  // Resolve the session group for split brews. Sort so the logger's own cup
+  // (!rate_for) comes first, partner's cup second — regardless of which row
+  // was passed in (the recent strip may hand us the sibling at index 0).
+  const group = brew.session_id
+    ? [...brews.filter((b) => b.session_id === brew.session_id)]
+        .sort((a, b) => (a.rate_for == null ? -1 : 1) - (b.rate_for == null ? -1 : 1))
+    : null;
+  const isSplit = group != null && group.length > 1;
 
   const coffee = coffees.find((c) => c.id === brew.coffee_id);
   const brewer = config.brewers.find((b) => b.id === brew.brewer_id);
@@ -158,8 +168,92 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete,
   }
 
   // Detail view
-  const ratingStars = brew.stars ?? 0;
   const dateLabel = journalDateText(startMs);
+
+  // Renders stars + tasting scales + note for one brew row.
+  // showHeader=true (split mode): displays the taster name above their block.
+  // showHeader=false (solo/legacy mode): no name; "Rating" label is rendered by
+  //   the caller; legacy stars2 combined label is preserved.
+  const renderTasterBlock = (row: Brew, showHeader: boolean) => {
+    const displayName = row.taster1 || (row.rate_for == null ? "you" : config.taster2 || "partner");
+    const rowStars = row.stars ?? 0;
+    const scales = [
+      { label: "Acidity", value: row.acidity, low: "Flat", high: "Bright" },
+      { label: "Sweetness", value: row.sweetness, low: "Dry", high: "Syrupy" },
+      { label: "Body", value: row.body, low: "Light", high: "Heavy" },
+      { label: "Clarity", value: row.clarity, low: "Muddy", high: "Clean" },
+    ].flatMap((s) => (s.value != null && s.value > 0 ? [{ ...s, value: s.value }] : []));
+
+    return (
+      <div key={row.id}>
+        {showHeader && (
+          <div className="label" style={{ marginBottom: 8, fontWeight: 700 }}>{displayName}</div>
+        )}
+        {row.stars == null ? (
+          <div style={{ fontSize: 13, color: "var(--ink-faint)", fontStyle: "italic" }}>
+            Waiting on {displayName} to rate…
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {[1, 2, 3, 4, 5].map((i) => {
+                  const full = i <= rowStars;
+                  const half = !full && (i - 0.5 === rowStars);
+                  return (
+                    <span key={i} style={{ position: "relative", display: "inline-block", fontSize: 22, lineHeight: 1 }}>
+                      <span style={{ color: full ? "var(--accent)" : "var(--ink-ghost)" }}>★</span>
+                      {half && (
+                        <span style={{
+                          position: "absolute", left: 0, top: 0,
+                          overflow: "hidden", width: "50%", height: "100%",
+                          color: "var(--accent)", display: "block",
+                        }}>★</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+              {/* Legacy two-slot (stars2 set, session_id null): show combined label */}
+              {!showHeader && row.stars2 != null && (
+                <span className="label" style={{ fontSize: 11 }}>
+                  {row.taster1 || "you"} {row.stars} · {row.taster2 || config.taster2} {row.stars2}
+                </span>
+              )}
+            </div>
+            {scales.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div className="label" style={{ marginBottom: 8 }}>Tasting</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {scales.map((s) => {
+                    const descriptor = s.value <= 2 ? s.low : s.value >= 4 ? s.high : `${s.low}–${s.high}`;
+                    return (
+                      <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "7px 0" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>{s.label}</div>
+                          <div className="label" style={{ fontSize: 9, marginTop: 2 }}>{descriptor}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <span key={n} style={{ width: 18, height: 18, borderRadius: 6, background: n <= s.value ? "var(--accent)" : "var(--surface-3)" }} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {row.note && (
+              <div style={{ marginTop: 12, fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.55, fontStyle: "italic" }}>
+                &ldquo;{row.note}&rdquo;
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Sheet open={!!brew} onClose={onClose}>
@@ -188,6 +282,7 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete,
           </div>
         </div>
 
+        {/* Shared recipe — one physical brew, shown once even for splits */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginTop: 20, background: "var(--line)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
           {([
             ["Dose", `${brew.dose}g`],
@@ -204,74 +299,23 @@ export function BrewDetail({ brew, coffees, config, onClose, onUpdate, onDelete,
           ))}
         </div>
 
-        {brew.stars != null && (
+        {isSplit ? (
+          // Split session: render both tasters' ratings, each with a name header.
+          // Pending siblings show a "waiting on…" placeholder instead of an empty block.
           <div style={{ marginTop: 18 }}>
-            <div className="label" style={{ marginBottom: 8 }}>Rating</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ display: "flex", gap: 4 }}>
-                {[1, 2, 3, 4, 5].map((i) => {
-                  const full = i <= ratingStars;
-                  const half = !full && (i - 0.5 === ratingStars);
-                  return (
-                    <span key={i} style={{ position: "relative", display: "inline-block", fontSize: 22, lineHeight: 1 }}>
-                      <span style={{ color: full ? "var(--accent)" : "var(--ink-ghost)" }}>★</span>
-                      {half && (
-                        <span style={{
-                          position: "absolute", left: 0, top: 0,
-                          overflow: "hidden", width: "50%", height: "100%",
-                          color: "var(--accent)", display: "block",
-                        }}>★</span>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-              {brew.stars2 != null && (
-                <span className="label" style={{ fontSize: 11 }}>
-                  {brew.taster1 || "you"} {brew.stars} · {brew.taster2 || config.taster2} {brew.stars2}
-                </span>
-              )}
+            <div className="label" style={{ marginBottom: 12 }}>Ratings</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {group!.map((row) => renderTasterBlock(row, true))}
             </div>
           </div>
-        )}
-
-        {(() => {
-          const scales = [
-            { label: "Acidity", value: brew.acidity, low: "Flat", high: "Bright" },
-            { label: "Sweetness", value: brew.sweetness, low: "Dry", high: "Syrupy" },
-            { label: "Body", value: brew.body, low: "Light", high: "Heavy" },
-            { label: "Clarity", value: brew.clarity, low: "Muddy", high: "Clean" },
-          ].flatMap((s) => (s.value != null && s.value > 0 ? [{ ...s, value: s.value }] : []));
-          if (!scales.length) return null;
-          return (
+        ) : (
+          // Solo or legacy two-slot brew — unchanged single-rating view.
+          brew.stars != null && (
             <div style={{ marginTop: 18 }}>
-              <div className="label" style={{ marginBottom: 8 }}>Tasting</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {scales.map((s) => {
-                  const descriptor = s.value <= 2 ? s.low : s.value >= 4 ? s.high : `${s.low}–${s.high}`;
-                  return (
-                    <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "7px 0" }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>{s.label}</div>
-                        <div className="label" style={{ fontSize: 9, marginTop: 2 }}>{descriptor}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <span key={n} style={{ width: 18, height: 18, borderRadius: 6, background: n <= s.value ? "var(--accent)" : "var(--surface-3)" }} />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <div className="label" style={{ marginBottom: 8 }}>Rating</div>
+              {renderTasterBlock(brew, false)}
             </div>
-          );
-        })()}
-
-        {brew.note && (
-          <div style={{ marginTop: 16, fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.55, fontStyle: "italic" }}>
-            &ldquo;{brew.note}&rdquo;
-          </div>
+          )
         )}
 
         <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 10 }}>

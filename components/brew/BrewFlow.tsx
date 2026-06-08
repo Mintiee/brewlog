@@ -273,6 +273,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       <BrewDetail
         brew={detailBrew}
         coffees={coffees}
+        brews={brews}
         config={config}
         onClose={() => setDetailBrew(null)}
         onUpdate={updateBrew}

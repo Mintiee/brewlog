@@ -76,6 +76,7 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
       <BrewDetail
         brew={selected}
         coffees={coffees}
+        brews={brews}
         config={config}
         onClose={() => setSelected(null)}
         onUpdate={handleUpdate}
