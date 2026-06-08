@@ -53,6 +53,9 @@ export interface Brew {
   /** When set, this brew was handed off to that profile to rate — it leaves the
    *  sender's pending list and shows only for the target. null = shared pending. */
   rate_for: string | null;
+  /** Links the two rows of a split (double) brew — one physical cup split between
+   *  two drinkers. Each row is rated independently via the normal flow. null = single brew. */
+  session_id: string | null;
   // rating fields (null until rated)
   stars: number | null;
   stars2: number | null;

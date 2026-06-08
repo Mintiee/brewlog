@@ -10,18 +10,27 @@ interface TasterFaceoffProps {
   config: Config;
 }
 
-/** "You vs Kris" face-off. Identity is by taster name; scores come from both the
- *  primary (stars) and second (stars2) slots, so it doesn't matter who logged. */
+/** "You vs Kris" face-off. Identity is by taster name.
+ *
+ *  Scores are gathered from two sources:
+ *  - **Legacy single-row brews** (session_id == null): taster1/stars and the optional
+ *    taster2/stars2 inline second-taster slot, same as before.
+ *  - **Split session rows** (session_id != null): two rows sharing a session_id, each
+ *    independently rated. Each row contributes its own taster1/stars to the tally, and
+ *    they are paired for the agreement/split/loved stats by matching on session_id.
+ */
 export function TasterFaceoff({ brews, coffees, config }: TasterFaceoffProps) {
   const data = useMemo(() => {
     const rated = brews.filter((b) => b.stars != null);
     if (!rated.length) return null;
 
+    // Build per-name tallies from both sources.
     const tally: Record<string, { sum: number; n: number }> = {};
     const add = (name: string, v: number) => { const o = tally[name] = tally[name] || { sum: 0, n: 0 }; o.sum += v; o.n += 1; };
     rated.forEach((b) => {
       add((b.taster1 || "You").trim(), b.stars as number);
-      if (b.stars2 != null) add((b.taster2 || config.taster2 || "Partner").trim(), b.stars2 as number);
+      // Legacy second-slot (session_id == null only, to avoid double-counting split sessions).
+      if (b.session_id == null && b.stars2 != null) add((b.taster2 || config.taster2 || "Partner").trim(), b.stars2 as number);
     });
     const people = Object.entries(tally)
       .map(([name, o]) => ({ name, avg: o.sum / o.n, n: o.n }))
@@ -29,14 +38,33 @@ export function TasterFaceoff({ brews, coffees, config }: TasterFaceoffProps) {
     if (people.length < 2) return null;
     const [p1, p2] = people;
 
+    // --- Legacy pairs (within a single row) ---
     const scoreFor = (b: Brew, name: string): number | null => {
       if ((b.taster1 || "You").trim() === name && b.stars != null) return b.stars;
       if ((b.taster2 || config.taster2 || "Partner").trim() === name && b.stars2 != null) return b.stars2;
       return null;
     };
-    const pairs = rated
+    const legacyPairs = rated
+      .filter((b) => b.session_id == null)
       .map((b) => ({ b, a: scoreFor(b, p1.name), c: scoreFor(b, p2.name) }))
       .filter((x): x is { b: Brew; a: number; c: number } => x.a != null && x.c != null);
+
+    // --- Split-session pairs (two rows per session, each with its own taster1/stars) ---
+    const sessionGroups = new Map<string, Brew[]>();
+    rated.filter((b) => b.session_id != null).forEach((b) => {
+      const group = sessionGroups.get(b.session_id!) ?? [];
+      group.push(b);
+      sessionGroups.set(b.session_id!, group);
+    });
+    const sessionPairs: { b: Brew; a: number; c: number }[] = [];
+    for (const group of sessionGroups.values()) {
+      if (group.length < 2) continue;
+      const rowP1 = group.find((b) => (b.taster1 || "You").trim() === p1.name && b.stars != null);
+      const rowP2 = group.find((b) => (b.taster1 || "You").trim() === p2.name && b.stars != null);
+      if (rowP1 && rowP2) sessionPairs.push({ b: rowP1, a: rowP1.stars as number, c: rowP2.stars as number });
+    }
+
+    const pairs = [...legacyPairs, ...sessionPairs];
 
     let agreePct: number | null = null;
     let genGap = 0;

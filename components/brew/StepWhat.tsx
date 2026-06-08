@@ -126,7 +126,9 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
               // Handed to me = it's mine to rate, was sent (rate_for set), by someone else.
               const handedToMe = b.rate_for != null && rateBelongsTo(b, profile, members) && loggerName !== profile.name;
               const senderName = handedToMe ? loggerName : null;
-              const canSend = !!onSend && !!otherMember && b.rate_for == null && iLoggedIt;
+              // Suppress "send to rate" when a sibling was already spawned for this brew
+              // (the other half of a split session) — it's already in the partner's list.
+              const canSend = !!onSend && !!otherMember && b.rate_for == null && iLoggedIt && !b.session_id;
               return (
                 <div key={b.id} style={{ display: "flex", flexDirection: "column" }}>
                   <button onClick={() => onRate(b)} style={{

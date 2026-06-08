@@ -127,6 +127,7 @@ export const SEED_BREWS: Brew[] = seedRows.map(([daysAgo, cid, bid, stars, acidi
     logged_by: "me",
     pending: false,
     rate_for: null,
+    session_id: null,
     stars,
     stars2: null,
     taster1: "You",

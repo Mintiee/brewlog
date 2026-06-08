@@ -12,10 +12,18 @@ interface JournalProps {
   onOpen?: (b: Brew) => void;
 }
 
+/** One card in the journal — a single brew, or two session-linked siblings collapsed. */
+interface DisplayCard {
+  /** Recipe/coffee source of truth, and the target for onOpen. */
+  primary: Brew;
+  /** The other half of a split session, or undefined for a solo brew. */
+  partner?: Brew;
+}
+
 interface Group {
   d: number;
   ts: number;
-  items: Brew[];
+  items: DisplayCard[];
 }
 
 // Render-windowing only: the journal can hold a couple of years of brews, but
@@ -23,6 +31,43 @@ interface Group {
 // ~3 brews/day × 90 days ≈ 270 cards — generous yet snappy on a phone.
 // This windows the *display* only; Stats still see every fetched brew.
 const CHUNK_DAYS = 90;
+
+/**
+ * Collapse session siblings within a day's brew list into single DisplayCards.
+ * Brews with no session_id pass through as solo cards. For each session group,
+ * the row with rate_for == null (the logger's own cup) becomes "primary"; the
+ * partner's row (rate_for set, or the second row after both have rated) is
+ * "partner". Preserves the encounter order of the primary within the list.
+ */
+function collapseSiblings(brews: Brew[]): DisplayCard[] {
+  const sessionMap = new Map<string, Brew[]>();
+  const result: DisplayCard[] = [];
+  const sessionSlot = new Map<string, number>(); // session_id → index in result
+
+  for (const b of brews) {
+    if (!b.session_id) {
+      result.push({ primary: b });
+    } else if (!sessionMap.has(b.session_id)) {
+      // First encounter — reserve a slot; sibling(s) added below
+      const idx = result.length;
+      sessionMap.set(b.session_id, [b]);
+      sessionSlot.set(b.session_id, idx);
+      result.push({ primary: b }); // placeholder, resolved after the loop
+    } else {
+      sessionMap.get(b.session_id)!.push(b);
+    }
+  }
+
+  // Resolve placeholders: pick primary = rate_for==null (your row), partner = the other
+  for (const [sid, group] of sessionMap) {
+    const idx = sessionSlot.get(sid)!;
+    const primary = group.find((b) => !b.rate_for) ?? group[0];
+    const partner = group.find((b) => b !== primary);
+    result[idx] = { primary, partner };
+  }
+
+  return result;
+}
 
 export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
   const [windowDays, setWindowDays] = useState(CHUNK_DAYS);
@@ -34,19 +79,20 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
       return da - db;
     });
 
-    const result: Group[] = [];
-    let cur: Group | null = null;
-
+    // First pass: build day groups from raw brews
+    const rawGroups: { d: number; ts: number; brews: Brew[] }[] = [];
+    let cur: { d: number; ts: number; brews: Brew[] } | null = null;
     sorted.forEach((b) => {
       const d = daysAgoFromStartedAt(b.started_at);
       if (!cur || cur.d !== d) {
-        cur = { d, ts: parseInt(b.started_at, 10), items: [] };
-        result.push(cur);
+        cur = { d, ts: parseInt(b.started_at, 10), brews: [] };
+        rawGroups.push(cur);
       }
-      cur.items.push(b);
+      cur.brews.push(b);
     });
 
-    return result;
+    // Second pass: collapse session siblings within each day into DisplayCards
+    return rawGroups.map((g) => ({ d: g.d, ts: g.ts, items: collapseSiblings(g.brews) }));
   }, [brews]);
 
   // Day-groups within the current window (daysAgo < windowDays), and whether
@@ -75,11 +121,34 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
             {journalDateText(g.ts)}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {g.items.map((b) => {
+            {g.items.map(({ primary: b, partner }) => {
               const c = coffees.find((x) => x.id === b.coffee_id);
               const br = config.brewers.find((x) => x.id === b.brewer_id);
-              const rating = Math.round(brewRating(b));
               const tex = c ? processTexture(c.process) : {};
+
+              // Rating footer — handles solo, legacy two-slot, and split-session cards.
+              const anyRated = b.stars != null || (partner && partner.stars != null);
+              const avgStars = (() => {
+                if (b.stars != null && partner?.stars != null) return Math.round((b.stars + partner.stars) / 2);
+                return Math.round(b.stars ?? partner?.stars ?? 0);
+              })();
+              // For legacy single-row brews (stars2 on same row) keep existing behaviour.
+              const legacySecond = !partner && b.stars2 != null;
+              const ratingLine = (() => {
+                if (!anyRated) return null;
+                const t1 = b.taster1 || "you";
+                if (legacySecond) {
+                  return `${t1} ${b.stars} · ${b.taster2 || config.taster2 || "partner"} ${b.stars2}`;
+                }
+                if (partner) {
+                  const t2 = partner.taster1 || config.taster2 || "partner";
+                  const scoreStr = b.stars != null
+                    ? `${t1} ${b.stars} · ${partner.stars != null ? `${t2} ${partner.stars}` : `${t2} …`}`
+                    : `${t2} ${partner.stars}`;
+                  return scoreStr;
+                }
+                return `${t1} ${b.stars}`;
+              })();
 
               return (
                 <button
@@ -115,12 +184,11 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                    {b.stars != null ? (
+                    {anyRated ? (
                       <>
-                        <StarsMini value={rating} size={12} />
+                        <StarsMini value={avgStars} size={12} />
                         <span className="label" style={{ fontSize: 8.5, color: "var(--ink-faint)" }}>
-                          {b.taster1 || "you"} {b.stars}
-                          {b.stars2 != null ? ` · ${b.taster2 || config.taster2 || "partner"} ${b.stars2}` : ""}
+                          {ratingLine}
                         </span>
                       </>
                     ) : (

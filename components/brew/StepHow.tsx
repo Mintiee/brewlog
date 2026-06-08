@@ -9,8 +9,12 @@ interface StepHowProps {
   coffee: Coffee;
   brews: Brew[];
   config: Config;
+  /** Show the "Split with {name}" toggle — only truthy when another household member exists. */
+  canSplit?: boolean;
+  /** Display name of the partner to split with (e.g. "Kris"). */
+  splitPartnerName?: string;
   onChangeCoffee: () => void;
-  onLog: (brewer: Brewer, recipe: Recipe) => void;
+  onLog: (brewer: Brewer, recipe: Recipe, split: boolean) => void;
 }
 
 // Pick a brewer-shaped icon by matching the user-facing label (`short`) and id.
@@ -24,7 +28,7 @@ function brewerIcon(b: Brewer): string {
   return "dripper";
 }
 
-export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHowProps) {
+export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onChangeCoffee, onLog }: StepHowProps) {
   const recipeFromBrew = (b: Brew): Recipe =>
     ({ dose: b.dose, ratio: b.ratio, water: b.water, bypass: b.bypass || 0, temp: b.temp, grind: b.grind, water_type: b.water_type });
 
@@ -58,9 +62,12 @@ export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHo
   const [r, setR] = useState<Recipe>(() =>
     lastForCoffee ? recipeFromBrew(lastForCoffee) : fallbackRecipe(initialBrewer)
   );
+  // Default split ON when the brewer is OXO (makes enough for two) and a partner exists.
+  const [split, setSplit] = useState(() => !!canSplit && brewerIcon(initialBrewer) === "dripperOxo");
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
+    if (canSplit) setSplit(brewerIcon(b) === "dripperOxo");
     const last = lastBrewOn(b.id);
     setR(last ? recipeFromBrew(last) : fallbackRecipe(b));
   }
@@ -152,8 +159,18 @@ export function StepHow({ coffee, brews, config, onChangeCoffee, onLog }: StepHo
         </div>
       </div>
 
+      {canSplit && (
+        <div style={{ marginTop: 12 }}>
+          <div className="label" style={{ marginBottom: 8 }}>Split</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="chip" data-on={!split} onClick={() => setSplit(false)} style={{ flex: 1, textAlign: "center" }}>Just me</button>
+            <button className="chip" data-on={split} onClick={() => setSplit(true)} style={{ flex: 1, textAlign: "center" }}>With {splitPartnerName ?? "partner"}</button>
+          </div>
+        </div>
+      )}
+
       <div className="rise rise-5" style={{ marginTop: 14 }}>
-        <button className="btn btn-accent" onClick={() => onLog(brewer, r)}>
+        <button className="btn btn-accent" onClick={() => onLog(brewer, r, split)}>
           <Icon name="check" size={19} stroke={2} /> Log coffee
         </button>
       </div>

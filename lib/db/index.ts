@@ -206,6 +206,7 @@ function rowToBrew(r: any): Brew {
     taster1: r.taster1, taster2: r.taster2,
     acidity: r.acidity, sweetness: r.sweetness, body: r.body, clarity: r.clarity,
     note: r.note,
+    session_id: r.session_id ?? null,
   };
 }
 
@@ -226,6 +227,8 @@ function brewToRow(b: Partial<Brew>) {
     // Only write rate_for when present in the patch, so unrelated updates don't
     // null it; an explicit null (cleared on rate) still writes through.
     ...(b.rate_for !== undefined ? { rate_for: b.rate_for } : {}),
+    // Only write session_id when present — rating-only patches must not clobber it.
+    ...(b.session_id !== undefined ? { session_id: b.session_id } : {}),
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,

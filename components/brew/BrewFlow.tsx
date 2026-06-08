@@ -32,6 +32,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [rateTarget, setRateTarget] = useState<Brew | null>(null);
   const [detailBrew, setDetailBrew] = useState<Brew | null>(null);
+  // True when the last logged brew spawned a sibling for the other member (split brew).
+  const [didSplit, setDidSplit] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const logTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,10 +54,12 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     return config.brewers.find((b) => b.id === id) ?? null;
   }
 
-  function logCoffee(b: Brewer, r: Recipe) {
+  function logCoffee(b: Brewer, r: Recipe, split: boolean) {
     setBrewer(b);
     setRecipe(r);
     const startedAt = Date.now();
+    // Assign a shared session_id when splitting with the other household member.
+    const sessionId = split && otherMember ? crypto.randomUUID() : null;
     const newBrew: Brew = {
       id: crypto.randomUUID(),
       household_id: profile.household_id,
@@ -70,6 +74,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       ratio: (r.water + (r.bypass || 0)) / r.dose,
       pending: true,
       rate_for: null,
+      session_id: sessionId,
       started_at: String(startedAt),
       // Snapshot the freeze-adjusted rest now, so it stays correct if the
       // coffee is later re-frozen or its dates edited.
@@ -87,6 +92,46 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       note: null,
     };
     startBrew(newBrew);
+
+    // For a split brew, also create a sibling row directed at the other member.
+    // They see it as a normal pending brew on their device and rate it through
+    // the unchanged StepRate flow. rate_for is cleared when they save their rating,
+    // just like any other handoff. session_id links the two rows for the read layer
+    // (TasterFaceoff pairing, Journal merge).
+    if (sessionId && otherMember) {
+      const siblingBrew: Brew = {
+        id: crypto.randomUUID(),
+        household_id: profile.household_id,
+        coffee_id: coffee!.id,
+        brewer_id: b.id,
+        dose: r.dose,
+        water: r.water,
+        temp: r.temp,
+        grind: r.grind,
+        water_type: r.water_type,
+        bypass: r.bypass || 0,
+        ratio: (r.water + (r.bypass || 0)) / r.dose,
+        pending: true,
+        rate_for: otherMember.id,
+        session_id: sessionId,
+        started_at: String(startedAt),
+        rest_days: coffee ? restDaysAt(coffee, startedAt) : null,
+        rated_at: null,
+        logged_by: profile.id,
+        stars: null,
+        stars2: null,
+        taster1: null,
+        taster2: null,
+        acidity: null,
+        sweetness: null,
+        body: null,
+        clarity: null,
+        note: null,
+      };
+      startBrew(siblingBrew);
+    }
+
+    setDidSplit(!!sessionId && !!otherMember);
     setRateTarget(newBrew);
     setStep("logged");
     if (logTimer.current) clearTimeout(logTimer.current);
@@ -116,6 +161,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setStep("what");
     setCoffee(coffees[0] ?? null);
     setRateTarget(null);
+    setDidSplit(false);
   }
 
   function saveRating(rating: object) {
@@ -157,6 +203,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           coffee={coffee}
           brews={brews}
           config={config}
+          canSplit={!!otherMember}
+          splitPartnerName={otherMember?.name}
           onChangeCoffee={() => setStep("what")}
           onLog={logCoffee}
         />
@@ -183,8 +231,10 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           </div>
           <div className="rise rise-1" style={{ fontSize: 20, fontWeight: 600, marginTop: 18 }}>Logged.</div>
           <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-faint)", marginTop: 6 }}>{coffee && coffee.name}</div>
-          <div className="rise rise-2" style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5, maxWidth: 250, marginTop: 12 }}>
-            We&apos;ll keep it on your home screen so you can rate it once you&apos;ve had a cup.
+          <div className="rise rise-2" style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5, maxWidth: 260, marginTop: 12 }}>
+            {didSplit && otherMember
+              ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate — yours is waiting whenever you&apos;re ready.</>
+              : "We'll keep it on your home screen so you can rate it once you've had a cup."}
           </div>
           <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
             marginTop: 22, background: "none", border: "none", cursor: "pointer",
@@ -193,7 +243,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           }}>
             Already had it? Rate now
           </button>
-          {otherMember && (
+          {/* Only show the manual "send to rate" option when a sibling was NOT already spawned. */}
+          {!didSplit && otherMember && (
             <button className="rise rise-3" onClick={sendToRate} style={{
               marginTop: 14, background: "none", border: "1px solid var(--line)", borderRadius: 999,
               cursor: "pointer", color: "var(--ink-dim)", fontFamily: "var(--font-ui)",
