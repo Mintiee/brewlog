@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
+import { Segmented } from "@/components/ui/Segmented";
 import { Stepper } from "@/components/ui/Stepper";
 import { Field } from "@/components/shelf/Field";
 import { journalDateText, localISODate, parseLocalDate } from "@/lib/domain";
@@ -36,6 +37,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
   // Captured when editing starts (avoids an impure Date.now() in render); caps
   // the date picker so brews can't be dated into the future.
   const [todayISO, setTodayISO] = useState("");
+  const [activeTaster, setActiveTaster] = useState(0);
 
   if (!brew) return null;
 
@@ -47,6 +49,12 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
         .sort((a, b) => (a.rate_for == null ? -1 : 1) - (b.rate_for == null ? -1 : 1))
     : null;
   const isSplit = group != null && group.length > 1;
+  // Tab labels for the split segmented control. Clips activeTaster to bounds so
+  // switching from a split brew to a solo brew never reads out of range.
+  const tasterNames = isSplit
+    ? group!.map((row) => row.taster1 || (row.rate_for == null ? "you" : config.taster2 || "partner"))
+    : [];
+  const activeIdx = Math.min(activeTaster, tasterNames.length - 1);
 
   const coffee = coffees.find((c) => c.id === brew.coffee_id);
   const brewer = config.brewers.find((b) => b.id === brew.brewer_id);
@@ -171,10 +179,8 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
   const dateLabel = journalDateText(startMs);
 
   // Renders stars + tasting scales + note for one brew row.
-  // showHeader=true (split mode): displays the taster name above their block.
-  // showHeader=false (solo/legacy mode): no name; "Rating" label is rendered by
-  //   the caller; legacy stars2 combined label is preserved.
-  const renderTasterBlock = (row: Brew, showHeader: boolean) => {
+  // "Rating" label (solo) or the Segmented tab (split) serves as the header — no name header here.
+  const renderTasterBlock = (row: Brew) => {
     const displayName = row.taster1 || (row.rate_for == null ? "you" : config.taster2 || "partner");
     const rowStars = row.stars ?? 0;
     const scales = [
@@ -186,9 +192,6 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
 
     return (
       <div key={row.id}>
-        {showHeader && (
-          <div className="label" style={{ marginBottom: 8, fontWeight: 700 }}>{displayName}</div>
-        )}
         {row.stars == null ? (
           <div style={{ fontSize: 13, color: "var(--ink-faint)", fontStyle: "italic" }}>
             Waiting on {displayName} to rate…
@@ -215,7 +218,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
                 })}
               </div>
               {/* Legacy two-slot (stars2 set, session_id null): show combined label */}
-              {!showHeader && row.stars2 != null && (
+              {row.stars2 != null && (
                 <span className="label" style={{ fontSize: 11 }}>
                   {row.taster1 || "you"} {row.stars} · {row.taster2 || config.taster2} {row.stars2}
                 </span>
@@ -300,12 +303,15 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
         </div>
 
         {isSplit ? (
-          // Split session: render both tasters' ratings, each with a name header.
-          // Pending siblings show a "waiting on…" placeholder instead of an empty block.
+          // Split session: tab per taster; pending sibling shows "waiting on…".
           <div style={{ marginTop: 18 }}>
-            <div className="label" style={{ marginBottom: 12 }}>Ratings</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {group!.map((row) => renderTasterBlock(row, true))}
+            <Segmented
+              options={tasterNames}
+              value={tasterNames[activeIdx]}
+              onChange={(v) => setActiveTaster(tasterNames.indexOf(v))}
+            />
+            <div style={{ marginTop: 16 }}>
+              {renderTasterBlock(group![activeIdx])}
             </div>
           </div>
         ) : (
@@ -313,7 +319,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
           brew.stars != null && (
             <div style={{ marginTop: 18 }}>
               <div className="label" style={{ marginBottom: 8 }}>Rating</div>
-              {renderTasterBlock(brew, false)}
+              {renderTasterBlock(brew)}
             </div>
           )
         )}
