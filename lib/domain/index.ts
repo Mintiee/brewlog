@@ -102,7 +102,18 @@ export function freshColor(state: string): string {
 export const CUP_GRAMS = 12.5;  // default serving size; override via setServingGrams
 
 export function gramsUsed(coffeeId: string, brews: Brew[]): number {
-  return brews.filter((b) => b.coffee_id === coffeeId).reduce((s, b) => s + (b.dose || 0), 0);
+  // For split sessions (session_id set), count each physical brew's dose only once.
+  // Cups poured and ratings remain per-row; only bean weight is deduplicated here.
+  const seenSessions = new Set<string>();
+  return brews
+    .filter((b) => b.coffee_id === coffeeId)
+    .reduce((s, b) => {
+      if (b.session_id) {
+        if (seenSessions.has(b.session_id)) return s;
+        seenSessions.add(b.session_id);
+      }
+      return s + (b.dose || 0);
+    }, 0);
 }
 
 export function remainingGrams(coffee: Coffee, brews: Brew[]): number {
@@ -224,9 +235,15 @@ export function avgDailyGrams(brews: Brew[], windowDays = 14): number {
   const cutoff = now - windowDays * 86400000;
   let sum = 0;
   let earliest = now;
+  // Same split-session dedup as gramsUsed: one physical brew = one dose for weight.
+  const seenSessions = new Set<string>();
   for (const b of brews) {
     const ts = parseTs(b.started_at);
     if (ts < earliest) earliest = ts;
+    if (b.session_id) {
+      if (seenSessions.has(b.session_id)) continue;
+      seenSessions.add(b.session_id);
+    }
     if (ts >= cutoff) sum += b.dose || 0;
   }
   if (sum === 0) return 0;

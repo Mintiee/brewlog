@@ -109,13 +109,26 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
               <span className="dot" style={{ background: "var(--ink-faint)" }} /> Out of beans · {emptyList.length}
             </div>
             {emptyList.map((c) => (
-              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: "11px 14px", marginBottom: 8 }}>
+              <div
+                key={c.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setDetail(c)}
+                onKeyDown={(e) => e.key === "Enter" && setDetail(c)}
+                style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: "11px 14px", marginBottom: 8, cursor: "pointer" }}
+              >
                 <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={34} radius={9} process={c.process} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                   <div className="label" style={{ color: "var(--ink-faint)" }}>looks empty</div>
                 </div>
-                <button onClick={() => onUpdate({ ...c, archived: true })} className="chip" style={{ flexShrink: 0 }}>Finished</button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUpdate({ ...c, archived: true }); }}
+                  className="chip"
+                  style={{ flexShrink: 0 }}
+                >
+                  Finished
+                </button>
               </div>
             ))}
           </div>

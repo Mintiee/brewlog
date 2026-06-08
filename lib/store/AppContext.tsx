@@ -9,7 +9,7 @@ import {
   fetchAiKeyStatus, fetchLearnedNotes,
 } from "@/lib/db";
 import { setLearnedNotes } from "@/lib/flavour";
-import { setRestWindow, setServingGrams, setPeakWindow } from "@/lib/domain";
+import { setRestWindow, setServingGrams, setPeakWindow, activeGrams } from "@/lib/domain";
 
 /** Push household-wide settings into the domain module's freshness/serving knobs. */
 function applyConfigToDomain(c: Config) {
@@ -37,6 +37,8 @@ interface AppActions {
   rateBrew: (id: string, rating: Partial<Brew>) => void;
   updateBrew: (id: string, patch: Partial<Brew>) => void;
   dismissBrew: (id: string) => void;
+  /** Delete a brew and all session siblings (for journal/recent-strip deletes). */
+  dismissBrewSession: (id: string) => void;
   setConfig: (c: Config) => void;
   setProfile: (p: Profile) => void;
   clearError: () => void;
@@ -206,9 +208,45 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   }, [authed]);
 
   const dismissBrew = useCallback((id: string) => {
-    setBrews((prev) => prev.filter((x) => x.id !== id));
+    const brew = brews.find((x) => x.id === id);
+    const nextBrews = brews.filter((x) => x.id !== id);
+    setBrews(nextBrews);
+    // Bug 1c: if deleting this brew restores beans to a finished bag, auto-return it.
+    if (brew) {
+      const coffee = coffees.find((c) => c.id === brew.coffee_id);
+      if (coffee?.archived && activeGrams(coffee, nextBrews) > 0) {
+        const restored = { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false };
+        setCoffees((prev) => prev.map((c) => c.id === coffee.id ? restored : c));
+        if (authed) upsertCoffee(restored).catch(console.error);
+      }
+    }
     if (authed) deleteBrew(id).catch(console.error);
-  }, [authed]);
+  }, [authed, brews, coffees, profile.household_id]);
+
+  /** Deletes an entire session (both split-brew rows) by any sibling's id.
+   *  Falls back to single-row delete when session_id is null (same as dismissBrew).
+   *  Use this for journal/recent-strip deletes — NOT for discardRating, which must
+   *  leave Kris's sibling row intact. */
+  const dismissBrewSession = useCallback((id: string) => {
+    const brew = brews.find((x) => x.id === id);
+    const idsToRemove = new Set(
+      brew?.session_id
+        ? brews.filter((x) => x.session_id === brew.session_id).map((x) => x.id)
+        : [id],
+    );
+    const nextBrews = brews.filter((x) => !idsToRemove.has(x.id));
+    setBrews(nextBrews);
+    // Bug 1c: if the deletion restores beans to a finished bag, auto-return it.
+    if (brew) {
+      const coffee = coffees.find((c) => c.id === brew.coffee_id);
+      if (coffee?.archived && activeGrams(coffee, nextBrews) > 0) {
+        const restored = { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false };
+        setCoffees((prev) => prev.map((c) => c.id === coffee.id ? restored : c));
+        if (authed) upsertCoffee(restored).catch(console.error);
+      }
+    }
+    if (authed) idsToRemove.forEach((rid) => deleteBrew(rid).catch(console.error));
+  }, [authed, brews, coffees, profile.household_id]);
 
   const setConfig = useCallback((c: Config) => {
     setConfigState(c);
@@ -223,7 +261,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   return (
     <AppContext.Provider value={{
       coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, lastError,
-      addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, setConfig, setProfile, clearError,
+      addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError,
     }}>
       {children}
     </AppContext.Provider>

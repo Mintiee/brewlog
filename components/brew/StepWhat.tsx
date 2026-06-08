@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
-import { coffeeStatus, activeGrams, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
+import { coffeeStatus, activeGrams, frozenGramsOf, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { Icon, FreshDot, OriginTile } from "@/components/ui";
 
@@ -43,6 +43,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   const sortByDay = (arr: typeof decorated) => [...arr].sort((a, b) => b.st.day - a.st.day);
   const ready = sortByDay(decorated.filter((d) => d.st.ready && d.st.state !== "past"));
   const pastPeak = sortByDay(decorated.filter((d) => d.st.ready && d.st.state === "past"));
+  const hasFrozen = coffees.some((c) => !c.archived && frozenGramsOf(c, brews) > 0);
 
   // Recent strip: last 14 days — only render from the oldest day with a brew to today
   const byDay: Record<number, Brew[]> = {};
@@ -191,7 +192,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
         </>
       )}
 
-      {ready.length < 3 && onGotoShelf && (
+      {ready.length < 3 && hasFrozen && onGotoShelf && (
         <button
           onClick={onGotoShelf}
           className="rise rise-5"
@@ -203,7 +204,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
             cursor: "pointer", color: "var(--ink-dim)",
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 500 }}>Add more coffees to your shelf</span>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>Beans in the freezer — take some out to thaw</span>
           <Icon name="chev" size={16} stroke={1.8} />
         </button>
       )}

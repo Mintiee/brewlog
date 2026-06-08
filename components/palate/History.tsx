@@ -17,7 +17,7 @@ interface HistoryProps {
 }
 
 export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
-  const { updateBrew, dismissBrew, rateBrew, profile } = useApp();
+  const { updateBrew, dismissBrew, dismissBrewSession, rateBrew, profile } = useApp();
   const [selected, setSelected] = useState<Brew | null>(null);
   const [rating, setRating] = useState<Brew | null>(null);
   const [view, setView] = useState<"journal" | "stats">("journal");
@@ -79,7 +79,7 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
         config={config}
         onClose={() => setSelected(null)}
         onUpdate={handleUpdate}
-        onDelete={dismissBrew}
+        onDelete={dismissBrewSession}
         onRate={(b) => { setSelected(null); setRating(b); }}
       />
 

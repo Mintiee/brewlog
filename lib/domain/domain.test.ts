@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
+  gramsUsed, avgDailyGrams,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
   effectiveDaysAgo, restDaysAt,
   setRestWindow, setServingGrams, daysAgoFromStartedAt,
@@ -37,7 +38,7 @@ function makeBrew(overrides: Partial<Brew> = {}): Brew {
     id: "b1", household_id: "h1", coffee_id: "c1", brewer_id: "v60",
     dose: 15, water: 240, bypass: 0, temp: 96, grind: 22, ratio: 16,
     water_type: "Filtered", started_at: String(Date.now()), rated_at: String(Date.now()),
-    logged_by: "me", pending: false, rate_for: null,
+    logged_by: "me", pending: false, rate_for: null, session_id: null,
     rest_days: null,
     stars: 4, stars2: null, taster1: "You", taster2: null,
     acidity: 3, sweetness: 3, body: 3, clarity: 4, note: null,
@@ -122,6 +123,45 @@ describe("coffeeStatus", () => {
   it("Geometry: 30d roasted, 28/56 → 26d left", () => {
     const c = makeCoffee({ roasted_at: daysAgoDate(30), rest_days: 28, peak_days: 56 });
     expect(coffeeStatus(c, []).label).toBe("26d left");
+  });
+});
+
+describe("split-session dedup (gramsUsed / avgDailyGrams)", () => {
+  it("gramsUsed counts a split session's dose only once", () => {
+    // One 22g OXO brew → two rows sharing session_id. Should deduct 22g, not 44g.
+    const brews = [
+      makeBrew({ id: "b1", coffee_id: "c1", dose: 22, session_id: "s1" }),
+      makeBrew({ id: "b2", coffee_id: "c1", dose: 22, session_id: "s1" }),
+    ];
+    expect(gramsUsed("c1", brews)).toBe(22);
+  });
+
+  it("gramsUsed counts two different sessions independently", () => {
+    const brews = [
+      makeBrew({ id: "b1", coffee_id: "c1", dose: 22, session_id: "s1" }),
+      makeBrew({ id: "b2", coffee_id: "c1", dose: 22, session_id: "s1" }),
+      makeBrew({ id: "b3", coffee_id: "c1", dose: 22, session_id: "s2" }),
+      makeBrew({ id: "b4", coffee_id: "c1", dose: 22, session_id: "s2" }),
+    ];
+    expect(gramsUsed("c1", brews)).toBe(44); // two physical brews, 22g each
+  });
+
+  it("gramsUsed counts solo brews (no session_id) normally", () => {
+    const brews = [
+      makeBrew({ id: "b1", coffee_id: "c1", dose: 15, session_id: null }),
+      makeBrew({ id: "b2", coffee_id: "c1", dose: 15, session_id: null }),
+    ];
+    expect(gramsUsed("c1", brews)).toBe(30);
+  });
+
+  it("avgDailyGrams counts a split session's dose only once", () => {
+    const now = Date.now();
+    const brews = [
+      makeBrew({ id: "b1", dose: 22, session_id: "s1", started_at: String(now) }),
+      makeBrew({ id: "b2", dose: 22, session_id: "s1", started_at: String(now) }),
+    ];
+    // 22g over 1 day = 22g/day (not 44g)
+    expect(avgDailyGrams(brews, 14)).toBeCloseTo(22, 0);
   });
 });
 
