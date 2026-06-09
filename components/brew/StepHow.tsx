@@ -111,8 +111,10 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
     <div className="screen-pad">
       <div className="rise rise-1"><CoffeePin coffee={coffee} brews={brews} onChange={onChangeCoffee} /></div>
 
+      <h2 className="h-ask rise rise-2" style={{ fontSize: 21, marginTop: 14 }}>How are you brewing?</h2>
+
       {/* brewer tiles */}
-      <div className="rise rise-2" style={{ display: "flex", gap: 9, marginTop: 14 }}>
+      <div className="rise rise-2" style={{ display: "flex", gap: 9, marginTop: 12 }}>
         {config.brewers.map((b) => {
           const on = b.id === brewer.id;
           return (
@@ -155,7 +157,7 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
           )}
         </div>
 
-        <div className="mono" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, color: "var(--ink-faint)", fontSize: 12, marginTop: 6, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+        <div className="mono" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, color: "var(--ink-faint)", fontSize: 12, marginTop: 6, paddingTop: 12, paddingBottom: 12, borderTop: "1px solid var(--line)" }}>
           {brewer.bypass
             ? <span>{r.water}g brew + {r.bypass || 0}g after · {total}g · 1:{ratio.toFixed(1)}</span>
             : <span>{r.dose}g in <Icon name="chev" size={11} stroke={2} /> {total}g out · 1:{ratio.toFixed(1)}</span>}
