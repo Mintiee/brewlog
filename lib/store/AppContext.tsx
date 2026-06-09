@@ -198,7 +198,14 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // anyone, and the rater is recorded as taster1 by the caller (StepRate).
     const patch = { ...rating, pending: false, rated_at: String(Date.now()), rate_for: null };
     setBrews((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } : x));
-    if (authed) dbUpdateBrew(id, patch).catch(console.error);
+    if (authed) dbUpdateBrew(id, patch).catch((err) => {
+      console.error("[rateBrew] update failed — rating may not persist:", err);
+      const detail = err?.message ?? err?.code ?? String(err);
+      setLastError(`Rating save failed: ${detail}`);
+      // Roll back the optimistic update so the brew reappears as pending immediately
+      // rather than appearing done locally and bouncing back on the next DB refresh.
+      setBrews((prev) => prev.map((x) => x.id === id ? { ...x, pending: true, rated_at: null } : x));
+    });
   }, [authed]);
 
   // Pure patch — no forced pending/rated_at (use for BrewDetail edits, not the rating flow).

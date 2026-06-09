@@ -88,7 +88,7 @@ export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave
       )}
 
       <button className="btn btn-accent" disabled={!stars}
-        onClick={() => onSave({ stars, acidity, sweetness, body, clarity, note, taster1: meName, logged_by: profile.id, stars2: secondOpen && stars2 ? stars2 : null, taster2: secondOpen && stars2 ? taster2 : null })}
+        onClick={() => onSave({ stars, acidity, sweetness, body, clarity, note, taster1: meName, stars2: secondOpen && stars2 ? stars2 : null, taster2: secondOpen && stars2 ? taster2 : null })}
         style={{ marginTop: 12, opacity: stars ? 1 : 0.4 }}>
         <Icon name="check" size={20} stroke={2} /> Save rating
       </button>
