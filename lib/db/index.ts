@@ -232,7 +232,9 @@ function brewToRow(b: Partial<Brew>) {
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,
-    acidity: b.acidity, sweetness: b.sweetness, body: b.body, clarity: b.clarity,
+    // 0 means "not set" from the UI — send null so the check (x between 1 and 5) passes
+    acidity: b.acidity || null, sweetness: b.sweetness || null,
+    body: b.body || null, clarity: b.clarity || null,
     note: b.note,
   };
 }
