@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Coffee, Brew, Brewer, Config, Recipe } from "@/lib/types";
 import { defaultsFor } from "@/lib/domain";
 import { Icon, Stepper } from "@/components/ui";
+import { Sheet } from "@/components/ui/Sheet";
 import { CoffeePin } from "./CoffeePin";
 
 interface StepHowProps {
@@ -26,6 +27,31 @@ function brewerIcon(b: Brewer): string {
   if (key.includes("gabi")) return "dripperGabi";
   if (key.includes("oxo")) return "dripperOxo";
   return "dripper";
+}
+
+// Minimal inline toggle switch (yes/no only — no shared primitive exists).
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      style={{
+        width: 44, height: 26, borderRadius: 13, flexShrink: 0,
+        background: on ? "var(--accent)" : "var(--surface-3)",
+        border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+        cursor: "pointer", padding: 0, position: "relative",
+        transition: "background .18s ease, border-color .18s ease",
+      }}
+    >
+      <span style={{
+        position: "absolute", top: 3, left: on ? 21 : 3,
+        width: 18, height: 18, borderRadius: "50%",
+        background: on ? "#1a0f06" : "var(--ink-faint)",
+        transition: "left .18s ease, background .18s ease",
+      }} />
+    </button>
+  );
 }
 
 export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onChangeCoffee, onLog }: StepHowProps) {
@@ -64,6 +90,7 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
   );
   // Default split ON when the brewer is OXO (makes enough for two) and a partner exists.
   const [split, setSplit] = useState(() => !!canSplit && brewerIcon(initialBrewer) === "dripperOxo");
+  const [waterPickerOpen, setWaterPickerOpen] = useState(false);
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
@@ -84,10 +111,8 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
     <div className="screen-pad">
       <div className="rise rise-1"><CoffeePin coffee={coffee} brews={brews} onChange={onChangeCoffee} /></div>
 
-      <h2 className="h-ask rise rise-2" style={{ fontSize: 21, marginTop: 14 }}>How are you brewing?</h2>
-
       {/* brewer tiles */}
-      <div className="rise rise-2" style={{ display: "flex", gap: 9, marginTop: 12 }}>
+      <div className="rise rise-2" style={{ display: "flex", gap: 9, marginTop: 14 }}>
         {config.brewers.map((b) => {
           const on = b.id === brewer.id;
           return (
@@ -105,33 +130,21 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         })}
       </div>
 
-      {/* recipe — grind-led */}
-      <div className="card rise rise-3" style={{ marginTop: 12, padding: "14px 16px" }}>
-        {/* grind readout */}
-        <div className="label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name="grind" size={13} stroke={1.8} /> Grind · {config.grinder.name}
-        </div>
-        <div className="num" style={{ fontSize: 38, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1, marginTop: 3 }}>
-          <span key={r.grind} className="popv">
-            {(config.grinder.grind_step ?? 1) < 1 ? r.grind.toFixed(1) : r.grind}
-          </span>
-          <span style={{ fontSize: 14, color: "var(--ink-faint)", marginLeft: 5, fontWeight: 500 }}>{config.grinder.unit}</span>
-        </div>
-        {/* adjust — sits below the readout so it never overlaps the value */}
-        <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
-          <button
-            aria-label="Coarser"
-            onClick={() => setGrind(+Math.max(config.grinder.grind_min ?? 0, r.grind - (config.grinder.grind_step ?? 1)).toFixed(2))}
-            style={{ flex: 1, height: 42, borderRadius: 13, background: "var(--surface-3)", border: "1px solid var(--line)", color: "var(--ink)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          ><Icon name="minus" size={20} stroke={2} /></button>
-          <button
-            aria-label="Finer"
-            onClick={() => setGrind(+Math.min(config.grinder.grind_max ?? 50, r.grind + (config.grinder.grind_step ?? 1)).toFixed(2))}
-            style={{ flex: 1, height: 42, borderRadius: 13, background: "var(--accent)", border: "none", color: "#1a0f06", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          ><Icon name="plus" size={20} stroke={2.2} /></button>
-        </div>
+      {/* recipe — grind-led, now as an inline Stepper matching Dose/Water/Temp */}
+      <div className="card rise rise-3" style={{ marginTop: 12, padding: "2px 16px" }}>
+        <Stepper
+          icon="grind"
+          label={`Grind · ${config.grinder.name}`}
+          value={r.grind}
+          unit={config.grinder.unit}
+          step={config.grinder.grind_step ?? 1}
+          min={config.grinder.grind_min ?? 0}
+          max={config.grinder.grind_max ?? 50}
+          format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
+          onChange={setGrind}
+        />
 
-        <div style={{ height: 1, background: "var(--line)", margin: "14px 0 0" }} />
+        <div style={{ height: 1, background: "var(--line)" }} />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
           <Stepper icon="scale"  label="Dose"  value={r.dose}   unit="g"   step={0.5} min={8}  max={40}  onChange={setDose} />
@@ -149,25 +162,32 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         </div>
       </div>
 
-      {/* water type */}
-      <div className="rise rise-4" style={{ marginTop: 12 }}>
-        <div className="label" style={{ marginBottom: 8 }}>Water</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {config.waters.map((w) => (
-            <button key={w} className="chip" data-on={r.water_type === w} onClick={() => setR((s) => ({ ...s, water_type: w }))} style={{ flex: 1, textAlign: "center" }}>{w}</button>
-          ))}
-        </div>
-      </div>
+      {/* Water + Split — compact options card */}
+      <div className="card rise rise-4" style={{ marginTop: 12, padding: "2px 16px" }}>
+        {/* Water — tap row opens the picker sheet */}
+        <button
+          onClick={() => setWaterPickerOpen(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 12, width: "100%",
+            padding: "14px 0", background: "none", border: "none",
+            cursor: "pointer", color: "var(--ink)", textAlign: "left",
+          }}
+        >
+          <span className="label" style={{ flex: 1 }}>Water</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{r.water_type || "—"}</span>
+          <Icon name="chev" size={16} stroke={1.8} style={{ color: "var(--ink-faint)" }} />
+        </button>
 
-      {canSplit && (
-        <div style={{ marginTop: 12 }}>
-          <div className="label" style={{ marginBottom: 8 }}>Split</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="chip" data-on={!split} onClick={() => setSplit(false)} style={{ flex: 1, textAlign: "center" }}>Just me</button>
-            <button className="chip" data-on={split} onClick={() => setSplit(true)} style={{ flex: 1, textAlign: "center" }}>With {splitPartnerName ?? "partner"}</button>
-          </div>
-        </div>
-      )}
+        {canSplit && (
+          <>
+            <div style={{ height: 1, background: "var(--line)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0" }}>
+              <span className="label" style={{ flex: 1 }}>Split with {splitPartnerName ?? "partner"}</span>
+              <Toggle on={split} onChange={setSplit} />
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="rise rise-5" style={{ marginTop: 14 }}>
         <button className="btn btn-accent" onClick={() => onLog(brewer, r, split)}>
@@ -175,6 +195,28 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         </button>
       </div>
       <div className="screen-bottom" />
+
+      {/* Water picker sheet */}
+      <Sheet open={waterPickerOpen} onClose={() => setWaterPickerOpen(false)}>
+        <div className="screen-pad" style={{ paddingTop: 6, paddingBottom: 8 }}>
+          <div className="label" style={{ marginBottom: 6 }}>Water</div>
+          {config.waters.map((w) => (
+            <button
+              key={w}
+              onClick={() => { setR((s) => ({ ...s, water_type: w })); setWaterPickerOpen(false); }}
+              style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                width: "100%", padding: "14px 2px", background: "none", border: "none",
+                borderBottom: "1px solid var(--line)", cursor: "pointer",
+                color: "var(--ink)", fontSize: 16, fontWeight: 600, fontFamily: "var(--font-ui)",
+              }}
+            >
+              {w}
+              {r.water_type === w && <Icon name="check" size={18} stroke={2} style={{ color: "var(--accent)" }} />}
+            </button>
+          ))}
+        </div>
+      </Sheet>
     </div>
   );
 }
