@@ -147,7 +147,7 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
                     { key: `${b.id}-2`, initial: t2[0].toUpperCase(), stars: num(b.stars2) },
                   ];
                 }
-                return [{ key: b.id, initial: null, stars: num(b.stars) }];
+                return [{ key: b.id, initial: tasterName(b)[0].toUpperCase(), stars: num(b.stars) }];
               })();
               const anyRated = ratingRows.some((r) => r.stars != null);
 
