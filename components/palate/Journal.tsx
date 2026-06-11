@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { StarsMini } from "@/components/ui";
-import { brewRating, daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
+import { daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
 import { processTexture } from "@/lib/flavour";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
@@ -126,29 +126,30 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
               const br = config.brewers.find((x) => x.id === b.brewer_id);
               const tex = c ? processTexture(c.process) : {};
 
-              // Rating footer — handles solo, legacy two-slot, and split-session cards.
-              const anyRated = b.stars != null || (partner && partner.stars != null);
-              const avgStars = (() => {
-                if (b.stars != null && partner?.stars != null) return Math.round((b.stars + partner.stars) / 2);
-                return Math.round(b.stars ?? partner?.stars ?? 0);
-              })();
-              // For legacy single-row brews (stars2 on same row) keep existing behaviour.
-              const legacySecond = !partner && b.stars2 != null;
-              const ratingLine = (() => {
-                if (!anyRated) return null;
-                const t1 = b.taster1 || "you";
-                if (legacySecond) {
-                  return `${t1} ${b.stars} · ${b.taster2 || config.taster2 || "partner"} ${b.stars2}`;
-                }
+              // Rating footer — one StarsMini row per taster, exact half-star
+              // values (Postgres numeric may arrive as a string, hence Number()).
+              // Handles solo, legacy two-slot, and split-session cards.
+              const tasterName = (row: Brew) =>
+                row.taster1 || (row.rate_for == null ? "you" : config.taster2 || "partner");
+              const ratingRows: { key: string; initial: string | null; stars: number | null }[] = (() => {
+                const num = (v: number | null) => (v == null ? null : Number(v));
                 if (partner) {
-                  const t2 = partner.taster1 || config.taster2 || "partner";
-                  const scoreStr = b.stars != null
-                    ? `${t1} ${b.stars} · ${partner.stars != null ? `${t2} ${partner.stars}` : `${t2} …`}`
-                    : `${t2} ${partner.stars}`;
-                  return scoreStr;
+                  return [
+                    { key: b.id, initial: tasterName(b)[0].toUpperCase(), stars: num(b.stars) },
+                    { key: partner.id, initial: tasterName(partner)[0].toUpperCase(), stars: num(partner.stars) },
+                  ];
                 }
-                return `${t1} ${b.stars}`;
+                if (b.stars2 != null) {
+                  // Legacy two-slot: both ratings live on the same row
+                  const t2 = b.taster2 || config.taster2 || "partner";
+                  return [
+                    { key: `${b.id}-1`, initial: (b.taster1 || "you")[0].toUpperCase(), stars: num(b.stars) },
+                    { key: `${b.id}-2`, initial: t2[0].toUpperCase(), stars: num(b.stars2) },
+                  ];
+                }
+                return [{ key: b.id, initial: null, stars: num(b.stars) }];
               })();
+              const anyRated = ratingRows.some((r) => r.stars != null);
 
               return (
                 <button
@@ -180,17 +181,27 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
                       {c ? c.name : b.coffee_id}
                     </div>
                     <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-dim)", marginTop: 2 }}>
-                      {br ? br.short : b.brewer_id} · 1:{b.ratio.toFixed(1)} · {b.temp}°C · {b.grind}{config.grinder.unit[0]}
+                      {br ? br.short : b.brewer_id} · {b.dose}g · {b.temp}°C · {b.grind}{config.grinder.unit[0]}
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
                     {anyRated ? (
-                      <>
-                        <StarsMini value={avgStars} size={12} />
-                        <span className="label" style={{ fontSize: 8.5, color: "var(--ink-faint)" }}>
-                          {ratingLine}
-                        </span>
-                      </>
+                      ratingRows.map((r) => (
+                        <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          {r.initial && (
+                            <span className="label" style={{ fontSize: 9, color: "var(--ink-faint)", width: 10, textAlign: "center" }}>
+                              {r.initial}
+                            </span>
+                          )}
+                          {r.stars != null ? (
+                            <StarsMini value={r.stars} size={12} />
+                          ) : (
+                            <span className="mono" style={{ fontSize: 11, color: "var(--ink-ghost)", width: 68, textAlign: "center" }}>
+                              …
+                            </span>
+                          )}
+                        </div>
+                      ))
                     ) : (
                       <span className="label" style={{ fontSize: 8.5, color: "var(--ink-faint)", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 7px" }}>
                         Unrated
