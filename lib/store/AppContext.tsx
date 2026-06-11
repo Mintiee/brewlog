@@ -173,8 +173,19 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   const updateCoffee = useCallback((c: Coffee) => {
     const coffee = { ...c, household_id: c.household_id || profile.household_id };
-    setCoffees((prev) => prev.map((x) => x.id === c.id ? coffee : x));
-    if (authed) upsertCoffee(coffee).catch(console.error);
+    // Capture previous state for rollback before the optimistic update.
+    let prev: Coffee | undefined;
+    setCoffees((prev_) => {
+      prev = prev_.find((x) => x.id === c.id);
+      return prev_.map((x) => x.id === c.id ? coffee : x);
+    });
+    if (authed) upsertCoffee(coffee).catch((err) => {
+      console.error("[updateCoffee] upsert failed:", err);
+      const detail = err?.message ?? err?.code ?? String(err);
+      setLastError(`Coffee save failed: ${detail}`);
+      // Roll back the optimistic update so the stale value isn't shown as saved.
+      if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev! : x));
+    });
   }, [authed, profile.household_id]);
 
   const startBrew = useCallback((b: Brew) => {

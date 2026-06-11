@@ -162,8 +162,8 @@ function rowToCoffee(r: any): Coffee {
     roasted_at: r.roasted_at,
     rest_days: r.rest_days,
     peak_days: r.peak_days,
-    grams: r.grams,
-    frozen_grams: r.frozen_grams,
+    grams: Number(r.grams),          // numeric in DB; coerce in case PostgREST returns a string
+    frozen_grams: Number(r.frozen_grams),
     frozen_at: r.frozen_at ?? null,
     thawed_at: r.thawed_at ?? null,
     archived: r.archived,
