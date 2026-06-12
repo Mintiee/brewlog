@@ -3,7 +3,7 @@ import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   gramsUsed, avgDailyGrams,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
-  roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating, bestBrew,
+  roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
   effectiveDaysAgo, restDaysAt,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
 } from "@/lib/domain";
@@ -348,7 +348,7 @@ describe("roaster dedup helpers", () => {
   });
 });
 
-describe("bagAvgRating / bestBrew", () => {
+describe("bagAvgRating", () => {
   const brews = [
     makeBrew({ id: "a", coffee_id: "c9", stars: 4, started_at: "1000" }),
     makeBrew({ id: "b", coffee_id: "c9", stars: 3, stars2: 5, started_at: "2000" }), // brewRating 4
@@ -365,13 +365,5 @@ describe("bagAvgRating / bestBrew", () => {
 
   it("returns null with no rated brews", () => {
     expect(bagAvgRating("none", brews)).toBeNull();
-  });
-
-  it("bestBrew picks the highest rating, most recent on ties", () => {
-    expect(bestBrew("c9", brews)!.id).toBe("s1");
-    // ties: a (4, t=1000) vs b (4, t=2000) — drop the 5-star rows
-    const tied = brews.filter((b) => !b.session_id);
-    expect(bestBrew("c9", tied)!.id).toBe("b");
-    expect(bestBrew("none", brews)).toBeNull();
   });
 });

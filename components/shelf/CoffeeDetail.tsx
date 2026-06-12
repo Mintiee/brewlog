@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
-  todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions, bagAvgRating, bestBrew, brewRating,
+  todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions, bagAvgRating,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
 import { useEditForm } from "@/lib/hooks/useEditForm";
@@ -61,7 +61,6 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   const st = coffeeStatus(coffee, brews);
   const coffeeBrews = brews.filter((b) => b.coffee_id === coffee.id);
   const avgRating = bagAvgRating(coffee.id, brews);
-  const best = bestBrew(coffee.id, brews);
   const remaining = remainingGrams(coffee, brews);
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
@@ -241,23 +240,6 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
             </span>
           )}
         </div>
-
-        {best && (
-          <div className="card" style={{ marginTop: 12, padding: "12px 16px" }}>
-            <div className="label" style={{ marginBottom: 5, display: "flex", alignItems: "center", gap: 6 }}>
-              <Icon name="star" size={13} stroke={1.8} /> Best brew · ★ {brewRating(best) % 1 === 0 ? brewRating(best) : brewRating(best).toFixed(1)}
-            </div>
-            <div className="mono" style={{ fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.5 }}>
-              {[
-                `${best.dose}g`,
-                `${best.water}mL`,
-                best.temp ? `${best.temp}°` : null,
-                best.grind != null ? `grind ${best.grind}` : null,
-                best.rest_days != null ? `day ${best.rest_days}` : null,
-              ].filter(Boolean).join(" · ")}
-            </div>
-          </div>
-        )}
 
         {coffee.archived ? (
           <button className="btn btn-accent" style={{ marginTop: 18 }} onClick={() => setArchived(false)}>

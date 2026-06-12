@@ -206,18 +206,6 @@ export function bagAvgRating(coffeeId: string, brews: Brew[]): number | null {
   return ratings.reduce((s, r) => s + r, 0) / ratings.length;
 }
 
-/** The highest-rated brew of a coffee (ties: most recent). null when unrated. */
-export function bestBrew(coffeeId: string, brews: Brew[]): Brew | null {
-  const rated = brews.filter((b) => b.coffee_id === coffeeId && !b.pending && b.stars != null);
-  if (!rated.length) return null;
-  return rated.reduce((best, b) => {
-    const d = brewRating(b) - brewRating(best);
-    if (d > 0) return b;
-    if (d === 0 && parseTs(b.started_at) > parseTs(best.started_at)) return b;
-    return best;
-  });
-}
-
 export function lastBrewOf(coffeeId: string, brews: Brew[]): Brew | null {
   const rated = brews
     .filter((b) => b.coffee_id === coffeeId && !b.pending)
