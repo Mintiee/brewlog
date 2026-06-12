@@ -11,6 +11,7 @@ interface CoffeePinProps {
 
 export function CoffeePin({ coffee, brews, onChange }: CoffeePinProps) {
   const st = coffeeStatus(coffee, brews);
+  const hasVarietal = coffee.varietal && coffee.varietal !== "—";
   return (
     <button onClick={onChange} style={{
       width: "100%", display: "flex", alignItems: "center", gap: 13,
@@ -20,7 +21,14 @@ export function CoffeePin({ coffee, brews, onChange }: CoffeePinProps) {
       <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={30} radius={9} process={coffee.process} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
-        <div style={{ fontSize: 15.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{coffee.name}</div>
+        <div style={{ fontSize: 15.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {coffee.name}
+          {hasVarietal && (
+            <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}>
+              {" "}· <span style={{ fontSize: 12.5 }}>{coffee.varietal}</span>
+            </span>
+          )}
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--ink-faint)" }}>
         <FreshDot state={st.state} />
