@@ -27,7 +27,7 @@ export function ShelfRow({ coffee, brews, onOpen }: ShelfRowProps) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
-        <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.01em", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
           {coffee.name}
           {hasVarietal && (
             <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}>

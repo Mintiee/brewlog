@@ -21,7 +21,7 @@ export function CoffeePin({ coffee, brews, onChange }: CoffeePinProps) {
       <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={30} radius={9} process={coffee.process} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
-        <div style={{ fontSize: 15.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ fontSize: 15.5, fontWeight: 600, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
           {coffee.name}
           {hasVarietal && (
             <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}>
