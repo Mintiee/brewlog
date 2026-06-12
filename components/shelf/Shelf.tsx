@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { activeGrams, coffeeStatus, frozenGramsOf, remainingGrams, avgDailyGrams, formatWeight, formatDaysWorth } from "@/lib/domain";
+import { activeGrams, coffeeStatus, frozenGramsOf, remainingGrams, avgDailyGrams, formatWeight, formatDaysWorth, bagAvgRating } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
@@ -151,23 +151,32 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
             </button>
             {showArchive && (
               <div style={{ marginTop: 6 }}>
-                {archived.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setDetail(c)}
-                    style={{
-                      width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
-                      background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 13, padding: "10px 14px", marginBottom: 8, opacity: 0.6,
-                    }}
-                  >
-                    <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={30} radius={8} process={c.process} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
-                      <div className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</div>
-                    </div>
-                    <span className="label" style={{ fontSize: 9 }}>finished</span>
-                  </button>
-                ))}
+                {archived.map((c) => {
+                  const avg = bagAvgRating(c.id, brews);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setDetail(c)}
+                      style={{
+                        width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
+                        background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 13, padding: "10px 14px", marginBottom: 8, opacity: 0.6,
+                      }}
+                    >
+                      <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={30} radius={8} process={c.process} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                        <div className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}{c.grams ? ` · ${formatWeight(c.grams)}` : ""}</div>
+                      </div>
+                      {avg != null ? (
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                          <Icon name="star" size={12} stroke={1.8} /> {avg.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="label" style={{ fontSize: 9 }}>finished</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

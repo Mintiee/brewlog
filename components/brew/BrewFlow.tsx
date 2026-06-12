@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { Brew, Brewer, Recipe } from "@/lib/types";
 import { useApp } from "@/lib/store/AppContext";
-import { restDaysAt } from "@/lib/domain";
+import { restDaysAt, activeGrams } from "@/lib/domain";
 import { Icon } from "@/components/ui";
 import { StepWhat } from "./StepWhat";
 import { StepHow } from "./StepHow";
@@ -21,7 +21,7 @@ interface BrewFlowProps {
 }
 
 export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
-  const { coffees, brews, config, profile, members, authed, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession } = useApp();
+  const { coffees, brews, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrew, dismissBrewSession } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
   const otherMember = members.find((m) => m.name !== profile.name) ?? null;
@@ -40,6 +40,12 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   const [saveState, setSaveState] = useState<"saving" | "saved" | "failed">("saved");
   // The brew rows of the last log attempt, kept for the in-place Retry.
   const lastLogged = useRef<Brew[]>([]);
+  // Set when the just-logged dose looks like the bag's last serving — the
+  // logged screen then asks whether to mark the coffee finished instead of
+  // auto-dismissing. Ref mirrors state so persistLogged (called in the same
+  // tick the state is set) reads the fresh value.
+  const [finishCandidate, setFinishCandidate] = useState<Coffee | null>(null);
+  const finishRef = useRef<Coffee | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const logTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,6 +145,11 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
 
     setDidSplit(!!sessionId && !!otherMember);
     setRateTarget(newBrew);
+    // Last-dose check: `brews` doesn't yet include the just-logged row(s), and a
+    // split still draws one physical dose. Less than a serving left → probably done.
+    const lastDose = !!coffee && activeGrams(coffee, brews) - r.dose < config.serving_grams;
+    finishRef.current = lastDose ? coffee : null;
+    setFinishCandidate(finishRef.current);
     setStep("logged");
     if (logTimer.current) clearTimeout(logTimer.current);
     void persistLogged();
@@ -153,7 +164,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     const oks = await Promise.all(lastLogged.current.map((b) => startBrew(b)));
     const ok = !authed || oks.every(Boolean);
     setSaveState(ok ? "saved" : "failed");
-    if (ok) {
+    if (ok && !finishRef.current) {
+      // The finish prompt holds the screen open; otherwise auto-dismiss.
       if (logTimer.current) clearTimeout(logTimer.current);
       logTimer.current = setTimeout(backHome, 4200);
     }
@@ -183,6 +195,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setCoffee(coffees[0] ?? null);
     setRateTarget(null);
     setDidSplit(false);
+    setFinishCandidate(null);
+    finishRef.current = null;
   }
 
   function saveRating(rating: object) {
@@ -289,6 +303,34 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
               ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate — yours is waiting whenever you&apos;re ready.</>
               : "We'll keep it on your home screen so you can rate it once you've had a cup."}
           </div>
+          {finishCandidate && (
+            <div className="rise rise-3" style={{ marginTop: 20, padding: "14px 16px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--line)", maxWidth: 300 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45 }}>
+                That looks like the last dose — mark <span style={{ color: "var(--accent)" }}>{finishCandidate.name}</span> finished?
+              </div>
+              <div style={{ display: "flex", gap: 9, marginTop: 12 }}>
+                <button
+                  className="btn btn-accent"
+                  style={{ flex: 1, height: 42, fontSize: 13.5 }}
+                  onClick={() => { updateCoffee({ ...finishCandidate, archived: true }); backHome(); }}
+                >
+                  Yes, finished
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  style={{ flex: 1, height: 42, fontSize: 13.5 }}
+                  onClick={() => {
+                    setFinishCandidate(null);
+                    finishRef.current = null;
+                    if (logTimer.current) clearTimeout(logTimer.current);
+                    logTimer.current = setTimeout(backHome, 4200);
+                  }}
+                >
+                  Not yet
+                </button>
+              </div>
+            </div>
+          )}
           <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
             marginTop: 22, background: "none", border: "none", cursor: "pointer",
             color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 600,
