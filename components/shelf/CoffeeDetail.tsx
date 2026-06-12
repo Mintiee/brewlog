@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
-  todayISO, daysAgoISO,
+  todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
 import { useEditForm } from "@/lib/hooks/useEditForm";
@@ -15,6 +15,7 @@ import { Stepper } from "@/components/ui/Stepper";
 import { ProcessPicker } from "./ProcessPicker";
 import { FreshBar } from "./FreshBar";
 import { Field } from "./Field";
+import { SuggestField } from "@/components/ui/SuggestField";
 import type { Coffee, Brew } from "@/lib/types";
 
 interface EditForm {
@@ -32,12 +33,14 @@ interface EditForm {
 interface CoffeeDetailProps {
   coffee: Coffee | null;
   brews: Brew[];
+  /** Full shelf — used to suggest and canonicalise roaster names while editing. */
+  coffees?: Coffee[];
   onClose: () => void;
   onBrew: (c: Coffee) => void;
   onUpdate: (c: Coffee) => void;
 }
 
-export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: CoffeeDetailProps) {
+export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onUpdate }: CoffeeDetailProps) {
   const [freezing, setFreezing] = useState(false);
   const [thawing, setThawing] = useState(false);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
@@ -107,7 +110,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
     const grams = newRemaining + gramsUsed(coffee.id, brews);
     onUpdate({
       ...coffee,
-      roaster: ef.roaster || "Unknown",
+      roaster: canonicalRoaster(ef.roaster, coffees) || "Unknown",
       name: ef.name || "Untitled",
       origin: ef.origin,
       region: ef.region || ef.origin,
@@ -130,7 +133,13 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       <Sheet open={true} onClose={onClose}>
         <div className="screen-pad" style={{ paddingTop: 6 }}>
           <SheetHeader title="Edit details" onClose={cancelEdit} />
-          <Field label="Roaster" value={ef.roaster} onChange={setE("roaster")} placeholder="Roaster" />
+          <SuggestField
+            label="Roaster"
+            value={ef.roaster}
+            onChange={setE("roaster")}
+            placeholder="Roaster"
+            suggestions={roasterSuggestions(ef.roaster, coffees)}
+          />
           <Field label="Coffee" value={ef.name} onChange={setE("name")} placeholder="Name / lot" />
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}><Field label="Origin" value={ef.origin} onChange={setE("origin")} placeholder="Country" /></div>

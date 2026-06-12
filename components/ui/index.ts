@@ -7,6 +7,7 @@ export { Stepper } from "./Stepper";
 export { Segmented } from "./Segmented";
 export { FreshDot } from "./FreshDot";
 export { EmptyState } from "./EmptyState";
+export { SuggestField } from "./SuggestField";
 export { Sheet } from "./Sheet";
 export { Monogram } from "./Monogram";
 export { OriginTile } from "./OriginTile";

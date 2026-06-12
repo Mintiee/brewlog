@@ -176,10 +176,11 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
         <div className="screen-bottom" />
       </div>
 
-      <AddCoffee open={adding} onClose={() => setAdding(false)} onAdd={onAdd} llmEnabled={llmEnabled} />
+      <AddCoffee open={adding} onClose={() => setAdding(false)} onAdd={onAdd} llmEnabled={llmEnabled} coffees={coffees} />
       <CoffeeDetail
         coffee={liveDetail}
         brews={brews}
+        coffees={coffees}
         onClose={() => setDetail(null)}
         onBrew={(c) => { setDetail(null); onBrew(c); }}
         onUpdate={onUpdate}

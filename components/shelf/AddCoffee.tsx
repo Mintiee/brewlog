@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { originCode, todayISO, daysAgoISO } from "@/lib/domain";
+import { originCode, todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions } from "@/lib/domain";
 import { coffeeColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
@@ -8,6 +8,7 @@ import { SheetHeader } from "@/components/ui/SheetHeader";
 import { ProcessPicker } from "./ProcessPicker";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Field } from "./Field";
+import { SuggestField } from "@/components/ui/SuggestField";
 import type { Coffee } from "@/lib/types";
 
 type Phase = "capture" | "scanning" | "review";
@@ -31,11 +32,13 @@ interface AddCoffeeProps {
   onClose: () => void;
   onAdd: (c: Coffee) => void;
   llmEnabled: boolean;
+  /** Existing shelf — used to suggest and canonicalise roaster names. */
+  coffees?: Coffee[];
 }
 
 const ROAST_LEVELS = ["light", "medium-light", "medium", "medium-dark", "dark"];
 
-export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) {
+export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: AddCoffeeProps) {
   const [phase, setPhase] = useState<Phase>(llmEnabled ? "capture" : "review");
   const [form, setForm] = useState<ReviewForm | null>(null);
   const [scanPct, setScanPct] = useState(0);
@@ -120,7 +123,9 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
     const roasted_at = form.roastedAt || todayISO();
     const c: Coffee = {
       id: crypto.randomUUID(),
-      roaster: form.roaster || "Unknown",
+      // Adopt the shelf's existing spelling when this roaster (or a case/suffix
+      // variant of it) is already known — keeps stats grouping by one name.
+      roaster: canonicalRoaster(form.roaster, coffees) || "Unknown",
       name: form.name || "Untitled",
       origin: form.origin || "—",
       region: form.region || form.origin || "—",
@@ -249,7 +254,14 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
                   </div>
                 </div>
               )}
-              <Field label="Roaster" value={form.roaster} onChange={set("roaster")} placeholder="Roaster" highlight={source !== "manual"} />
+              <SuggestField
+                label="Roaster"
+                value={form.roaster}
+                onChange={set("roaster")}
+                placeholder="Roaster"
+                highlight={source !== "manual"}
+                suggestions={roasterSuggestions(form.roaster, coffees)}
+              />
               <Field label="Coffee" value={form.name} onChange={set("name")} placeholder="Name / lot" highlight={source !== "manual"} />
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}><Field label="Origin" value={form.origin} onChange={set("origin")} placeholder="Country" highlight={source !== "manual"} /></div>
