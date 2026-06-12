@@ -11,5 +11,6 @@ export { SuggestField } from "./SuggestField";
 export { Sheet } from "./Sheet";
 export { Monogram } from "./Monogram";
 export { OriginTile } from "./OriginTile";
+export { CoffeeName } from "./CoffeeName";
 export { ImagePicker } from "./ImagePicker";
 export { Splash } from "./Splash";

@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { coffeeStatus, activeGrams, frozenGramsOf, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
-import { Icon, FreshDot, OriginTile } from "@/components/ui";
+import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
 
 interface StepWhatProps {
   coffees: Coffee[];
@@ -63,7 +63,6 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   const brewerById = (id: string) => config.brewers.find((b) => b.id === id);
 
   const renderRow = ({ c, st }: typeof decorated[number], i: number, dim = false) => {
-    const hasVarietal = c.varietal && c.varietal !== "—";
     const lb = lastBrewOf(c.id, brews);
     const daysAgo = lb ? daysAgoFromStartedAt(lb.started_at) : null;
     const last = daysAgo !== null ? (daysAgo === 0 ? "today" : `${daysAgo}d`) : null;
@@ -92,14 +91,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
               <Icon name="bean" size={13} stroke={1.8} /> {serves} left
             </span>
           </div>
-          <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.015em", color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 2 }}>
-            {c.name}
-            {hasVarietal && (
-              <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}>
-                {" "}· <span style={{ fontSize: 14 }}>{c.varietal}</span>
-              </span>
-            )}
-          </div>
+          <CoffeeName coffee={c} style={{ fontSize: 18, letterSpacing: "-0.015em", color: "var(--ink)", marginTop: 2 }} />
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px 13px", marginTop: 8 }}>
             {c.notes.map((n) => (
               <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: noteColor(n) }}>

@@ -4,6 +4,7 @@ import { coffeeStatus, cupsLeft, frozenGramsOf } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { OriginTile } from "@/components/ui/OriginTile";
+import { CoffeeName } from "@/components/ui/CoffeeName";
 import type { Coffee, Brew } from "@/lib/types";
 
 interface FrozenRowProps {
@@ -26,7 +27,7 @@ export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
-        <div style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{coffee.name}</div>
+        <CoffeeName coffee={coffee} style={{ fontSize: 16.5, letterSpacing: "-0.01em" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 3, fontSize: 12, color: "var(--frozen)" }}>
           <Icon name="snow" size={12} stroke={1.8} />
           <span>{st.label}</span>

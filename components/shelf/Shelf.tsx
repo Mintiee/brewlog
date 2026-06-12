@@ -4,6 +4,7 @@ import { activeGrams, coffeeStatus, frozenGramsOf, remainingGrams, avgDailyGrams
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
+import { CoffeeName } from "@/components/ui/CoffeeName";
 import { FreshDot } from "@/components/ui/FreshDot";
 import { ShelfRow } from "./ShelfRow";
 import { FrozenRow } from "./FrozenRow";
@@ -164,7 +165,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
                     >
                       <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={30} radius={8} process={c.process} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                        <CoffeeName coffee={c} style={{ fontSize: 14 }} />
                         <div className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}{c.grams ? ` · ${formatWeight(c.grams)}` : ""}</div>
                       </div>
                       {avg != null ? (
