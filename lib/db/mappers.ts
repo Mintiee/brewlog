@@ -3,11 +3,11 @@
  * so they're unit-testable without Supabase.
  */
 import type { Coffee, Brew, Config } from "@/lib/types";
+import type { Tables, TablesInsert } from "./database.types";
 import { coffeeColor } from "@/lib/flavour";
 import { SEED_BREWERS } from "@/lib/domain/seed";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rowToCoffee(r: any): Coffee {
+export function rowToCoffee(r: Tables<"coffees">): Coffee {
   return {
     id: r.id,
     household_id: r.household_id,
@@ -17,7 +17,7 @@ export function rowToCoffee(r: any): Coffee {
     region: r.region,
     varietal: r.varietal,
     process: r.process,
-    roast: r.roast,
+    roast: r.roast as Coffee["roast"],
     roasted_at: r.roasted_at,
     rest_days: r.rest_days,
     peak_days: r.peak_days,
@@ -32,7 +32,7 @@ export function rowToCoffee(r: any): Coffee {
   };
 }
 
-export function coffeeToRow(c: Partial<Coffee>) {
+export function coffeeToRow(c: Omit<Coffee, "id"> & { id?: string }): TablesInsert<"coffees"> {
   return {
     ...(c.id ? { id: c.id } : {}),
     ...(c.household_id ? { household_id: c.household_id } : {}),
@@ -46,8 +46,7 @@ export function coffeeToRow(c: Partial<Coffee>) {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rowToBrew(r: any): Brew {
+export function rowToBrew(r: Tables<"brews">): Brew {
   return {
     id: r.id,
     household_id: r.household_id,
@@ -72,7 +71,7 @@ export function rowToBrew(r: any): Brew {
 /** Full-row mapping for inserts — every column is emitted. Do NOT use for
  *  partial updates: absent rating fields would null their columns (this was
  *  the "brews resurrect as pending / scores vanish" bug). */
-export function brewToRow(b: Brew) {
+export function brewToRow(b: Brew): TablesInsert<"brews"> {
   return {
     ...(b.id ? { id: b.id } : {}),
     // Supply household_id / logged_by explicitly — do not rely on DB defaults
@@ -100,7 +99,7 @@ export function brewToRow(b: Brew) {
 /** Patch-aware row mapping for updates — emits ONLY columns whose keys are
  *  present in the patch, so an edit that doesn't mention a field can never
  *  clobber it. `pending` (derived from rated_at) and `id` are never emitted. */
-export function brewPatchToRow(patch: Partial<Brew>): Record<string, unknown> {
+export function brewPatchToRow(patch: Partial<Brew>): Partial<TablesInsert<"brews">> {
   const row: Record<string, unknown> = {};
   const passthrough = [
     "coffee_id", "brewer_id", "dose", "water", "bypass", "temp", "grind",
@@ -122,11 +121,10 @@ export function brewPatchToRow(patch: Partial<Brew>): Record<string, unknown> {
   for (const k of ["acidity", "sweetness", "body", "clarity"] as const) {
     if (k in patch) row[k] = patch[k] || null;
   }
-  return row;
+  return row as Partial<TablesInsert<"brews">>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rowToConfig(r: any): Config {
+export function rowToConfig(r: Tables<"config">): Config {
   const rawBrewers = Array.isArray(r.brewers) && r.brewers.length ? r.brewers : SEED_BREWERS;
   // Backfill `water` (default water out, mL) for brewers stored before this field existed.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,8 +135,8 @@ export function rowToConfig(r: any): Config {
   // Backfill grind range/step defaults for grinders stored before these fields existed
   const grinder = {
     name: "Comandante C40", unit: "clicks", grind_min: 0, grind_max: 50, grind_step: 1,
-    ...(r.grinder ?? {}),
-  };
+    ...((typeof r.grinder === "object" && !Array.isArray(r.grinder) ? r.grinder : {}) ?? {}),
+  } as Config["grinder"];
   return {
     grinder,
     brewers,

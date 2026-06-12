@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { rowToBrew, brewToRow, brewPatchToRow } from "@/lib/db/mappers";
+import type { Tables } from "@/lib/db/database.types";
 import type { Brew } from "@/lib/types";
+
+/** Fill in the DB-side columns an insert payload doesn't carry. */
+function asRow(partial: object): Tables<"brews"> {
+  return { household_id: "h1", created_at: "2026-01-01T00:00:00Z", ...partial } as Tables<"brews">;
+}
 
 function makeBrew(overrides: Partial<Brew> = {}): Brew {
   return {
@@ -29,7 +35,7 @@ describe("brewToRow / rowToBrew round-trip", () => {
   it("preserves all fields through row and back", () => {
     const brew = makeBrew();
     const row = brewToRow(brew);
-    const back = rowToBrew({ ...row, id: brew.id });
+    const back = rowToBrew(asRow({ ...row, id: brew.id }));
     expect(back).toEqual(brew);
   });
 
@@ -38,14 +44,14 @@ describe("brewToRow / rowToBrew round-trip", () => {
     const row = brewToRow(brew);
     expect(row.started_at).toBe(new Date(1750000000000).toISOString());
     expect(row.rated_at).toBe(new Date(1750000600000).toISOString());
-    const back = rowToBrew({ ...row, id: brew.id });
+    const back = rowToBrew(asRow({ ...row, id: brew.id }));
     expect(back.started_at).toBe("1750000000000");
     expect(back.rated_at).toBe("1750000600000");
   });
 
   it("derives pending from rated_at", () => {
     const row = brewToRow(makeBrew({ rated_at: null, pending: true, stars: null }));
-    expect(rowToBrew({ ...row, id: "b1" }).pending).toBe(true);
+    expect(rowToBrew(asRow({ ...row, id: "b1" })).pending).toBe(true);
   });
 
   it("maps zero scale values to null on write (1–5 DB check)", () => {

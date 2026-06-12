@@ -83,8 +83,10 @@ export async function upsertConfig(config: Config, householdId: string): Promise
   const sb = createClient();
   const row = {
     household_id: householdId,
-    grinder: config.grinder,
-    brewers: config.brewers,
+    // Grinder/Brewer interfaces lack Json's index signature; structurally they
+    // are plain JSON objects, so the cast is safe.
+    grinder: config.grinder as unknown as import("./database.types").Json,
+    brewers: config.brewers as unknown as import("./database.types").Json,
     waters: config.waters,
     default_water: config.default_water,
     taster2: config.taster2,
