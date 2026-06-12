@@ -189,8 +189,19 @@ function Shell() {
           display: "flex", alignItems: "flex-start", gap: 10,
           boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
         }}>
-          <span style={{ flex: 1 }}>{lastError}</span>
-          <button onClick={clearError} style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", lineHeight: 0, flexShrink: 0, marginTop: 1 }}>
+          <span style={{ flex: 1 }}>{lastError.message}</span>
+          {lastError.retry && (
+            <button
+              onClick={lastError.retry}
+              style={{
+                background: "rgba(255,255,255,0.18)", border: "none", cursor: "pointer", color: "#fff",
+                borderRadius: 8, padding: "3px 10px", fontSize: 12.5, fontWeight: 600, flexShrink: 0,
+              }}
+            >
+              Retry
+            </button>
+          )}
+          <button onClick={clearError} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", lineHeight: 0, flexShrink: 0, marginTop: 1 }}>
             <Icon name="close" size={15} stroke={2} />
           </button>
         </div>

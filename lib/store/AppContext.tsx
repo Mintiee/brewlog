@@ -11,12 +11,20 @@ import {
 import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
 import { setRestWindow, setServingGrams, setPeakWindow, activeGrams } from "@/lib/domain";
+import { persist, writesIdle, writesInFlight } from "@/lib/store/persist";
 
 /** Push household-wide settings into the domain module's freshness/serving knobs. */
 function applyConfigToDomain(c: Config) {
   setRestWindow(c.rest_days);
   if (c.peak_days) setPeakWindow(c.peak_days);
   setServingGrams(c.serving_grams);
+}
+
+/** A failed write surfaced to the UI. `retry` re-applies the optimistic
+ *  state and re-runs the write (set by the persist pipeline). */
+export interface AppError {
+  message: string;
+  retry?: () => void;
 }
 
 interface AppState {
@@ -28,19 +36,22 @@ interface AppState {
   llmEnabled: boolean;
   aiProvider?: string;
   ready: boolean;          // true once data has loaded (or seeded)
-  lastError: string | null; // last swallowed DB error, shown as a banner
+  lastError: AppError | null; // last failed DB write, shown as a banner
 }
 
+/** Mutations resolve true once the write is confirmed in the DB, false on
+ *  final failure (state already rolled back, banner shown) or when unauthed
+ *  (local-only demo mode). Callers may ignore the promise. */
 interface AppActions {
-  addCoffee: (c: Coffee) => void;
-  updateCoffee: (c: Coffee) => void;
-  startBrew: (b: Brew) => void;
-  rateBrew: (id: string, rating: Partial<Brew>) => void;
-  updateBrew: (id: string, patch: Partial<Brew>) => void;
-  dismissBrew: (id: string) => void;
+  addCoffee: (c: Coffee) => Promise<boolean>;
+  updateCoffee: (c: Coffee) => Promise<boolean>;
+  startBrew: (b: Brew) => Promise<boolean>;
+  rateBrew: (id: string, rating: Partial<Brew>) => Promise<boolean>;
+  updateBrew: (id: string, patch: Partial<Brew>) => Promise<boolean>;
+  dismissBrew: (id: string) => Promise<boolean>;
   /** Delete a brew and all session siblings (for journal/recent-strip deletes). */
-  dismissBrewSession: (id: string) => void;
-  setConfig: (c: Config) => void;
+  dismissBrewSession: (id: string) => Promise<boolean>;
+  setConfig: (c: Config) => Promise<boolean>;
   setProfile: (p: Profile) => void;
   clearError: () => void;
 }
@@ -78,7 +89,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const [aiProvider, setAiProvider] = useState<string | undefined>(initialData?.aiStatus?.provider);
   const [ready, setReady] = useState(!!initialData);
   const [authed, setAuthed] = useState(!!initialData?.profile);
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<AppError | null>(null);
 
   // Check auth + load data — only when the server did NOT prefetch (demo/unauthed
   // path, or Supabase unconfigured). The authed first-load path is fully seeded above.
@@ -132,7 +143,13 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const refresh = useCallback(async () => {
     if (!authed) return;
     try {
+      // Never snapshot the server mid-write: wait for in-flight writes so the
+      // fetch includes everything we've sent, and discard the result if a new
+      // write started during the fetch (its data wouldn't be in the snapshot —
+      // adopting it would clobber the optimistic state with stale rows).
+      await writesIdle();
       const [c, b] = await Promise.all([fetchCoffees(), fetchBrews()]);
+      if (writesInFlight() > 0) return; // next refresh reconciles
       setCoffees(c);
       setBrews(b);
     } catch { /* transient — keep current state */ }
@@ -180,90 +197,135 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once-guarded; coffees read at sweep time only
   }, [ready, authed, llmEnabled, learnNotes]);
 
-  // ---- Optimistic mutations (update local state immediately; sync to DB if authed) ----
+  // ---- Optimistic mutations ----
+  // Pattern: `apply` updates local state immediately; `persist` runs the DB
+  // write with retry, and on final failure rolls back and surfaces a banner
+  // with a Retry that re-applies the optimistic state and re-runs the write.
+
+  const save = useCallback((
+    label: string,
+    write: () => Promise<unknown>,
+    apply: () => void,
+    rollback: () => void,
+  ): Promise<boolean> => {
+    apply();
+    if (!authed) return Promise.resolve(false); // demo mode — local-only by design
+    const run = (): Promise<boolean> => persist(label, write, {
+      rollback,
+      onError: (message) => setLastError({
+        message,
+        retry: () => { setLastError(null); apply(); void run(); },
+      }),
+    });
+    return run();
+  }, [authed]);
 
   const addCoffee = useCallback((c: Coffee) => {
     // Ensure household_id is always set — upsertCoffee will forward it to coffeeToRow.
     const coffee = { ...c, household_id: profile.household_id };
-    setCoffees((prev) => [coffee, ...prev]);
     void learnNotes(coffee.notes ?? []);
-    if (authed) upsertCoffee(coffee).catch((err) => {
-      console.error("[addCoffee] upsert failed:", err);
-      const detail = err?.message ?? err?.code ?? String(err);
-      setLastError(`Coffee save failed: ${detail}`);
-    });
-  }, [authed, profile.household_id, learnNotes]);
+    return save(
+      "Coffee save",
+      () => upsertCoffee(coffee),
+      () => setCoffees((prev) => [coffee, ...prev]),
+      () => setCoffees((prev) => prev.filter((x) => x.id !== coffee.id)),
+    );
+  }, [save, profile.household_id, learnNotes]);
 
   const updateCoffee = useCallback((c: Coffee) => {
     const coffee = { ...c, household_id: c.household_id || profile.household_id };
     // Capture previous state for rollback before the optimistic update.
     let prev: Coffee | undefined;
-    setCoffees((prev_) => {
-      prev = prev_.find((x) => x.id === c.id);
-      return prev_.map((x) => x.id === c.id ? coffee : x);
-    });
     void learnNotes(coffee.notes ?? []);
-    if (authed) upsertCoffee(coffee).catch((err) => {
-      console.error("[updateCoffee] upsert failed:", err);
-      const detail = err?.message ?? err?.code ?? String(err);
-      setLastError(`Coffee save failed: ${detail}`);
-      // Roll back the optimistic update so the stale value isn't shown as saved.
-      if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev! : x));
-    });
-  }, [authed, profile.household_id, learnNotes]);
+    return save(
+      "Coffee save",
+      () => upsertCoffee(coffee),
+      () => setCoffees((prev_) => {
+        prev = prev_.find((x) => x.id === c.id) ?? prev;
+        return prev_.map((x) => x.id === c.id ? coffee : x);
+      }),
+      () => { if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev! : x)); },
+    );
+  }, [save, profile.household_id, learnNotes]);
 
   const startBrew = useCallback((b: Brew) => {
-    setBrews((prev) => [b, ...prev]);
+    if (!authed) {
+      setBrews((prev) => [b, ...prev]);
+      setLastError({ message: "Not signed in — this brew is only on this device and will be lost on reload" });
+      return Promise.resolve(false);
+    }
     // Insert WITH the client-generated UUID so later rating updates (updateBrew by id)
     // match the same row — otherwise rated_at never persists and the brew reappears
     // as pending after a refresh.
-    if (!authed) {
-      console.error("[startBrew] not authed — brew saved locally only and will be lost on reload");
-      return;
-    }
-    insertBrew(b).catch((err) => {
-      console.error("[startBrew] insert failed — brew saved locally only and will be lost on reload:", err);
-      const detail = err?.message ?? err?.code ?? String(err);
-      setLastError(`Brew insert failed: ${detail}`);
-    });
-  }, [authed]);
+    return save(
+      "Brew save",
+      () => insertBrew(b),
+      () => setBrews((prev) => [b, ...prev]),
+      () => setBrews((prev) => prev.filter((x) => x.id !== b.id)),
+    );
+  }, [authed, save]);
 
   const rateBrew = useCallback((id: string, rating: Partial<Brew>) => {
     // Rating always clears the handoff flag — once rated it's no longer "awaiting"
     // anyone, and the rater is recorded as taster1 by the caller (StepRate).
     const patch = { ...rating, pending: false, rated_at: String(Date.now()), rate_for: null };
-    setBrews((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } : x));
-    if (authed) dbUpdateBrew(id, patch).catch((err) => {
-      console.error("[rateBrew] update failed — rating may not persist:", err);
-      const detail = err?.message ?? err?.code ?? String(err);
-      setLastError(`Rating save failed: ${detail}`);
-      // Roll back the optimistic update so the brew reappears as pending immediately
-      // rather than appearing done locally and bouncing back on the next DB refresh.
-      setBrews((prev) => prev.map((x) => x.id === id ? { ...x, pending: true, rated_at: null } : x));
-    });
-  }, [authed]);
+    let prev: Brew | undefined;
+    return save(
+      "Rating save",
+      () => dbUpdateBrew(id, patch),
+      () => setBrews((bs) => {
+        prev = bs.find((x) => x.id === id) ?? prev;
+        return bs.map((x) => x.id === id ? { ...x, ...patch } : x);
+      }),
+      // Restore the full prior row (not just pending/rated_at) so rate_for and
+      // any earlier rating fields survive the rollback.
+      () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev! : x)); },
+    );
+  }, [save]);
 
   // Pure patch — no forced pending/rated_at (use for BrewDetail edits, not the rating flow).
   const updateBrew = useCallback((id: string, patch: Partial<Brew>) => {
-    setBrews((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } : x));
-    if (authed) dbUpdateBrew(id, patch).catch(console.error);
-  }, [authed]);
+    let prev: Brew | undefined;
+    return save(
+      "Brew update",
+      () => dbUpdateBrew(id, patch),
+      () => setBrews((bs) => {
+        prev = bs.find((x) => x.id === id) ?? prev;
+        return bs.map((x) => x.id === id ? { ...x, ...patch } : x);
+      }),
+      () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev! : x)); },
+    );
+  }, [save]);
+
+  /** Shared core for single / session deletes: removes the given brew rows and,
+   *  if that restores beans to a finished bag (Bug 1c), un-archives the coffee.
+   *  One persist call covers the delete(s) + restore so a partial failure rolls
+   *  the whole thing back. */
+  const deleteBrews = useCallback((ids: Set<string>, anchor: Brew | undefined) => {
+    const prevBrews = brews;
+    const prevCoffees = coffees;
+    const nextBrews = brews.filter((x) => !ids.has(x.id));
+    const coffee = anchor ? coffees.find((c) => c.id === anchor.coffee_id) : undefined;
+    const restored = coffee?.archived && activeGrams(coffee, nextBrews) > 0
+      ? { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false }
+      : null;
+    return save(
+      ids.size > 1 ? "Brew delete (both cups)" : "Brew delete",
+      async () => {
+        await Promise.all([...ids].map((rid) => deleteBrew(rid)));
+        if (restored) await upsertCoffee(restored);
+      },
+      () => {
+        setBrews(nextBrews);
+        if (restored) setCoffees((cs) => cs.map((c) => c.id === restored.id ? restored : c));
+      },
+      () => { setBrews(prevBrews); if (restored) setCoffees(prevCoffees); },
+    );
+  }, [save, brews, coffees, profile.household_id]);
 
   const dismissBrew = useCallback((id: string) => {
-    const brew = brews.find((x) => x.id === id);
-    const nextBrews = brews.filter((x) => x.id !== id);
-    setBrews(nextBrews);
-    // Bug 1c: if deleting this brew restores beans to a finished bag, auto-return it.
-    if (brew) {
-      const coffee = coffees.find((c) => c.id === brew.coffee_id);
-      if (coffee?.archived && activeGrams(coffee, nextBrews) > 0) {
-        const restored = { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false };
-        setCoffees((prev) => prev.map((c) => c.id === coffee.id ? restored : c));
-        if (authed) upsertCoffee(restored).catch(console.error);
-      }
-    }
-    if (authed) deleteBrew(id).catch(console.error);
-  }, [authed, brews, coffees, profile.household_id]);
+    return deleteBrews(new Set([id]), brews.find((x) => x.id === id));
+  }, [deleteBrews, brews]);
 
   /** Deletes an entire session (both split-brew rows) by any sibling's id.
    *  Falls back to single-row delete when session_id is null (same as dismissBrew).
@@ -271,30 +333,23 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
    *  leave Kris's sibling row intact. */
   const dismissBrewSession = useCallback((id: string) => {
     const brew = brews.find((x) => x.id === id);
-    const idsToRemove = new Set(
+    const ids = new Set(
       brew?.session_id
         ? brews.filter((x) => x.session_id === brew.session_id).map((x) => x.id)
         : [id],
     );
-    const nextBrews = brews.filter((x) => !idsToRemove.has(x.id));
-    setBrews(nextBrews);
-    // Bug 1c: if the deletion restores beans to a finished bag, auto-return it.
-    if (brew) {
-      const coffee = coffees.find((c) => c.id === brew.coffee_id);
-      if (coffee?.archived && activeGrams(coffee, nextBrews) > 0) {
-        const restored = { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false };
-        setCoffees((prev) => prev.map((c) => c.id === coffee.id ? restored : c));
-        if (authed) upsertCoffee(restored).catch(console.error);
-      }
-    }
-    if (authed) idsToRemove.forEach((rid) => deleteBrew(rid).catch(console.error));
-  }, [authed, brews, coffees, profile.household_id]);
+    return deleteBrews(ids, brew);
+  }, [deleteBrews, brews]);
 
   const setConfig = useCallback((c: Config) => {
-    setConfigState(c);
-    applyConfigToDomain(c);
-    if (authed && profile.household_id) upsertConfig(c, profile.household_id).catch(console.error);
-  }, [authed, profile.household_id]);
+    const prev = config;
+    return save(
+      "Settings save",
+      () => upsertConfig(c, profile.household_id),
+      () => { setConfigState(c); applyConfigToDomain(c); },
+      () => { setConfigState(prev); applyConfigToDomain(prev); },
+    );
+  }, [save, config, profile.household_id]);
 
   const setProfile = useCallback((p: Profile) => setProfileState(p), []);
 
