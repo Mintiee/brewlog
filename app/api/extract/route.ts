@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { image, url } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
+  }
+  const { image, url } = body;
 
   try {
     if (image) {
@@ -41,6 +45,7 @@ export async function POST(req: NextRequest) {
     if (url) {
       // URL extraction — server fetches the page, then extracts
       const pageRes = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 brewlog/1.0" }, signal: AbortSignal.timeout(8000) });
+      if (!pageRes.ok) throw new Error(`Page fetch failed: ${pageRes.status}`);
       const html = await pageRes.text();
       // Strip to text content (very basic; the LLM handles the noise)
       const text = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 4000);

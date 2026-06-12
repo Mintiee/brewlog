@@ -13,7 +13,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { key } = await req.json();
+  const body = await req.json().catch(() => null);
+  const key: string | undefined = body && typeof body === "object" ? body.key : undefined;
   if (!key?.trim()) return NextResponse.json({ error: "Key is required" }, { status: 400 });
 
   const provider = detectProvider(key.trim());

@@ -28,7 +28,11 @@ export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { brews, date, tzOffsetMin } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
+  }
+  const { brews, date, tzOffsetMin } = body;
   if (!Array.isArray(brews) || brews.length === 0) {
     return NextResponse.json({ error: "No brew data" }, { status: 400 });
   }
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
     .from("household_insight")
     .select("text,generated_at")
     .eq("household_id", hk.householdId)
-    .single();
+    .maybeSingle();
 
   if (cached && localDay(new Date(cached.generated_at).getTime(), offset) === clientToday) {
     return NextResponse.json({ text: cached.text, cached: true });
