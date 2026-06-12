@@ -29,8 +29,9 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
       WebkitBackdropFilter: "blur(18px) saturate(160%)",
       borderTop: "1px solid var(--line)",
     }}>
-      {/* Icon row — fixed height, icons centered within it */}
-      <div style={{ minHeight: "var(--tab-h)", display: "flex", alignItems: "center" }}>
+      {/* Icon row — fixed height, icons centered within it. Top padding gives the
+          icons clearance from the bar's top border (the stack nearly fills --tab-h). */}
+      <div style={{ minHeight: "var(--tab-h)", display: "flex", alignItems: "center", paddingTop: 6 }}>
         {TABS.map((t) => {
           const on = t.id === active;
           const badge = t.id === "brew" && pendingCount > 0 ? pendingCount : 0;
@@ -181,7 +182,7 @@ function Shell() {
 
       {(lastError || undoState) && (
         <div style={{
-          position: "absolute", bottom: "calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 8px)",
+          position: "absolute", bottom: "calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 14px)",
           left: 16, right: 16, zIndex: 50,
           display: "flex", flexDirection: "column", gap: 8,
         }}>

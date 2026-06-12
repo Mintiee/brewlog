@@ -73,7 +73,7 @@ button { color: inherit; font-family: inherit; }
 }
 .screen::-webkit-scrollbar { display: none; }
 .screen-pad { padding: 0 20px; }
-.screen-bottom { height: calc(var(--tab-h) + 12px); }
+.screen-bottom { height: calc(var(--tab-h) + 18px); } /* +6px matches the tab bar's top padding */
 
 /* ---------- type helpers ---------- */
 .label {
