@@ -39,6 +39,8 @@ interface AppState {
   /** False in local-only demo mode (no session) — writes don't reach a DB. */
   authed: boolean;
   lastError: AppError | null; // last failed DB write, shown as a banner
+  /** Transient post-delete affordance ("Brew deleted — Undo"), auto-clears. */
+  undoState: { message: string; undo: () => void } | null;
 }
 
 /** Mutations resolve true once the write is confirmed in the DB, false on
@@ -92,6 +94,8 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const [ready, setReady] = useState(!!initialData);
   const [authed, setAuthed] = useState(!!initialData?.profile);
   const [lastError, setLastError] = useState<AppError | null>(null);
+  const [undoState, setUndoState] = useState<{ message: string; undo: () => void } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check auth + load data — only when the server did NOT prefetch (demo/unauthed
   // path, or Supabase unconfigured). The authed first-load path is fully seeded above.
@@ -311,7 +315,8 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     const restored = coffee?.archived && activeGrams(coffee, nextBrews) > 0
       ? { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false }
       : null;
-    return save(
+    const removed = brews.filter((x) => ids.has(x.id));
+    const p = save(
       ids.size > 1 ? "Brew delete (both cups)" : "Brew delete",
       async () => {
         await Promise.all([...ids].map((rid) => deleteBrew(rid)));
@@ -323,7 +328,29 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       },
       () => { setBrews(prevBrews); if (restored) setCoffees(prevCoffees); },
     );
-  }, [save, brews, coffees, profile.household_id]);
+    // Offer a 5s undo: restore local state, then (once the delete has actually
+    // landed) re-insert the same rows and re-archive the bag if it was
+    // auto-returned. Waiting on `p` keeps insert-after-delete ordering.
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoState({
+      message: ids.size > 1 ? "Brews deleted" : "Brew deleted",
+      undo: () => {
+        setUndoState(null);
+        void p.then((ok) => {
+          setBrews(prevBrews);
+          if (restored) setCoffees(prevCoffees);
+          if (ok && authed) {
+            void persist("Undo delete", async () => {
+              await Promise.all(removed.map((b) => insertBrew(b)));
+              if (restored && coffee) await upsertCoffee(coffee);
+            }, { onError: (message, retry) => setLastError({ message, retry }) });
+          }
+        });
+      },
+    });
+    undoTimer.current = setTimeout(() => setUndoState(null), 5000);
+    return p;
+  }, [save, authed, brews, coffees, profile.household_id]);
 
   const dismissBrew = useCallback((id: string) => {
     return deleteBrews(new Set([id]), brews.find((x) => x.id === id));
@@ -359,7 +386,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError,
+      coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError, undoState,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError,
     }}>
       {children}

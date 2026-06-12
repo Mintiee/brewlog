@@ -40,6 +40,9 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
   // the date picker so brews can't be dated into the future.
   const [todayISO, setTodayISO] = useState("");
   const [activeTaster, setActiveTaster] = useState(0);
+  // Split deletes remove both tasters' ratings, so they confirm inline; solo
+  // deletes go straight through (the post-delete Undo toast covers mistakes).
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (!brew) return null;
 
@@ -317,9 +320,28 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
             <Icon name="edit" size={19} stroke={1.7} /> Edit this brew
           </button>
           {onDelete && (
-            <button className="btn btn-ghost" onClick={() => { onDelete(brew.id); onClose(); }}>
-              Delete
-            </button>
+            isSplit && confirmingDelete ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ fontSize: 13.5, color: "var(--ink-dim)", textAlign: "center", lineHeight: 1.4 }}>
+                  This was a split cup — deleting removes both ratings.
+                </div>
+                <button className="btn btn-soft" style={{ color: "var(--bad, #b65f4f)", borderColor: "var(--bad, #b65f4f)" }} onClick={() => { onDelete(brew.id); setConfirmingDelete(false); onClose(); }}>
+                  Delete both cups
+                </button>
+                <button className="btn btn-ghost" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+              </div>
+            ) : (
+              <button
+                className="btn btn-ghost"
+                onClick={() => {
+                  if (isSplit) { setConfirmingDelete(true); return; }
+                  onDelete(brew.id);
+                  onClose();
+                }}
+              >
+                Delete
+              </button>
+            )
           )}
         </div>
       </div>

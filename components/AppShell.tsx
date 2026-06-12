@@ -67,7 +67,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
 }
 
 function Shell() {
-  const { coffees, brews, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, lastError, clearError } = useApp();
+  const { coffees, brews, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, lastError, clearError, undoState } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -179,10 +179,35 @@ function Shell() {
 
       <TabBar active={tab} onChange={gotoTab} pendingCount={pendingCount} />
 
-      {lastError && (
+      {(lastError || undoState) && (
         <div style={{
           position: "absolute", bottom: "calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 8px)",
           left: 16, right: 16, zIndex: 50,
+          display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          {undoState && (
+            <div style={{
+              background: "var(--surface-2)", border: "1px solid var(--line)",
+              color: "var(--ink)", borderRadius: 12, padding: "11px 14px",
+              fontSize: 13, fontWeight: 500, lineHeight: 1.4,
+              display: "flex", alignItems: "center", gap: 10,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+            }}>
+              <span style={{ flex: 1 }}>{undoState.message}</span>
+              <button
+                onClick={undoState.undo}
+                style={{
+                  background: "var(--accent-soft)", border: "none", cursor: "pointer", color: "var(--accent)",
+                  borderRadius: 8, padding: "4px 12px", fontSize: 12.5, fontWeight: 700, flexShrink: 0,
+                  fontFamily: "var(--font-ui)",
+                }}
+              >
+                Undo
+              </button>
+            </div>
+          )}
+          {lastError && (
+        <div style={{
           background: "color-mix(in srgb, var(--bad, #b65f4f) 92%, transparent)",
           color: "#fff", borderRadius: 12, padding: "11px 14px",
           fontSize: 13, fontWeight: 500, lineHeight: 1.4,
@@ -204,6 +229,8 @@ function Shell() {
           <button onClick={clearError} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", lineHeight: 0, flexShrink: 0, marginTop: 1 }}>
             <Icon name="close" size={15} stroke={2} />
           </button>
+        </div>
+          )}
         </div>
       )}
 
