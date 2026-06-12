@@ -26,7 +26,9 @@ export async function complete(key: string, provider: Provider, req: LLMRequest)
 
 async function completeOpenAI(apiKey: string, req: LLMRequest): Promise<string> {
   const OpenAI = (await import("openai")).default;
-  const client = new OpenAI({ apiKey });
+  // Bounded: a hung provider request must not pin the route for the platform's
+  // full function timeout — fail in 30s so cache fallbacks can kick in.
+  const client = new OpenAI({ apiKey, timeout: 30_000, maxRetries: 1 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userContent: any[] = [];
@@ -52,7 +54,8 @@ async function completeOpenAI(apiKey: string, req: LLMRequest): Promise<string> 
 
 async function completeAnthropic(apiKey: string, req: LLMRequest): Promise<string> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey });
+  // Bounded: see completeOpenAI — 30s timeout, single retry.
+  const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userContent: any[] = [];

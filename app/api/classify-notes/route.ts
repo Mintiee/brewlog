@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { notes: rawNotes } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
+  }
+  const { notes: rawNotes } = body;
   if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
     return NextResponse.json({ map: {} });
   }
@@ -66,7 +70,10 @@ Return ONLY minified JSON mapping each input note (verbatim, lowercase) to its c
     if (Object.keys(map).length) {
       const service = createServiceClient();
       const rows = Object.entries(map).map(([note, family]) => ({ note, family }));
-      await service.from("learned_notes").upsert(rows, { onConflict: "note" });
+      const { error } = await service.from("learned_notes").upsert(rows, { onConflict: "note" });
+      // Classification still succeeded for this client — log so a broken global
+      // cache (every session re-classifying the same notes) is diagnosable.
+      if (error) console.error("/api/classify-notes learned_notes upsert failed:", error);
     }
 
     return NextResponse.json({ map });

@@ -37,7 +37,7 @@ export function ProcessPicker({ value, onChange }: ProcessPickerProps) {
           style={{
             width: "100%", marginTop: 8, padding: "11px 14px", borderRadius: 13,
             background: "var(--surface)", border: "1px solid var(--line)", color: "var(--ink)",
-            fontFamily: "var(--font-ui)", fontSize: 15, outline: "none", boxSizing: "border-box",
+            fontFamily: "var(--font-ui)", fontSize: 16, outline: "none", boxSizing: "border-box",
           }}
         />
       )}

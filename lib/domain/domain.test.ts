@@ -3,8 +3,9 @@ import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   gramsUsed, avgDailyGrams,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
+  roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating, bestBrew,
   effectiveDaysAgo, restDaysAt,
-  setRestWindow, setServingGrams, daysAgoFromStartedAt,
+  setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -291,5 +292,86 @@ describe("daysAgoFromStartedAt — calendar days in local time", () => {
   it("counts exactly N calendar days ago", () => {
     const d = localMidnight(); d.setDate(d.getDate() - 5); d.setHours(14, 0, 0, 0);
     expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(5);
+  });
+});
+
+describe("todayISO / daysAgoISO", () => {
+  it("todayISO matches the device-local date", () => {
+    const d = new Date();
+    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    expect(todayISO()).toBe(expected);
+  });
+
+  it("daysAgoISO(0) equals todayISO", () => {
+    expect(daysAgoISO(0)).toBe(todayISO());
+  });
+
+  it("daysAgoISO counts back local calendar days", () => {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 10);
+    expect(daysAgoISO(10)).toBe(localIso(d));
+  });
+});
+
+describe("roaster dedup helpers", () => {
+  const shelf = [
+    makeCoffee({ id: "r1", roaster: "Five Senses Coffee" }),
+    makeCoffee({ id: "r2", roaster: "Five Senses Coffee" }),
+    makeCoffee({ id: "r3", roaster: "five senses " }),
+    makeCoffee({ id: "r4", roaster: "Market Lane" }),
+  ];
+
+  it("roasterKey ignores case, whitespace and trailing Coffee/Roasters words", () => {
+    expect(roasterKey("Five Senses Coffee")).toBe("five senses");
+    expect(roasterKey("  five   senses ")).toBe("five senses");
+    expect(roasterKey("Proud Mary Roasters")).toBe("proud mary");
+    expect(roasterKey("ONA Coffee Co.")).toBe("ona");
+  });
+
+  it("distinctRoasters collapses variants to the most-used spelling", () => {
+    const distinct = distinctRoasters(shelf);
+    expect(distinct).toContain("Five Senses Coffee");
+    expect(distinct).toContain("Market Lane");
+    expect(distinct).toHaveLength(2);
+  });
+
+  it("canonicalRoaster resolves a variant to the canonical spelling", () => {
+    expect(canonicalRoaster("five senses", shelf)).toBe("Five Senses Coffee");
+    expect(canonicalRoaster("FIVE SENSES ROASTERS", shelf)).toBe("Five Senses Coffee");
+    expect(canonicalRoaster("Brand New Roaster", shelf)).toBe("Brand New Roaster");
+    expect(canonicalRoaster("  ", shelf)).toBe("");
+  });
+
+  it("roasterSuggestions surfaces partial matches but not exact ones", () => {
+    expect(roasterSuggestions("five", shelf)).toEqual(["Five Senses Coffee"]);
+    expect(roasterSuggestions("Five Senses Coffee", shelf)).toEqual([]);
+    expect(roasterSuggestions("zzz", shelf)).toEqual([]);
+  });
+});
+
+describe("bagAvgRating / bestBrew", () => {
+  const brews = [
+    makeBrew({ id: "a", coffee_id: "c9", stars: 4, started_at: "1000" }),
+    makeBrew({ id: "b", coffee_id: "c9", stars: 3, stars2: 5, started_at: "2000" }), // brewRating 4
+    makeBrew({ id: "c", coffee_id: "c9", stars: null, pending: true, rated_at: null, started_at: "3000" }),
+    makeBrew({ id: "d", coffee_id: "other", stars: 1, started_at: "4000" }),
+    makeBrew({ id: "s1", coffee_id: "c9", stars: 5, session_id: "s", started_at: "5000" }),
+    makeBrew({ id: "s2", coffee_id: "c9", stars: 2, session_id: "s", started_at: "5000" }),
+  ];
+
+  it("averages rated brews only, counting split halves separately", () => {
+    // (4 + 4 + 5 + 2) / 4 = 3.75
+    expect(bagAvgRating("c9", brews)).toBeCloseTo(3.75);
+  });
+
+  it("returns null with no rated brews", () => {
+    expect(bagAvgRating("none", brews)).toBeNull();
+  });
+
+  it("bestBrew picks the highest rating, most recent on ties", () => {
+    expect(bestBrew("c9", brews)!.id).toBe("s1");
+    // ties: a (4, t=1000) vs b (4, t=2000) — drop the 5-star rows
+    const tied = brews.filter((b) => !b.session_id);
+    expect(bestBrew("c9", tied)!.id).toBe("b");
+    expect(bestBrew("none", brews)).toBeNull();
   });
 });

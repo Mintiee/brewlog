@@ -1,5 +1,7 @@
 "use client";
+import { Fragment } from "react";
 import { activeGrams, coffeeStatus, cupsLeft, freshColor } from "@/lib/domain";
+import { noteColor } from "@/lib/flavour";
 import { OriginTile } from "@/components/ui/OriginTile";
 import type { Coffee, Brew } from "@/lib/types";
 
@@ -29,6 +31,16 @@ export function ShelfRow({ coffee, brews, onOpen }: ShelfRowProps) {
           <span className="dot" style={{ width: 5, height: 5, background: freshColor(st.state) }} />
           <span>{st.label}</span>
         </div>
+        {coffee.notes.length > 0 && (
+          <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {coffee.notes.map((n, i) => (
+              <Fragment key={n}>
+                {i > 0 && <span style={{ color: "var(--ink-faint)" }}> · </span>}
+                <span style={{ color: noteColor(n) }}>{n}</span>
+              </Fragment>
+            ))}
+          </div>
+        )}
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <div className="num" style={{ fontSize: 20, fontWeight: 600, lineHeight: 1, color: low ? "var(--accent)" : "var(--ink)" }}>

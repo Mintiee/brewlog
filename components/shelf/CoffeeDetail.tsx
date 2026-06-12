@@ -2,15 +2,20 @@
 import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
+  todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions, bagAvgRating, bestBrew, brewRating,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
+import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
+import { SheetHeader } from "@/components/ui/SheetHeader";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Stepper } from "@/components/ui/Stepper";
 import { ProcessPicker } from "./ProcessPicker";
 import { FreshBar } from "./FreshBar";
 import { Field } from "./Field";
+import { SuggestField } from "@/components/ui/SuggestField";
 import type { Coffee, Brew } from "@/lib/types";
 
 interface EditForm {
@@ -28,42 +33,41 @@ interface EditForm {
 interface CoffeeDetailProps {
   coffee: Coffee | null;
   brews: Brew[];
+  /** Full shelf — used to suggest and canonicalise roaster names while editing. */
+  coffees?: Coffee[];
   onClose: () => void;
   onBrew: (c: Coffee) => void;
   onUpdate: (c: Coffee) => void;
 }
 
-export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: CoffeeDetailProps) {
+export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onUpdate }: CoffeeDetailProps) {
   const [freezing, setFreezing] = useState(false);
   const [thawing, setThawing] = useState(false);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
   const [amt, setAmt] = useState(0);
   const [thawAmt, setThawAmt] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [ef, setEf] = useState<EditForm | null>(null);
+  const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
 
   useEffect(() => {
     setFreezing(false);
     setThawing(false);
     setConfirmingFinish(false);
-    setEditing(false);
+    cancelEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset transient sheet state when the coffee changes
   }, [coffee?.id]);
 
   if (!coffee) return null;
 
   const st = coffeeStatus(coffee, brews);
   const coffeeBrews = brews.filter((b) => b.coffee_id === coffee.id);
+  const avgRating = bagAvgRating(coffee.id, brews);
+  const best = bestBrew(coffee.id, brews);
   const remaining = remainingGrams(coffee, brews);
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
   const statusLabel = st.state === "peak" ? "In peak" : st.state === "resting" ? "Resting" : st.state === "frozen" ? "Frozen" : "Past peak";
   const thawFmt = (v: number) => (v % 1 === 0 ? String(v) : v.toFixed(1));
 
-  // Local YYYY-MM-DD (avoid UTC drift), matching how roasted_at is stored.
-  const isoToday = () => {
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
   // Coming out of the freezer. Defaults to all (set when the slider opens); a
   // partial thaw leaves some frozen, so aging stays paused until the last gram is
   // out (then thawed_at resumes aging, matching the single freeze-cycle model).
@@ -71,7 +75,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   const confirmThaw = () => {
     const out = Math.min(Math.max(0, thawAmt), frozen);
     const left = frozen - out;
-    if (left <= 0) onUpdate({ ...coffee, frozen_grams: 0, thawed_at: isoToday() });
+    if (left <= 0) onUpdate({ ...coffee, frozen_grams: 0, thawed_at: todayISO() });
     else onUpdate({ ...coffee, frozen_grams: left });
     onClose();
   };
@@ -82,9 +86,9 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   };
   // Going into the freezer pauses aging. Keep the original freeze date if already
   // frozen; clear any prior thaw (this is the active freeze cycle).
-  const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || isoToday(), thawed_at: null }); onClose(); };
+  const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || todayISO(), thawed_at: null }); onClose(); };
   const startEdit = () => {
-    setEf({
+    beginEdit({
       roaster: coffee.roaster,
       name: coffee.name,
       origin: coffee.origin,
@@ -95,22 +99,20 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       remaining,
       roastDaysAgo: st.day,
     });
-    setEditing(true);
   };
   const saveEdit = () => {
     if (!ef) return;
     const notes = ef.notes ? ef.notes.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const roastedAt = new Date(today.getTime() - ef.roastDaysAgo * 86400000);
-    const roasted_at = roastedAt.toISOString().slice(0, 10);
+    // Local date, not toISOString() — UTC formatting shifted the roast date back
+    // a day in ahead-of-UTC timezones.
+    const roasted_at = daysAgoISO(ef.roastDaysAgo);
     // "Remaining" is what's left now; the stored bag size (grams) is remaining +
     // what's already been brewed, so remainingGrams() reads back the edited value.
     const newRemaining = Number.isFinite(Number(ef.remaining)) ? Number(ef.remaining) : remaining;
     const grams = newRemaining + gramsUsed(coffee.id, brews);
     onUpdate({
       ...coffee,
-      roaster: ef.roaster || "Unknown",
+      roaster: canonicalRoaster(ef.roaster, coffees) || "Unknown",
       name: ef.name || "Untitled",
       origin: ef.origin,
       region: ef.region || ef.origin,
@@ -122,25 +124,24 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       cc: originCode(ef.origin),
       color: coffeeColor(notes),
     });
-    setEditing(false);
+    cancelEdit();
     // Empty bag → almost certainly finished; offer to archive right away
     // (reuses the detail view's archive confirmation).
     if (newRemaining === 0) setConfirmingFinish(true);
   };
-  const setE = (k: keyof EditForm) => (v: string | number) =>
-    setEf((f) => f ? { ...f, [k]: v } : f);
 
   if (editing && ef) {
     return (
       <Sheet open={true} onClose={onClose}>
         <div className="screen-pad" style={{ paddingTop: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-            <h2 style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-0.01em" }}>Edit details</h2>
-            <button onClick={() => setEditing(false)} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 34, height: 34, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="close" size={18} stroke={1.9} />
-            </button>
-          </div>
-          <Field label="Roaster" value={ef.roaster} onChange={setE("roaster")} placeholder="Roaster" />
+          <SheetHeader title="Edit details" onClose={cancelEdit} />
+          <SuggestField
+            label="Roaster"
+            value={ef.roaster}
+            onChange={setE("roaster")}
+            placeholder="Roaster"
+            suggestions={roasterSuggestions(ef.roaster, coffees)}
+          />
           <Field label="Coffee" value={ef.name} onChange={setE("name")} placeholder="Name / lot" />
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}><Field label="Origin" value={ef.origin} onChange={setE("origin")} placeholder="Country" /></div>
@@ -177,12 +178,8 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>{coffee.origin} · {coffee.region}</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button onClick={startEdit} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="edit" size={17} stroke={1.7} />
-            </button>
-            <button onClick={onClose} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="close" size={18} stroke={1.9} />
-            </button>
+            <IconButton icon="edit" label="Edit details" onClick={startEdit} size={36} iconSize={17} stroke={1.7} />
+            <IconButton icon="close" label="Close" onClick={onClose} size={36} />
           </div>
         </div>
 
@@ -238,7 +235,29 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, color: "var(--ink-dim)", fontSize: 13 }}>
           <Icon name="log" size={16} stroke={1.7} /> {coffeeBrews.length} brews logged
+          {avgRating != null && (
+            <span className="mono" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 600 }}>
+              · <Icon name="star" size={13} stroke={1.8} /> {avgRating.toFixed(1)}
+            </span>
+          )}
         </div>
+
+        {best && (
+          <div className="card" style={{ marginTop: 12, padding: "12px 16px" }}>
+            <div className="label" style={{ marginBottom: 5, display: "flex", alignItems: "center", gap: 6 }}>
+              <Icon name="star" size={13} stroke={1.8} /> Best brew · ★ {brewRating(best) % 1 === 0 ? brewRating(best) : brewRating(best).toFixed(1)}
+            </div>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.5 }}>
+              {[
+                `${best.dose}g`,
+                `${best.water}mL`,
+                best.temp ? `${best.temp}°` : null,
+                best.grind != null ? `grind ${best.grind}` : null,
+                best.rest_days != null ? `day ${best.rest_days}` : null,
+              ].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+        )}
 
         {coffee.archived ? (
           <button className="btn btn-accent" style={{ marginTop: 18 }} onClick={() => setArchived(false)}>

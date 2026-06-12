@@ -132,11 +132,90 @@ export function cupsLeft(grams: number): number {
   return grams / servingGrams;
 }
 
+// ---------- Roasters ----------
+
+/** Normalised matching key for a roaster name: case/whitespace-insensitive,
+ *  ignoring common trailing words ("Coffee", "Roasters", …) so "five senses"
+ *  and "Five Senses Coffee" are recognised as the same roaster. */
+export function roasterKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s+(coffee( co\.?| company)?|roasters?|roastery|roasting( co\.?| company)?)$/, "")
+    .trim();
+}
+
+/** Distinct roaster names across the shelf — one canonical spelling per
+ *  roasterKey (the most-used original spelling; ties go to the most recent,
+ *  i.e. first in the coffees array, which is sorted newest-first). */
+export function distinctRoasters(coffees: Coffee[]): string[] {
+  const byKey = new Map<string, Map<string, number>>();
+  coffees.forEach((c) => {
+    const raw = (c.roaster || "").replace(/\s+/g, " ").trim();
+    const key = roasterKey(raw);
+    if (!key) return;
+    const spellings = byKey.get(key) ?? new Map<string, number>();
+    spellings.set(raw, (spellings.get(raw) ?? 0) + 1);
+    byKey.set(key, spellings);
+  });
+  return [...byKey.values()].map((spellings) => {
+    let best = "", n = 0;
+    spellings.forEach((count, spelling) => { if (count > n) { best = spelling; n = count; } });
+    return best;
+  });
+}
+
+/** Resolve a typed roaster name to the shelf's canonical spelling when it
+ *  matches an existing roaster (case/suffix-insensitively); otherwise return
+ *  the trimmed input as-is. Keeps near-duplicate roasters from accumulating. */
+export function canonicalRoaster(input: string, coffees: Coffee[]): string {
+  const trimmed = (input || "").replace(/\s+/g, " ").trim();
+  const key = roasterKey(trimmed);
+  if (!key) return trimmed;
+  return distinctRoasters(coffees).find((r) => roasterKey(r) === key) ?? trimmed;
+}
+
+/** Existing roasters worth suggesting while typing: prefix/substring matches on
+ *  the normalised key, excluding an already-exact match. */
+export function roasterSuggestions(input: string, coffees: Coffee[], limit = 3): string[] {
+  const key = roasterKey(input);
+  if (!key) return [];
+  return distinctRoasters(coffees)
+    .filter((r) => {
+      const rk = roasterKey(r);
+      return rk.includes(key) && !(rk === key && r === input.replace(/\s+/g, " ").trim());
+    })
+    .slice(0, limit);
+}
+
 // ---------- Brew analytics ----------
 
 export function brewRating(b: Brew): number {
   if (b.stars2 != null && b.stars != null) return (b.stars + b.stars2) / 2;
   return b.stars ?? 0;
+}
+
+/** Average star rating across a coffee's rated brews (split halves count
+ *  separately — they're independent ratings). null when nothing is rated. */
+export function bagAvgRating(coffeeId: string, brews: Brew[]): number | null {
+  const ratings = brews
+    .filter((b) => b.coffee_id === coffeeId && !b.pending && b.stars != null)
+    .map(brewRating);
+  if (!ratings.length) return null;
+  return ratings.reduce((s, r) => s + r, 0) / ratings.length;
+}
+
+/** The highest-rated brew of a coffee (ties: most recent). null when unrated. */
+export function bestBrew(coffeeId: string, brews: Brew[]): Brew | null {
+  const rated = brews.filter((b) => b.coffee_id === coffeeId && !b.pending && b.stars != null);
+  if (!rated.length) return null;
+  return rated.reduce((best, b) => {
+    const d = brewRating(b) - brewRating(best);
+    if (d > 0) return b;
+    if (d === 0 && parseTs(b.started_at) > parseTs(best.started_at)) return b;
+    return best;
+  });
 }
 
 export function lastBrewOf(coffeeId: string, brews: Brew[]): Brew | null {
@@ -210,6 +289,19 @@ export function roastDateText(iso: string): string {
 export function localISODate(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Today as local YYYY-MM-DD (not UTC) — matches the device's "today". */
+export function todayISO(): string {
+  return localISODate(Date.now());
+}
+
+/** N days ago as local YYYY-MM-DD. */
+export function daysAgoISO(n: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  return localISODate(d.getTime());
 }
 
 // Absolute journal date e.g. "Fri 6 Jun" (weekday + day + short month), adding

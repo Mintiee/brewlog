@@ -34,6 +34,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // App-like PWA: lock pinch-zoom and the iOS input-focus auto-zoom, which left
+  // the page stuck zoomed-in with weird scrolling after orientation changes.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#0c0b0a",
 };

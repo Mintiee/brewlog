@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
+import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
+import { SheetHeader } from "@/components/ui/SheetHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { Segmented } from "@/components/ui/Segmented";
 import { Stepper } from "@/components/ui/Stepper";
@@ -32,12 +35,14 @@ interface BrewDetailProps {
 }
 
 export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, onDelete, onRate }: BrewDetailProps) {
-  const [editing, setEditing] = useState(false);
-  const [ef, setEf] = useState<EditForm | null>(null);
+  const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
   // Captured when editing starts (avoids an impure Date.now() in render); caps
   // the date picker so brews can't be dated into the future.
   const [todayISO, setTodayISO] = useState("");
   const [activeTaster, setActiveTaster] = useState(0);
+  // Split deletes remove both tasters' ratings, so they confirm inline; solo
+  // deletes go straight through (the post-delete Undo toast covers mistakes).
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (!brew) return null;
 
@@ -62,7 +67,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
 
   const startEdit = () => {
     setTodayISO(localISODate(Date.now()));
-    setEf({
+    beginEdit({
       date: localISODate(startMs),
       dose: brew.dose,
       water: brew.water,
@@ -73,7 +78,6 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
       stars: brew.stars ?? 3,
       note: brew.note || "",
     });
-    setEditing(true);
   };
 
   const saveEdit = () => {
@@ -96,29 +100,15 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
         : null,
     };
     onUpdate(brew.id, patch);
-    setEditing(false);
+    cancelEdit();
     onClose();
-  };
-
-  const setE = (k: keyof EditForm) => (v: string | number) =>
-    setEf((f) => f ? { ...f, [k]: v } : f);
-
-  const btnClose: React.CSSProperties = {
-    background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%",
-    width: 34, height: 34, color: "var(--ink-dim)", cursor: "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center",
   };
 
   if (editing && ef) {
     return (
       <Sheet open={true} onClose={onClose}>
         <div className="screen-pad" style={{ paddingTop: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-            <h2 style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-0.01em" }}>Edit brew</h2>
-            <button onClick={() => setEditing(false)} style={btnClose}>
-              <Icon name="close" size={18} stroke={1.9} />
-            </button>
-          </div>
+          <SheetHeader title="Edit brew" onClose={cancelEdit} />
 
           <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 0", minWidth: 0 }}>
@@ -133,7 +123,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
                 onChange={(e) => setE("date")(e.target.value)}
                 style={{
                   background: "var(--surface-3)", border: "1px solid var(--line)", borderRadius: 10,
-                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15, fontWeight: 600,
+                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 600,
                   padding: "7px 10px", outline: "none", colorScheme: "dark", flexShrink: 0,
                 }}
               />
@@ -165,7 +155,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
               onChange={setE("stars")} />
           </div>
 
-          <Field label="Notes" value={ef.note} onChange={setE("note") as (v: string) => void} placeholder="Tasting notes…" />
+          <Field label="Notes" value={ef.note} onChange={setE("note")} placeholder="Tasting notes…" />
 
           <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveEdit}>
             <Icon name="check" size={20} stroke={2} /> Save changes
@@ -276,12 +266,8 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button onClick={startEdit} style={btnClose}>
-              <Icon name="edit" size={17} stroke={1.7} />
-            </button>
-            <button onClick={onClose} style={btnClose}>
-              <Icon name="close" size={18} stroke={1.9} />
-            </button>
+            <IconButton icon="edit" label="Edit brew" onClick={startEdit} iconSize={17} stroke={1.7} />
+            <IconButton icon="close" label="Close" onClick={onClose} />
           </div>
         </div>
 
@@ -334,9 +320,28 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
             <Icon name="edit" size={19} stroke={1.7} /> Edit this brew
           </button>
           {onDelete && (
-            <button className="btn btn-ghost" onClick={() => { onDelete(brew.id); onClose(); }}>
-              Delete
-            </button>
+            isSplit && confirmingDelete ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ fontSize: 13.5, color: "var(--ink-dim)", textAlign: "center", lineHeight: 1.4 }}>
+                  This was a split cup — deleting removes both ratings.
+                </div>
+                <button className="btn btn-soft" style={{ color: "var(--bad, #b65f4f)", borderColor: "var(--bad, #b65f4f)" }} onClick={() => { onDelete(brew.id); setConfirmingDelete(false); onClose(); }}>
+                  Delete both cups
+                </button>
+                <button className="btn btn-ghost" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+              </div>
+            ) : (
+              <button
+                className="btn btn-ghost"
+                onClick={() => {
+                  if (isSplit) { setConfirmingDelete(true); return; }
+                  onDelete(brew.id);
+                  onClose();
+                }}
+              >
+                Delete
+              </button>
+            )
           )}
         </div>
       </div>

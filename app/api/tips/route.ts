@@ -73,7 +73,11 @@ export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { stats, brews, tzOffsetMin } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
+  }
+  const { stats, brews, tzOffsetMin } = body;
   if (!Array.isArray(brews) || brews.length < MIN_BREWS) {
     // Not enough signal — client shows heuristic tips instead.
     return new NextResponse(null, { status: 204 });
