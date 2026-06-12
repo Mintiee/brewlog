@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { SEED_CONFIG } from "@/lib/domain/seed";
 import { createClient } from "@/lib/supabase/browser";
@@ -8,7 +8,8 @@ import {
   insertBrew, updateBrew as dbUpdateBrew, deleteBrew, upsertCoffee, upsertConfig,
   fetchAiKeyStatus, fetchLearnedNotes,
 } from "@/lib/db";
-import { setLearnedNotes } from "@/lib/flavour";
+import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
+import { classifyUnknownNotes } from "@/lib/flavour/classify";
 import { setRestWindow, setServingGrams, setPeakWindow, activeGrams } from "@/lib/domain";
 
 /** Push household-wide settings into the domain module's freshness/serving knobs. */
@@ -158,18 +159,40 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     };
   }, [authed, refresh]);
 
+  // Send lexicon-missed tasting notes to the LLM (once each — classify.ts dedupes),
+  // then recolour the coffees state so chips and tiles repaint with the learned
+  // families. `coffee.color` is materialised per object, hence the remap.
+  const learnNotes = useCallback(async (notes: string[]) => {
+    if (!llmEnabled) return;
+    const map = await classifyUnknownNotes(notes);
+    if (!map) return;
+    setCoffees((prev) => prev.map((c) => ({ ...c, color: coffeeColor(c.notes) })));
+  }, [llmEnabled]);
+
+  // One-time background sweep: classify unknown notes already on the shelf so
+  // existing grey chips heal without an edit. Runs once the data + AI key state
+  // have settled (learned notes are loaded before `ready` flips on both paths).
+  const sweptRef = useRef(false);
+  useEffect(() => {
+    if (sweptRef.current || !ready || !authed || !llmEnabled) return;
+    sweptRef.current = true;
+    void learnNotes(coffees.flatMap((c) => c.notes ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once-guarded; coffees read at sweep time only
+  }, [ready, authed, llmEnabled, learnNotes]);
+
   // ---- Optimistic mutations (update local state immediately; sync to DB if authed) ----
 
   const addCoffee = useCallback((c: Coffee) => {
     // Ensure household_id is always set — upsertCoffee will forward it to coffeeToRow.
     const coffee = { ...c, household_id: profile.household_id };
     setCoffees((prev) => [coffee, ...prev]);
+    void learnNotes(coffee.notes ?? []);
     if (authed) upsertCoffee(coffee).catch((err) => {
       console.error("[addCoffee] upsert failed:", err);
       const detail = err?.message ?? err?.code ?? String(err);
       setLastError(`Coffee save failed: ${detail}`);
     });
-  }, [authed, profile.household_id]);
+  }, [authed, profile.household_id, learnNotes]);
 
   const updateCoffee = useCallback((c: Coffee) => {
     const coffee = { ...c, household_id: c.household_id || profile.household_id };
@@ -179,6 +202,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       prev = prev_.find((x) => x.id === c.id);
       return prev_.map((x) => x.id === c.id ? coffee : x);
     });
+    void learnNotes(coffee.notes ?? []);
     if (authed) upsertCoffee(coffee).catch((err) => {
       console.error("[updateCoffee] upsert failed:", err);
       const detail = err?.message ?? err?.code ?? String(err);
@@ -186,7 +210,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       // Roll back the optimistic update so the stale value isn't shown as saved.
       if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev! : x));
     });
-  }, [authed, profile.household_id]);
+  }, [authed, profile.household_id, learnNotes]);
 
   const startBrew = useCallback((b: Brew) => {
     setBrews((prev) => [b, ...prev]);

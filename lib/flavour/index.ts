@@ -1,4 +1,4 @@
-// Flavour-note categorisation — 3-tier: lexicon → learned cache → "other"
+// Flavour-note categorisation — 3-tier: learned cache (LLM-validated) → lexicon → "other"
 
 import type { CSSProperties } from "react";
 
@@ -127,8 +127,11 @@ export function setLearnedNotes(map: Record<string, FlavourFamily>) {
 
 export function noteIcon(note: string): FlavourFamily {
   const n = (note || "").toLowerCase().trim();
-  for (const [re, fam] of NOTE_ICONS) if (re.test(n)) return fam;
+  // Learned (LLM-validated, exact-match) entries outrank the regex lexicon —
+  // a substring regex can misfire ("limestone" → \blime) and the learned map
+  // is the correction channel.
   if (learnedNotes[n]) return learnedNotes[n];
+  for (const [re, fam] of NOTE_ICONS) if (re.test(n)) return fam;
   return "drop";
 }
 

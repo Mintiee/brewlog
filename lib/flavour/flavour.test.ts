@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { noteIcon, coffeeColor, NOTE_COLORS, processCategory } from "./index";
+import { noteIcon, coffeeColor, NOTE_COLORS, processCategory, setLearnedNotes, isNoteKnown, unknownNotes } from "./index";
 
 // ---- Lexicon spot-checks ----
 
@@ -73,6 +73,36 @@ describe("noteIcon — acidity / body / texture descriptors", () => {
   // genuinely family-less words remain unknown (handed to the LLM / default)
   it("complex → drop", () => expect(noteIcon("complex")).toBe("drop"));
   it("balanced → drop", () => expect(noteIcon("balanced")).toBe("drop"));
+});
+
+// ---- Learned cache (LLM-validated) — outranks the regex lexicon ----
+// NOTE: learnedNotes is module-level state shared across this file; each test
+// below uses note strings no other test touches to avoid cross-test bleed.
+
+describe("learned notes — LLM-validated entries", () => {
+  it("learned entry beats a regex misfire (limestone would hit \\blime → citrus)", () => {
+    expect(noteIcon("limestone")).toBe("citrus"); // regex misfire before learning
+    setLearnedNotes({ limestone: "leaf" });
+    expect(noteIcon("limestone")).toBe("leaf");
+  });
+
+  it("learned entry colours a lexicon miss", () => {
+    expect(noteIcon("tamarillo")).toBe("drop");
+    setLearnedNotes({ tamarillo: "redfruit" });
+    expect(noteIcon("tamarillo")).toBe("redfruit");
+  });
+
+  it("a learned 'drop' counts as known (never re-asked)", () => {
+    expect(isNoteKnown("quixotic")).toBe(false);
+    setLearnedNotes({ quixotic: "drop" });
+    expect(isNoteKnown("quixotic")).toBe(true);
+    expect(noteIcon("quixotic")).toBe("drop");
+  });
+
+  it("unknownNotes returns only lexicon+cache misses, deduped + normalised", () => {
+    expect(unknownNotes(["Tayberry", "cream soda", "acidic", "lemon", "tayberry "]))
+      .toEqual(["tayberry", "cream soda", "acidic"]);
+  });
 });
 
 // ---- processCategory ----

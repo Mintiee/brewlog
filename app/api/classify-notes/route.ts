@@ -30,18 +30,25 @@ export async function POST(req: NextRequest) {
   const hk = await getHouseholdKey();
   if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
 
-  const { notes } = await req.json();
-  if (!Array.isArray(notes) || notes.length === 0) {
+  const { notes: rawNotes } = await req.json();
+  if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
     return NextResponse.json({ map: {} });
   }
+  // Normalise + dedupe + cap so a big shelf sweep can't blow the token budget.
+  const notes = [...new Set(rawNotes.map((n) => String(n).toLowerCase().trim()).filter(Boolean))].slice(0, 50);
+  if (notes.length === 0) return NextResponse.json({ map: {} });
 
   try {
     const raw = await complete(hk.key, hk.provider, {
       system: `You categorise coffee tasting notes onto the SCA flavour wheel.
 For each note pick exactly one category from: ${FAMILIES}.
+Notes that describe acidity, brightness or effervescence rather than a flavour (e.g. acidic, sparkling, lively, tangy) → citrus.
+Creamy / dairy / buttery texture notes → nutty. Sweetness or silky / syrupy / round body notes → sweet.
+Drinks and confections map to their closest flavour (e.g. cream soda → sweet, cola → sweet, earl grey → citrus).
+Use "other" ONLY for notes with no flavour or mouthfeel content at all (e.g. complex, balanced, delicious).
 Return ONLY minified JSON mapping each input note (verbatim, lowercase) to its category.`,
       prompt: `NOTES: ${JSON.stringify(notes)}`,
-      maxTokens: 256,
+      maxTokens: 512,
     });
 
     const match = raw.match(/\{[\s\S]*\}/);
