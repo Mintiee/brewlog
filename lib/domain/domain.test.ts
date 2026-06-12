@@ -4,7 +4,7 @@ import {
   gramsUsed, avgDailyGrams,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
   effectiveDaysAgo, restDaysAt,
-  setRestWindow, setServingGrams, daysAgoFromStartedAt,
+  setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -291,5 +291,22 @@ describe("daysAgoFromStartedAt — calendar days in local time", () => {
   it("counts exactly N calendar days ago", () => {
     const d = localMidnight(); d.setDate(d.getDate() - 5); d.setHours(14, 0, 0, 0);
     expect(daysAgoFromStartedAt(String(d.getTime()))).toBe(5);
+  });
+});
+
+describe("todayISO / daysAgoISO", () => {
+  it("todayISO matches the device-local date", () => {
+    const d = new Date();
+    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    expect(todayISO()).toBe(expected);
+  });
+
+  it("daysAgoISO(0) equals todayISO", () => {
+    expect(daysAgoISO(0)).toBe(todayISO());
+  });
+
+  it("daysAgoISO counts back local calendar days", () => {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 10);
+    expect(daysAgoISO(10)).toBe(localIso(d));
   });
 });

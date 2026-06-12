@@ -1,97 +1,9 @@
 "use client";
 import { useState } from "react";
-import { Icon, Stepper, Sheet } from "@/components/ui";
-import type { Config, Profile, Brewer } from "@/lib/types";
-
-/* ---- Local helpers ---- */
-
-function SSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 22 }}>
-      <div className="label" style={{ marginBottom: 11 }}>{label}</div>
-      {children}
-    </div>
-  );
-}
-
-function SText({
-  value,
-  onChange,
-  placeholder,
-  mono,
-  type,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  mono?: boolean;
-  type?: string;
-}) {
-  return (
-    <input
-      value={value}
-      type={type || "text"}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        width: "100%",
-        padding: "12px 14px",
-        borderRadius: 13,
-        background: "var(--surface)",
-        border: "1px solid var(--line)",
-        color: "var(--ink)",
-        outline: "none",
-        fontFamily: mono ? "var(--font-mono)" : "var(--font-ui)",
-        fontSize: 15,
-        boxSizing: "border-box",
-      }}
-    />
-  );
-}
-
-function SRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 0" }}>
-      <span style={{ fontSize: 15, fontWeight: 500 }}>{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function SToggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!on)}
-      style={{
-        width: 50,
-        height: 30,
-        borderRadius: 15,
-        border: "none",
-        cursor: "pointer",
-        position: "relative",
-        background: on ? "var(--accent)" : "var(--surface-3)",
-        transition: "background .18s ease",
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: on ? 23 : 3,
-          width: 24,
-          height: 24,
-          borderRadius: "50%",
-          background: "#fff",
-          transition: "left .18s ease",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-        }}
-      />
-    </button>
-  );
-}
-
-/* ---- Main component ---- */
+import { Icon, IconButton, Stepper } from "@/components/ui";
+import { SSection, SText, SRow, SToggle } from "./controls";
+import { AddBrewerSheet } from "./AddBrewerSheet";
+import type { Config, Profile } from "@/lib/types";
 
 interface SettingsProps {
   config: Config;
@@ -133,28 +45,7 @@ export function Settings({
   const removeBrewer = (i: number) =>
     config.brewers.length > 1 &&
     onConfig({ ...config, brewers: config.brewers.filter((_, j) => j !== i) });
-  // Add-brewer popup: captures the brewer's seed recipe once, at creation. After that,
-  // each brew remembers its own parameters, so the seed is never edited again.
-  const blankDraft = (): Brewer => ({
-    id: "", name: "", short: "", dose: 15, water: 240, ratio: 16, temp: 94, grind: 5, pours: 3, bypass: false,
-  });
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState<Brewer>(blankDraft);
-  const openAddBrewer = () => { setDraft(blankDraft()); setAdding(true); };
-  const setD = (patch: Partial<Brewer>) => setDraft((d) => ({ ...d, ...patch }));
-  const commitBrewer = () => {
-    const name = draft.name.trim() || "New brewer";
-    const short = draft.short.trim() || name.slice(0, 6);
-    const water = draft.water ?? Math.round(draft.dose * 16);
-    onConfig({
-      ...config,
-      brewers: [
-        ...config.brewers,
-        { ...draft, id: "b" + Date.now(), name, short, water, ratio: +(water / draft.dose).toFixed(2) },
-      ],
-    });
-    setAdding(false);
-  };
 
   const [newWater, setNewWater] = useState("");
   const [aiKey, setAiKey] = useState("");
@@ -169,25 +60,7 @@ export function Settings({
             <div className="label">your setup</div>
             <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 20 }}>Settings</h1>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Done"
-            style={{
-              background: "var(--surface-2)",
-              border: "1px solid var(--line)",
-              borderRadius: "50%",
-              width: 38,
-              height: 38,
-              color: "var(--ink-dim)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Icon name="close" size={18} stroke={1.9} />
-          </button>
+          <IconButton icon="close" label="Done" onClick={onClose} size={38} />
         </div>
 
         {/* ACCOUNT */}
@@ -321,6 +194,7 @@ export function Settings({
                 </div>
                 <button
                   onClick={() => removeBrewer(i)}
+                  aria-label={`Remove ${b.name || "brewer"}`}
                   style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", display: "flex", flexShrink: 0 }}
                 >
                   <Icon name="close" size={18} stroke={1.9} />
@@ -332,7 +206,7 @@ export function Settings({
               </div>
             </div>
           ))}
-          <button className="btn btn-soft" onClick={openAddBrewer}>
+          <button className="btn btn-soft" onClick={() => setAdding(true)}>
             <Icon name="plus" size={18} stroke={2} /> Add a brewer
           </button>
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
@@ -340,48 +214,12 @@ export function Settings({
             first time you brew on a new brewer — after that, your last brew carries over.
           </div>
 
-          <Sheet open={adding} onClose={() => setAdding(false)}>
-            <div className="screen-pad" style={{ paddingTop: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-                <h2 style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-0.01em" }}>Add a brewer</h2>
-                <button onClick={() => setAdding(false)} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 34, height: 34, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Icon name="close" size={18} stroke={1.9} />
-                </button>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-                <div style={{ flex: 2 }}>
-                  <SText value={draft.name} onChange={(v) => setD({ name: v })} placeholder="Name" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <SText value={draft.short} onChange={(v) => setD({ short: v })} placeholder="Short" />
-                </div>
-              </div>
-
-              <div className="label" style={{ marginBottom: 8 }}>Starting recipe</div>
-              <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
-                  <Stepper icon="scale" label="Dose" value={draft.dose} unit="g" step={0.5} min={8} max={40} onChange={(v) => setD({ dose: v })} />
-                  <Stepper icon="drop" label="Water" value={draft.water ?? 240} unit="g" step={1} min={50} max={1000} onChange={(v) => setD({ water: v })} />
-                  <Stepper icon="thermo" label="Temp" value={draft.temp} unit="°C" step={1} min={80} max={100} onChange={(v) => setD({ temp: v })} />
-                  <Stepper icon="grind" label="Grind"
-                    value={draft.grind} unit={config.grinder.unit}
-                    step={config.grinder.grind_step ?? 1} min={config.grinder.grind_min ?? 0} max={config.grinder.grind_max ?? 50}
-                    format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
-                    onChange={(v) => setD({ grind: v })} />
-                </div>
-              </div>
-
-              <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", marginBottom: 18 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-dim)" }}>Add water after brewing (bypass)</span>
-                <SToggle on={!!draft.bypass} onChange={(v) => setD({ bypass: v })} />
-              </div>
-
-              <button className="btn" onClick={commitBrewer} style={{ width: "100%", background: "var(--ink)", color: "var(--bg)", height: 52, borderRadius: 13 }}>
-                Add brewer
-              </button>
-            </div>
-          </Sheet>
+          <AddBrewerSheet
+            open={adding}
+            grinder={config.grinder}
+            onClose={() => setAdding(false)}
+            onAdd={(b) => onConfig({ ...config, brewers: [...config.brewers, b] })}
+          />
         </SSection>
 
         {/* FRESHNESS */}

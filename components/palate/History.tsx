@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
-import { Icon, Segmented } from "@/components/ui";
+import { Icon, Segmented, EmptyState } from "@/components/ui";
 import { StatsView } from "./StatsView";
 import { Journal } from "./Journal";
 import { BrewDetail } from "./BrewDetail";
@@ -45,15 +45,11 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
         <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 18 }}>Log</h1>
 
         {brews.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "50px 16px", color: "var(--ink-dim)" }}>
-            <div style={{ color: "var(--ink-ghost)", display: "flex", justifyContent: "center", marginBottom: 12 }}>
-              <Icon name="log" size={44} stroke={1.3} />
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>No brews yet</div>
-            <div style={{ fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
-              Log a few brews and your flavour patterns and tips will show up here.
-            </div>
-          </div>
+          <EmptyState
+            icon="log"
+            title="No brews yet"
+            body="Log a few brews and your flavour patterns and tips will show up here."
+          />
         ) : (
           <>
             <div style={{ marginBottom: 16 }}>

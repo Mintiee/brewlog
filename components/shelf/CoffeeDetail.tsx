@@ -2,9 +2,13 @@
 import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
+  todayISO, daysAgoISO,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
+import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
+import { SheetHeader } from "@/components/ui/SheetHeader";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Stepper } from "@/components/ui/Stepper";
@@ -39,14 +43,14 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   const [confirmingFinish, setConfirmingFinish] = useState(false);
   const [amt, setAmt] = useState(0);
   const [thawAmt, setThawAmt] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [ef, setEf] = useState<EditForm | null>(null);
+  const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
 
   useEffect(() => {
     setFreezing(false);
     setThawing(false);
     setConfirmingFinish(false);
-    setEditing(false);
+    cancelEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset transient sheet state when the coffee changes
   }, [coffee?.id]);
 
   if (!coffee) return null;
@@ -59,11 +63,6 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   const statusLabel = st.state === "peak" ? "In peak" : st.state === "resting" ? "Resting" : st.state === "frozen" ? "Frozen" : "Past peak";
   const thawFmt = (v: number) => (v % 1 === 0 ? String(v) : v.toFixed(1));
 
-  // Local YYYY-MM-DD (avoid UTC drift), matching how roasted_at is stored.
-  const isoToday = () => {
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
   // Coming out of the freezer. Defaults to all (set when the slider opens); a
   // partial thaw leaves some frozen, so aging stays paused until the last gram is
   // out (then thawed_at resumes aging, matching the single freeze-cycle model).
@@ -71,7 +70,7 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   const confirmThaw = () => {
     const out = Math.min(Math.max(0, thawAmt), frozen);
     const left = frozen - out;
-    if (left <= 0) onUpdate({ ...coffee, frozen_grams: 0, thawed_at: isoToday() });
+    if (left <= 0) onUpdate({ ...coffee, frozen_grams: 0, thawed_at: todayISO() });
     else onUpdate({ ...coffee, frozen_grams: left });
     onClose();
   };
@@ -82,9 +81,9 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
   };
   // Going into the freezer pauses aging. Keep the original freeze date if already
   // frozen; clear any prior thaw (this is the active freeze cycle).
-  const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || isoToday(), thawed_at: null }); onClose(); };
+  const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || todayISO(), thawed_at: null }); onClose(); };
   const startEdit = () => {
-    setEf({
+    beginEdit({
       roaster: coffee.roaster,
       name: coffee.name,
       origin: coffee.origin,
@@ -95,15 +94,13 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       remaining,
       roastDaysAgo: st.day,
     });
-    setEditing(true);
   };
   const saveEdit = () => {
     if (!ef) return;
     const notes = ef.notes ? ef.notes.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const roastedAt = new Date(today.getTime() - ef.roastDaysAgo * 86400000);
-    const roasted_at = roastedAt.toISOString().slice(0, 10);
+    // Local date, not toISOString() — UTC formatting shifted the roast date back
+    // a day in ahead-of-UTC timezones.
+    const roasted_at = daysAgoISO(ef.roastDaysAgo);
     // "Remaining" is what's left now; the stored bag size (grams) is remaining +
     // what's already been brewed, so remainingGrams() reads back the edited value.
     const newRemaining = Number.isFinite(Number(ef.remaining)) ? Number(ef.remaining) : remaining;
@@ -122,24 +119,17 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
       cc: originCode(ef.origin),
       color: coffeeColor(notes),
     });
-    setEditing(false);
+    cancelEdit();
     // Empty bag → almost certainly finished; offer to archive right away
     // (reuses the detail view's archive confirmation).
     if (newRemaining === 0) setConfirmingFinish(true);
   };
-  const setE = (k: keyof EditForm) => (v: string | number) =>
-    setEf((f) => f ? { ...f, [k]: v } : f);
 
   if (editing && ef) {
     return (
       <Sheet open={true} onClose={onClose}>
         <div className="screen-pad" style={{ paddingTop: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-            <h2 style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-0.01em" }}>Edit details</h2>
-            <button onClick={() => setEditing(false)} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 34, height: 34, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="close" size={18} stroke={1.9} />
-            </button>
-          </div>
+          <SheetHeader title="Edit details" onClose={cancelEdit} />
           <Field label="Roaster" value={ef.roaster} onChange={setE("roaster")} placeholder="Roaster" />
           <Field label="Coffee" value={ef.name} onChange={setE("name")} placeholder="Name / lot" />
           <div style={{ display: "flex", gap: 12 }}>
@@ -177,12 +167,8 @@ export function CoffeeDetail({ coffee, brews, onClose, onBrew, onUpdate }: Coffe
             <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>{coffee.origin} · {coffee.region}</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button onClick={startEdit} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="edit" size={17} stroke={1.7} />
-            </button>
-            <button onClick={onClose} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 36, height: 36, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="close" size={18} stroke={1.9} />
-            </button>
+            <IconButton icon="edit" label="Edit details" onClick={startEdit} size={36} iconSize={17} stroke={1.7} />
+            <IconButton icon="close" label="Close" onClick={onClose} size={36} />
           </div>
         </div>
 

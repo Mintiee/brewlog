@@ -1,9 +1,12 @@
 export { Icon } from "./Icon";
+export { IconButton } from "./IconButton";
+export { SheetHeader } from "./SheetHeader";
 export { Stars, StarsMini } from "./Stars";
 export { Scale5 } from "./Scale5";
 export { Stepper } from "./Stepper";
 export { Segmented } from "./Segmented";
 export { FreshDot } from "./FreshDot";
+export { EmptyState } from "./EmptyState";
 export { Sheet } from "./Sheet";
 export { Monogram } from "./Monogram";
 export { OriginTile } from "./OriginTile";

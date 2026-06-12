@@ -20,7 +20,7 @@ export function Field({ label, value, onChange, placeholder, highlight }: FieldP
       </div>
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{
         width: "100%", padding: "12px 14px", borderRadius: 13, background: "var(--surface)",
-        border: highlight && !filled ? "1px solid var(--accent)" : "1px solid var(--line)", color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15.5, outline: "none",
+        border: highlight && !filled ? "1px solid var(--accent)" : "1px solid var(--line)", color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 16, outline: "none",
         boxShadow: highlight && !filled ? "0 0 0 3px var(--accent-soft)" : "none",
         boxSizing: "border-box",
       }} />

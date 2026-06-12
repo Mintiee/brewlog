@@ -212,6 +212,19 @@ export function localISODate(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Today as local YYYY-MM-DD (not UTC) — matches the device's "today". */
+export function todayISO(): string {
+  return localISODate(Date.now());
+}
+
+/** N days ago as local YYYY-MM-DD. */
+export function daysAgoISO(n: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  return localISODate(d.getTime());
+}
+
 // Absolute journal date e.g. "Fri 6 Jun" (weekday + day + short month), adding
 // the year only when it differs from the current year.
 export function journalDateText(ms: number): string {

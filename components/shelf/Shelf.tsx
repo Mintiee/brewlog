@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { activeGrams, coffeeStatus, frozenGramsOf, remainingGrams, avgDailyGrams, formatWeight, formatDaysWorth } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { FreshDot } from "@/components/ui/FreshDot";
 import { ShelfRow } from "./ShelfRow";
@@ -65,12 +66,14 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
 
       <div className="screen-pad" style={{ marginTop: 22 }}>
         {live.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-dim)" }}>
-            <div style={{ color: "var(--ink-ghost)", display: "flex", justifyContent: "center", marginBottom: 14 }}>
-              <Icon name="shelf" size={48} stroke={1.3} />
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 600, color: "var(--ink)" }}>Your shelf is empty</div>
-            <div style={{ fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>Scan a bag or paste a link to add your first coffee.</div>
+          <EmptyState
+            icon="shelf"
+            title="Your shelf is empty"
+            body="Scan a bag or paste a link to add your first coffee."
+            iconSize={48}
+            titleSize={17}
+            pad="60px 20px"
+          >
             <button
               className="btn btn-accent"
               style={{ marginTop: 20, width: "auto", padding: "0 22px", display: "inline-flex" }}
@@ -78,7 +81,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
             >
               <Icon name="plus" size={19} stroke={2} /> Add a coffee
             </button>
-          </div>
+          </EmptyState>
         )}
 
         {groups.map((g) => (

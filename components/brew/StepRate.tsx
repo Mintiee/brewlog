@@ -51,7 +51,7 @@ export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave
         </div>
         {secondOpen && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderTop: "1px solid var(--line)" }}>
-            <input value={taster2} onChange={(e) => setTaster2(e.target.value)} style={{ background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15, fontWeight: 600, width: 84, minWidth: 0, padding: 0 }} />
+            <input value={taster2} onChange={(e) => setTaster2(e.target.value)} style={{ background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 600, width: 84, minWidth: 0, padding: 0 }} />
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Stars value={stars2} onChange={setStars2} size={28} gap={6} />
               <button onClick={() => { setSecondOpen(false); setStars2(0); }} style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", display: "flex" }}><Icon name="close" size={15} stroke={2} /></button>
@@ -79,7 +79,7 @@ export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave
         <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Tasting note…" style={{
           width: "100%", marginTop: 14, minHeight: 70, resize: "none", padding: 14, borderRadius: 16,
           background: "var(--surface)", border: "1px solid var(--line)", color: "var(--ink)",
-          fontFamily: "var(--font-ui)", fontSize: 15, outline: "none",
+          fontFamily: "var(--font-ui)", fontSize: 16, outline: "none",
         }} />
       ) : (
         <button className="btn btn-ghost" style={{ marginTop: 8, height: 40, justifyContent: "flex-start", paddingLeft: 4 }} onClick={() => setNoteOpen(true)}>

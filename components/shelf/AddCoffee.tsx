@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
-import { originCode } from "@/lib/domain";
+import { originCode, todayISO, daysAgoISO } from "@/lib/domain";
 import { coffeeColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
+import { SheetHeader } from "@/components/ui/SheetHeader";
 import { ProcessPicker } from "./ProcessPicker";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Field } from "./Field";
@@ -23,26 +24,6 @@ interface ReviewForm {
   roastedAt: string;        // ISO YYYY-MM-DD; defaults to today
   needsRoastDate: boolean;
   notes: string;
-}
-
-/** Local YYYY-MM-DD (not UTC) so the date picker matches the device's "today". */
-function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** N days ago as local YYYY-MM-DD. */
-function daysAgoIso(n: number): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - n);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 interface AddCoffeeProps {
@@ -69,7 +50,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
         setForm(null);
       } else {
         setPhase("review");
-        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayIso(), needsRoastDate: false, notes: "" });
+        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
         setSource("manual");
       }
       setScanPct(0);
@@ -104,7 +85,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
     setTimeout(() => {
       if (!data || !data.roaster) {
         // fall through to manual entry
-        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayIso(), needsRoastDate: false, notes: "" });
+        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
         setSource("manual");
       } else {
         const notes = Array.isArray((data as any).notes) ? (data as any).notes : [];
@@ -118,7 +99,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
           process: (data as any).process || "Washed",
           roast: ROAST_LEVELS.includes((data as any).roast) ? (data as any).roast : "light",
           // A link rarely carries the roast date → default to today and flag for the user.
-          roastedAt: fromUrl ? todayIso() : daysAgoIso(scannedDaysAgo != null ? Number(scannedDaysAgo) : 4),
+          roastedAt: fromUrl ? todayISO() : daysAgoISO(scannedDaysAgo != null ? Number(scannedDaysAgo) : 4),
           needsRoastDate: !!fromUrl,
           notes: notes.join(", "),
         });
@@ -129,14 +110,14 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
 
   function startManual() {
     setSource("manual");
-    setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayIso(), needsRoastDate: false, notes: "" });
+    setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
     setPhase("review");
   }
 
   function commit() {
     if (!form) return;
     const notes = form.notes ? form.notes.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const roasted_at = form.roastedAt || todayIso();
+    const roasted_at = form.roastedAt || todayISO();
     const c: Coffee = {
       id: crypto.randomUUID(),
       roaster: form.roaster || "Unknown",
@@ -168,14 +149,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
   return (
     <Sheet open={open} onClose={onClose}>
       <div className="screen-pad" style={{ paddingTop: 6, minHeight: 420 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h2 style={{ fontSize: 21, fontWeight: 600, letterSpacing: "-0.01em" }}>
-            {phase === "review" ? "Confirm details" : "Add a coffee"}
-          </h2>
-          <button onClick={onClose} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%", width: 34, height: 34, color: "var(--ink-dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="close" size={18} stroke={1.9} />
-          </button>
-        </div>
+        <SheetHeader title={phase === "review" ? "Confirm details" : "Add a coffee"} onClose={onClose} />
 
         {phase === "capture" && (
           <div>
@@ -204,7 +178,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
                 style={{
                   flex: 1, minWidth: 0, padding: "0 14px", height: 52, borderRadius: 13,
                   background: "var(--surface)", border: "1px solid var(--line)",
-                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15, outline: "none",
+                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 16, outline: "none",
                 }}
               />
               <button
@@ -302,13 +276,13 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled }: AddCoffeeProps) 
                 <input
                   type="date"
                   value={form.roastedAt}
-                  max={todayIso()}
+                  max={todayISO()}
                   onChange={(e) => setForm((f) => f ? { ...f, roastedAt: e.target.value, needsRoastDate: false } : f)}
                   style={{
                     width: "100%", padding: "12px 14px", borderRadius: 13,
                     background: "var(--surface)", border: "1px solid var(--line)",
                     color: "var(--ink)", outline: "none",
-                    fontFamily: "var(--font-mono)", fontSize: 15, boxSizing: "border-box",
+                    fontFamily: "var(--font-mono)", fontSize: 16, boxSizing: "border-box",
                   }}
                 />
                 {missing.roast && (
