@@ -21,7 +21,7 @@ interface BrewFlowProps {
 }
 
 export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
-  const { coffees, brews, config, profile, members, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession } = useApp();
+  const { coffees, brews, config, profile, members, authed, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
   const otherMember = members.find((m) => m.name !== profile.name) ?? null;
@@ -34,6 +34,12 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   const [detailBrew, setDetailBrew] = useState<Brew | null>(null);
   // True when the last logged brew spawned a sibling for the other member (split brew).
   const [didSplit, setDidSplit] = useState(false);
+  // Persistence state of the just-logged brew(s): the confirmation screen shows
+  // optimistically, but the auto-dismiss timer only starts once the insert is
+  // confirmed — a failed save must not melt away as if it had worked.
+  const [saveState, setSaveState] = useState<"saving" | "saved" | "failed">("saved");
+  // The brew rows of the last log attempt, kept for the in-place Retry.
+  const lastLogged = useRef<Brew[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const logTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,8 +97,6 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       clarity: null,
       note: null,
     };
-    startBrew(newBrew);
-
     // For a split brew, also create a sibling row directed at the other member.
     // They see it as a normal pending brew on their device and rate it through
     // the unchanged StepRate flow. rate_for is cleared when they save their rating,
@@ -128,14 +132,31 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
         clarity: null,
         note: null,
       };
-      startBrew(siblingBrew);
+      lastLogged.current = [newBrew, siblingBrew];
+    } else {
+      lastLogged.current = [newBrew];
     }
 
     setDidSplit(!!sessionId && !!otherMember);
     setRateTarget(newBrew);
     setStep("logged");
     if (logTimer.current) clearTimeout(logTimer.current);
-    logTimer.current = setTimeout(backHome, 4200);
+    void persistLogged();
+  }
+
+  /** Insert the brew(s) of the last log attempt and gate the confirmation on
+   *  the result: auto-dismiss only after the DB write is confirmed; on failure
+   *  the screen flips to a retry state instead of melting away. In unauthed
+   *  demo mode writes are local-only by design, so treat them as done. */
+  async function persistLogged() {
+    setSaveState("saving");
+    const oks = await Promise.all(lastLogged.current.map((b) => startBrew(b)));
+    const ok = !authed || oks.every(Boolean);
+    setSaveState(ok ? "saved" : "failed");
+    if (ok) {
+      if (logTimer.current) clearTimeout(logTimer.current);
+      logTimer.current = setTimeout(backHome, 4200);
+    }
   }
 
   function openRate(brew: Brew) {
@@ -165,9 +186,19 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   }
 
   function saveRating(rating: object) {
-    if (rateTarget) rateBrew(rateTarget.id, rating as Partial<Brew>);
     setStep("done");
-    setTimeout(backHome, 1600);
+    if (logTimer.current) clearTimeout(logTimer.current);
+    logTimer.current = setTimeout(backHome, 1600);
+    if (!rateTarget) return;
+    // Show "Rated." optimistically, but if the write finally fails (state is
+    // already rolled back; the banner shows Retry) bounce back to the rate
+    // step so it doesn't melt away looking saved.
+    void rateBrew(rateTarget.id, rating as Partial<Brew>).then((ok) => {
+      if (!ok && authed) {
+        if (logTimer.current) clearTimeout(logTimer.current);
+        setStep("rate");
+      }
+    });
   }
 
   function discardRating() {
@@ -221,7 +252,29 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           onDiscard={discardRating}
         />
       )}
-      {step === "logged" && (
+      {step === "logged" && saveState === "failed" && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center" }}>
+          <div className="rise" style={{ width: 76, height: 76, borderRadius: "50%", background: "color-mix(in srgb, var(--bad, #b65f4f) 18%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--bad, #b65f4f)" }}>
+            <Icon name="close" size={36} stroke={2.2} />
+          </div>
+          <div className="rise rise-1" style={{ fontSize: 20, fontWeight: 600, marginTop: 18 }}>Couldn&apos;t save this brew</div>
+          <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-faint)", marginTop: 6 }}>{coffee && coffee.name}</div>
+          <div className="rise rise-2" style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5, maxWidth: 260, marginTop: 12 }}>
+            It isn&apos;t in your log yet. Check your connection and retry.
+          </div>
+          <button className="btn btn-accent rise rise-3" onClick={() => void persistLogged()} style={{ marginTop: 22, width: "auto", padding: "0 26px", display: "inline-flex" }}>
+            Retry
+          </button>
+          <button className="rise rise-3" onClick={backHome} style={{
+            marginTop: 14, background: "none", border: "none", cursor: "pointer",
+            color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 600,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}>
+            Discard this brew
+          </button>
+        </div>
+      )}
+      {step === "logged" && saveState !== "failed" && (
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center" }}>
           <div style={{ position: "relative", width: 76, height: 76, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div className="done-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid var(--accent)" }} />

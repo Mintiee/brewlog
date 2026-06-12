@@ -36,6 +36,8 @@ interface AppState {
   llmEnabled: boolean;
   aiProvider?: string;
   ready: boolean;          // true once data has loaded (or seeded)
+  /** False in local-only demo mode (no session) — writes don't reach a DB. */
+  authed: boolean;
   lastError: AppError | null; // last failed DB write, shown as a banner
 }
 
@@ -357,7 +359,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, lastError,
+      coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError,
     }}>
       {children}
