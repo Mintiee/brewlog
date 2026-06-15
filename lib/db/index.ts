@@ -39,6 +39,20 @@ export async function upsertCoffee(coffee: Coffee): Promise<Coffee> {
   return rowToCoffee(data);
 }
 
+/** Batch-insert multiple coffees in a single round-trip.
+ *  Uses client-generated UUIDs (passed in) so callers can optimistically display
+ *  rows before the write lands. */
+export async function insertCoffees(coffees: Coffee[]): Promise<Coffee[]> {
+  if (!coffees.length) return [];
+  const sb = createClient();
+  const { data, error } = await sb
+    .from("coffees")
+    .insert(coffees.map(coffeeToRow))
+    .select();
+  if (error) throw error;
+  return (data ?? []).map(rowToCoffee);
+}
+
 // ---- Brews ----
 
 export async function fetchBrews(client?: DB): Promise<Brew[]> {

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/browser";
 import {
   fetchCoffees, fetchBrews, fetchConfig, fetchProfile, fetchHouseholdProfiles,
   insertBrew, updateBrew as dbUpdateBrew, deleteBrew, upsertCoffee, upsertConfig,
-  fetchAiKeyStatus, fetchLearnedNotes,
+  fetchAiKeyStatus, fetchLearnedNotes, insertCoffees,
 } from "@/lib/db";
 import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
@@ -58,6 +58,9 @@ interface AppActions {
   setConfig: (c: Config) => Promise<boolean>;
   setProfile: (p: Profile) => void;
   clearError: () => void;
+  /** Batch-import coffees. Optimistic prepend + single persist call so a failure
+   *  rolls the entire batch back. Notes are classified after the write lands. */
+  importCoffees: (coffees: Coffee[]) => Promise<boolean>;
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null);
@@ -370,6 +373,22 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     return deleteBrews(ids, brew);
   }, [deleteBrews, brews]);
 
+  const importCoffees = useCallback((incoming: Coffee[]) => {
+    if (!incoming.length) return Promise.resolve(true);
+    // Inject household_id on every row (same pattern as addCoffee).
+    const batch = incoming.map((c) => ({ ...c, household_id: profile.household_id }));
+    void learnNotes(batch.flatMap((c) => c.notes ?? []));
+    return save(
+      "Import coffees",
+      () => insertCoffees(batch),
+      () => setCoffees((prev) => [...batch, ...prev]),
+      () => setCoffees((prev) => {
+        const ids = new Set(batch.map((c) => c.id));
+        return prev.filter((c) => !ids.has(c.id));
+      }),
+    );
+  }, [save, profile.household_id, learnNotes]);
+
   const setConfig = useCallback((c: Config) => {
     const prev = config;
     return save(
@@ -387,7 +406,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   return (
     <AppContext.Provider value={{
       coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError, undoState,
-      addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError,
+      addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError, importCoffees,
     }}>
       {children}
     </AppContext.Provider>

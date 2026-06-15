@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Icon, IconButton, Stepper } from "@/components/ui";
 import { SSection, SText, SRow, SToggle } from "./controls";
 import { AddBrewerSheet } from "./AddBrewerSheet";
+import { ImportSheet } from "@/components/import/ImportSheet";
 import type { Config, Profile } from "@/lib/types";
 
 interface SettingsProps {
@@ -46,6 +47,7 @@ export function Settings({
     config.brewers.length > 1 &&
     onConfig({ ...config, brewers: config.brewers.filter((_, j) => j !== i) });
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const [newWater, setNewWater] = useState("");
   const [aiKey, setAiKey] = useState("");
@@ -366,8 +368,27 @@ export function Settings({
           </div>
         </SSection>
 
+        {/* IMPORT */}
+        <SSection label="Import">
+          <div className="card" style={{ padding: "12px 16px" }}>
+            <div style={{ fontSize: 14.5, fontWeight: 500, marginBottom: 6 }}>Import your coffee shelf</div>
+            <div style={{ fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.5, marginBottom: 14 }}>
+              Bring in coffees from Bean Conqueror (.json export), a CSV file, or paste a list for the AI to structure.
+            </div>
+            <button
+              className="btn btn-accent"
+              onClick={() => setImporting(true)}
+              style={{ width: "100%", height: 50 }}
+            >
+              <Icon name="upload" size={18} stroke={1.8} /> Import coffees
+            </button>
+          </div>
+        </SSection>
+
         <div className="screen-bottom" />
       </div>
+
+      <ImportSheet open={importing} onClose={() => setImporting(false)} />
     </div>
   );
 }

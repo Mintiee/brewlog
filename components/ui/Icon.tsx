@@ -59,6 +59,8 @@ export function Icon({ name, size = 22, stroke = 1.7, style, className }: IconPr
     gear: <g {...ps}><path d="M4 8h7M15 8h5"/><circle cx="13" cy="8" r="2.1"/><path d="M4 16h5M13 16h7"/><circle cx="11" cy="16" r="2.1"/></g>,
     snow: <g {...ps}><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M12 6.6 9.9 4.9M12 6.6l2.1-1.7M12 17.4l-2.1 1.7M12 17.4l2.1 1.7M5.8 9.3 5 6.9M5.8 9.3 3.4 9.7M18.2 14.7l.8 2.4M18.2 14.7l2.4-.4M18.2 9.3l2.4.4M18.2 9.3 19 6.9M5.8 14.7l-2.4.4M5.8 14.7 5 17.1"/></g>,
     link: <g {...ps}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></g>,
+    // Upload / import — upward arrow with a tray underline
+    upload: <g {...ps}><path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M4 19h16"/></g>,
     key: <g {...ps}><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3"/></g>,
     // ---- Brewer silhouettes (selectable method tiles) ----
     // V60 — steep open cone with ridge lines on a small base

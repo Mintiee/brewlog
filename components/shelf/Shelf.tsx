@@ -70,7 +70,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
           <EmptyState
             icon="shelf"
             title="Your shelf is empty"
-            body="Scan a bag or paste a link to add your first coffee."
+            body="Scan a bag or paste a link to add your first coffee. To import from Bean Conqueror or a CSV, go to Settings → Import."
             iconSize={48}
             titleSize={17}
             pad="60px 20px"
