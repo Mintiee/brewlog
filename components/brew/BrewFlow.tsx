@@ -41,9 +41,9 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   // The brew rows of the last log attempt, kept for the in-place Retry.
   const lastLogged = useRef<Brew[]>([]);
   // Set when the just-logged dose looks like the bag's last serving — the
-  // logged screen then asks whether to mark the coffee finished instead of
-  // auto-dismissing. Ref mirrors state so persistLogged (called in the same
-  // tick the state is set) reads the fresh value.
+  // logged screen shows an info line ("Marked {name} finished") and the bag
+  // is auto-archived in persistLogged. Ref mirrors state so persistLogged
+  // (called in the same tick the state is set) reads the fresh value.
   const [finishCandidate, setFinishCandidate] = useState<Coffee | null>(null);
   const finishRef = useRef<Coffee | null>(null);
 
@@ -164,8 +164,10 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     const oks = await Promise.all(lastLogged.current.map((b) => startBrew(b)));
     const ok = !authed || oks.every(Boolean);
     setSaveState(ok ? "saved" : "failed");
-    if (ok && !finishRef.current) {
-      // The finish prompt holds the screen open; otherwise auto-dismiss.
+    if (ok) {
+      // Auto-archive when the last dose left less than one serving — inform on
+      // screen, no prompt. Safe to re-run (idempotent) on Retry.
+      if (finishRef.current) updateCoffee({ ...finishRef.current, archived: true });
       if (logTimer.current) clearTimeout(logTimer.current);
       logTimer.current = setTimeout(backHome, 4200);
     }
@@ -304,31 +306,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
               : "We'll keep it on your home screen so you can rate it once you've had a cup."}
           </div>
           {finishCandidate && (
-            <div className="rise rise-3" style={{ marginTop: 20, padding: "14px 16px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--line)", maxWidth: 300 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45 }}>
-                That looks like the last dose — mark <span style={{ color: "var(--accent)" }}>{finishCandidate.name}</span> finished?
-              </div>
-              <div style={{ display: "flex", gap: 9, marginTop: 12 }}>
-                <button
-                  className="btn btn-accent"
-                  style={{ flex: 1, height: 42, fontSize: 13.5 }}
-                  onClick={() => { updateCoffee({ ...finishCandidate, archived: true }); backHome(); }}
-                >
-                  Yes, finished
-                </button>
-                <button
-                  className="btn btn-ghost"
-                  style={{ flex: 1, height: 42, fontSize: 13.5 }}
-                  onClick={() => {
-                    setFinishCandidate(null);
-                    finishRef.current = null;
-                    if (logTimer.current) clearTimeout(logTimer.current);
-                    logTimer.current = setTimeout(backHome, 4200);
-                  }}
-                >
-                  Not yet
-                </button>
-              </div>
+            <div className="rise rise-3 mono" style={{ marginTop: 16, fontSize: 13, color: "var(--ink-faint)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Icon name="check" size={13} stroke={2.2} /> Marked <strong style={{ color: "var(--ink-dim)", fontWeight: 600 }}>{finishCandidate.name}</strong> finished
             </div>
           )}
           <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
