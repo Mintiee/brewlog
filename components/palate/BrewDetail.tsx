@@ -46,6 +46,12 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
 
   if (!brew) return null;
 
+  // A brew is "rated" only when a rated_at timestamp exists. Using rated_at
+  // (rather than stars != null) means corrupted rows that were accidentally
+  // written with stars:3 but rated_at:null are treated as unrated and self-heal
+  // on the next edit.
+  const wasRated = brew.rated_at != null;
+
   // Resolve the session group for split brews. Sort so the logger's own cup
   // (!rate_for) comes first, partner's cup second — regardless of which row
   // was passed in (the recent strip may hand us the sibling at index 0).
@@ -75,7 +81,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
       grind: brew.grind,
       ratio: brew.ratio,
       water_type: brew.water_type || config.default_water || "",
-      stars: brew.stars ?? 3,
+      stars: brew.stars ?? 0,
       note: brew.note || "",
     });
   };
@@ -91,11 +97,13 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
       grind: ef.grind,
       ratio: ef.ratio,
       water_type: ef.water_type,
-      stars: ef.stars,
+      // Only carry stars/rated_at forward when the brew was already rated.
+      // Writing null for both on an unrated brew keeps it pending, and also
+      // self-heals any row that was accidentally stamped stars:3 with no rated_at.
+      stars: wasRated ? ef.stars : null,
       note: ef.note || null,
       started_at: String(newStartMs),
-      // Keep rated_at at same offset from started_at (or keep original if not backdated)
-      rated_at: brew.rated_at
+      rated_at: wasRated && brew.rated_at
         ? String(parseInt(brew.rated_at, 10) + (newStartMs - startMs))
         : null,
     };
@@ -148,12 +156,14 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
               onChange={setE("grind")} />
           </div>
 
-          <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
-            <Stepper icon="star" label="Rating" value={ef.stars} unit="/ 5"
-              step={0.5} min={0.5} max={5}
-              format={(v) => v % 1 === 0 ? String(v) : v.toFixed(1)}
-              onChange={setE("stars")} />
-          </div>
+          {wasRated && (
+            <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
+              <Stepper icon="star" label="Rating" value={ef.stars} unit="/ 5"
+                step={0.5} min={0.5} max={5}
+                format={(v) => v % 1 === 0 ? String(v) : v.toFixed(1)}
+                onChange={setE("stars")} />
+            </div>
+          )}
 
           <Field label="Notes" value={ef.note} onChange={setE("note")} placeholder="Tasting notes…" />
 
