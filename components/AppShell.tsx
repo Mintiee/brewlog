@@ -77,7 +77,7 @@ function Shell() {
 
   // Only brews that are mine to rate — ones I logged (and haven't sent away) or
   // that were handed to me. Brews I sent to someone else drop off my badge.
-  const pendingCount = brews.filter((b) => b.pending && rateBelongsTo(b, profile, members)).length;
+  const pendingCount = brews.filter((b) => b.pending && !b.guest && rateBelongsTo(b, profile, members)).length;
 
   // Tabs are statically imported (instant, flicker-free switching). Render them
   // on the client only via this mounted gate: the data is seeded from server

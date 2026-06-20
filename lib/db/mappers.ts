@@ -60,6 +60,7 @@ export function rowToBrew(r: Tables<"brews">): Brew {
     logged_by: r.logged_by,
     pending: r.rated_at == null,
     rate_for: r.rate_for ?? null,
+    guest: r.guest ?? false,
     stars: r.stars, stars2: r.stars2,
     taster1: r.taster1, taster2: r.taster2,
     acidity: r.acidity, sweetness: r.sweetness, body: r.body, clarity: r.clarity,
@@ -86,6 +87,7 @@ export function brewToRow(b: Brew): TablesInsert<"brews"> {
     rest_days: b.rest_days ?? null,
     rate_for: b.rate_for ?? null,
     session_id: b.session_id ?? null,
+    guest: b.guest,
     rated_at: b.rated_at ? new Date(parseInt(b.rated_at)).toISOString() : null,
     stars: b.stars, stars2: b.stars2,
     taster1: b.taster1, taster2: b.taster2,
@@ -103,7 +105,7 @@ export function brewPatchToRow(patch: Partial<Brew>): Partial<TablesInsert<"brew
   const row: Record<string, unknown> = {};
   const passthrough = [
     "coffee_id", "brewer_id", "dose", "water", "bypass", "temp", "grind",
-    "ratio", "water_type", "rest_days", "rate_for", "session_id",
+    "ratio", "water_type", "rest_days", "rate_for", "session_id", "guest",
     "stars", "stars2", "taster1", "taster2", "note",
   ] as const;
   for (const k of passthrough) if (k in patch) row[k] = patch[k];

@@ -311,12 +311,17 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
         )}
 
         <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 10 }}>
-          {brew.pending && onRate && (
+          {brew.guest && (
+            <div className="label" style={{ textAlign: "center", color: "var(--ink-faint)", paddingBottom: 2 }}>
+              Made for a guest — no rating
+            </div>
+          )}
+          {brew.pending && !brew.guest && onRate && (
             <button className="btn btn-accent" onClick={() => onRate(brew)}>
               <Icon name="star" size={19} stroke={1.7} /> Rate this brew
             </button>
           )}
-          <button className={brew.pending && onRate ? "btn btn-soft" : "btn btn-accent"} onClick={startEdit}>
+          <button className={brew.pending && !brew.guest && onRate ? "btn btn-soft" : "btn btn-accent"} onClick={startEdit}>
             <Icon name="edit" size={19} stroke={1.7} /> Edit this brew
           </button>
           {onDelete && (

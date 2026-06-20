@@ -195,8 +195,8 @@ export function buildPalateStats(rated: Brew[], allBrews: Brew[], coffees: Coffe
   const cm = coffeeMapOf(coffees);
   const byScore = (a: StatCard, b: StatCard) => b.score - a.score;
 
-  // Deduplicate implicit shared brews for volume counts — each shared session counts once.
-  const volumeBrews = deduplicateSessions(inferSharedSessions(allBrews));
+  // Exclude guest cups and deduplicate implicit shared brews for volume counts.
+  const volumeBrews = deduplicateSessions(inferSharedSessions(allBrews.filter((b) => !b.guest)));
 
   const love = [
     flavourCard(rated, cm),

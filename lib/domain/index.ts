@@ -215,7 +215,7 @@ export function lastBrewOf(coffeeId: string, brews: Brew[]): Brew | null {
 
 export function pendingBrews(brews: Brew[]): Brew[] {
   return brews
-    .filter((b) => b.pending)
+    .filter((b) => b.pending && !b.guest)
     .sort((a, b) => parseTs(b.started_at) - parseTs(a.started_at));
 }
 

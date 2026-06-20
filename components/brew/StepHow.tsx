@@ -6,16 +6,18 @@ import { Icon, Stepper } from "@/components/ui";
 import { Sheet } from "@/components/ui/Sheet";
 import { CoffeePin } from "./CoffeePin";
 
+export type Audience = "me" | "split" | "guest";
+
 interface StepHowProps {
   coffee: Coffee;
   brews: Brew[];
   config: Config;
-  /** Show the "Split with {name}" toggle — only truthy when another household member exists. */
+  /** Show the "Split with {name}" option — only truthy when another household member exists. */
   canSplit?: boolean;
   /** Display name of the partner to split with (e.g. "Kris"). */
   splitPartnerName?: string;
   onChangeCoffee: () => void;
-  onLog: (brewer: Brewer, recipe: Recipe, split: boolean) => void;
+  onLog: (brewer: Brewer, recipe: Recipe, audience: Audience) => void;
 }
 
 // Pick a brewer-shaped icon by matching the user-facing label (`short`) and id.
@@ -29,27 +31,21 @@ function brewerIcon(b: Brewer): string {
   return "dripper";
 }
 
-// Minimal inline toggle switch (yes/no only — no shared primitive exists).
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+// "Who's it for?" pill — one option in the audience selector.
+function AudiencePill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
+      onClick={onClick}
       style={{
-        width: 44, height: 26, borderRadius: 13, flexShrink: 0,
-        background: on ? "var(--accent)" : "var(--surface-3)",
-        border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
-        cursor: "pointer", padding: 0, position: "relative",
-        transition: "background .18s ease, border-color .18s ease",
+        flex: 1, padding: "9px 6px", borderRadius: 10, cursor: "pointer", fontSize: 12.5, fontWeight: 600,
+        fontFamily: "var(--font-ui)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        background: active ? "var(--ink)" : "none",
+        color: active ? "var(--bg)" : "var(--ink-faint)",
+        border: `1px solid ${active ? "var(--ink)" : "transparent"}`,
+        transition: "all .15s ease",
       }}
     >
-      <span style={{
-        position: "absolute", top: 3, left: on ? 21 : 3,
-        width: 18, height: 18, borderRadius: "50%",
-        background: on ? "#1a0f06" : "var(--ink-faint)",
-        transition: "left .18s ease, background .18s ease",
-      }} />
+      {label}
     </button>
   );
 }
@@ -88,13 +84,15 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
   const [r, setR] = useState<Recipe>(() =>
     lastForCoffee ? recipeFromBrew(lastForCoffee) : fallbackRecipe(initialBrewer)
   );
-  // Default split ON when the brewer is OXO (makes enough for two) and a partner exists.
-  const [split, setSplit] = useState(() => !!canSplit && brewerIcon(initialBrewer) === "dripperOxo");
+  // Default to "split" when the brewer is OXO (makes enough for two) and a partner exists;
+  // otherwise "Just me". "For a guest" is always available but never the automatic default.
+  const defaultAudience = (b: Brewer): Audience => (!!canSplit && brewerIcon(b) === "dripperOxo" ? "split" : "me");
+  const [audience, setAudience] = useState<Audience>(() => defaultAudience(initialBrewer));
   const [waterPickerOpen, setWaterPickerOpen] = useState(false);
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
-    if (canSplit) setSplit(brewerIcon(b) === "dripperOxo");
+    setAudience(defaultAudience(b));
     const last = lastBrewOn(b.id);
     setR(last ? recipeFromBrew(last) : fallbackRecipe(b));
   }
@@ -180,19 +178,21 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
           <Icon name="chev" size={16} stroke={1.8} style={{ color: "var(--ink-faint)" }} />
         </button>
 
-        {canSplit && (
-          <>
-            <div style={{ height: 1, background: "var(--line)" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0" }}>
-              <span className="label" style={{ flex: 1 }}>Split with {splitPartnerName ?? "partner"}</span>
-              <Toggle on={split} onChange={setSplit} />
-            </div>
-          </>
-        )}
+        <div style={{ height: 1, background: "var(--line)" }} />
+        <div style={{ padding: "12px 0" }}>
+          <span className="label" style={{ display: "block", marginBottom: 8 }}>Who&apos;s it for?</span>
+          <div style={{ display: "flex", gap: 6, background: "var(--surface-2)", borderRadius: 12, padding: 3 }}>
+            <AudiencePill label="Just me" active={audience === "me"} onClick={() => setAudience("me")} />
+            {canSplit && (
+              <AudiencePill label={`Split · ${splitPartnerName ?? "partner"}`} active={audience === "split"} onClick={() => setAudience("split")} />
+            )}
+            <AudiencePill label="For a guest" active={audience === "guest"} onClick={() => setAudience("guest")} />
+          </div>
+        </div>
       </div>
 
       <div className="rise rise-5" style={{ marginTop: 14 }}>
-        <button className="btn btn-accent" onClick={() => onLog(brewer, r, split)}>
+        <button className="btn btn-accent" onClick={() => onLog(brewer, r, audience)}>
           <Icon name="check" size={19} stroke={2} /> Log coffee
         </button>
       </div>

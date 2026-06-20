@@ -96,6 +96,7 @@ export interface Database {
           rest_days: number | null;    // snapshot (migration 010)
           rate_for: string | null;     // handoff target (migration 011)
           session_id: string | null;   // split-brew link (migration 012)
+          guest: boolean;              // cup made for a guest — no rating, excluded from stats (migration 016)
           stars: number | null;        // numeric(2,1) (migration 006)
           stars2: number | null;       // numeric(2,1) (migration 006)
           taster1: string | null;
@@ -125,6 +126,7 @@ export interface Database {
           rest_days?: number | null;
           rate_for?: string | null;
           session_id?: string | null;
+          guest?: boolean;
           stars?: number | null;
           stars2?: number | null;
           taster1?: string | null;

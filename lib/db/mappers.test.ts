@@ -23,6 +23,7 @@ function makeBrew(overrides: Partial<Brew> = {}): Brew {
     pending: false,
     rate_for: null,
     session_id: null,
+    guest: false,
     stars: 4, stars2: 3.5,
     taster1: "Min", taster2: "Kris",
     acidity: 3, sweetness: 4, body: 2, clarity: 5,

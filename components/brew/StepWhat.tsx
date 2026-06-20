@@ -30,7 +30,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   // Only brews that are mine to rate: ones I logged and haven't sent away, or
   // ones handed to me. A sent brew leaves the sender's list and joins the target's.
   const pending = brews
-    .filter((b) => b.pending && rateBelongsTo(b, profile, members))
+    .filter((b) => b.pending && !b.guest && rateBelongsTo(b, profile, members))
     .sort((a, b) => Number(b.started_at) - Number(a.started_at));
 
   useEffect(() => {

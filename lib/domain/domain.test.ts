@@ -39,7 +39,7 @@ function makeBrew(overrides: Partial<Brew> = {}): Brew {
     id: "b1", household_id: "h1", coffee_id: "c1", brewer_id: "v60",
     dose: 15, water: 240, bypass: 0, temp: 96, grind: 22, ratio: 16,
     water_type: "Filtered", started_at: String(Date.now()), rated_at: String(Date.now()),
-    logged_by: "me", pending: false, rate_for: null, session_id: null,
+    logged_by: "me", pending: false, rate_for: null, session_id: null, guest: false,
     rest_days: null,
     stars: 4, stars2: null, taster1: "You", taster2: null,
     acidity: 3, sweetness: 3, body: 3, clarity: 4, note: null,

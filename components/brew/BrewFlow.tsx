@@ -5,7 +5,7 @@ import { useApp } from "@/lib/store/AppContext";
 import { restDaysAt, activeGrams } from "@/lib/domain";
 import { Icon } from "@/components/ui";
 import { StepWhat } from "./StepWhat";
-import { StepHow } from "./StepHow";
+import { StepHow, type Audience } from "./StepHow";
 import { StepRate } from "./StepRate";
 import { BrewDetail } from "@/components/palate/BrewDetail";
 
@@ -34,6 +34,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   const [detailBrew, setDetailBrew] = useState<Brew | null>(null);
   // True when the last logged brew spawned a sibling for the other member (split brew).
   const [didSplit, setDidSplit] = useState(false);
+  // True when the last logged brew was marked as a guest cup (no rating expected).
+  const [didGuest, setDidGuest] = useState(false);
   // Persistence state of the just-logged brew(s): the confirmation screen shows
   // optimistically, but the auto-dismiss timer only starts once the insert is
   // confirmed — a failed save must not melt away as if it had worked.
@@ -66,12 +68,13 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     return config.brewers.find((b) => b.id === id) ?? null;
   }
 
-  function logCoffee(b: Brewer, r: Recipe, split: boolean) {
+  function logCoffee(b: Brewer, r: Recipe, audience: Audience) {
     setBrewer(b);
     setRecipe(r);
     const startedAt = Date.now();
+    const isGuest = audience === "guest";
     // Assign a shared session_id when splitting with the other household member.
-    const sessionId = split && otherMember ? crypto.randomUUID() : null;
+    const sessionId = audience === "split" && otherMember ? crypto.randomUUID() : null;
     const newBrew: Brew = {
       id: crypto.randomUUID(),
       household_id: profile.household_id,
@@ -87,6 +90,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       pending: true,
       rate_for: null,
       session_id: sessionId,
+      guest: isGuest,
       started_at: String(startedAt),
       // Snapshot the freeze-adjusted rest now, so it stays correct if the
       // coffee is later re-frozen or its dates edited.
@@ -124,6 +128,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
         pending: true,
         rate_for: otherMember.id,
         session_id: sessionId,
+        guest: false,
         started_at: String(startedAt),
         rest_days: coffee ? restDaysAt(coffee, startedAt) : null,
         rated_at: null,
@@ -144,6 +149,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     }
 
     setDidSplit(!!sessionId && !!otherMember);
+    setDidGuest(isGuest);
     setRateTarget(newBrew);
     // Last-dose check: `brews` doesn't yet include the just-logged row(s), and a
     // split still draws one physical dose. Less than a serving left → probably done.
@@ -197,6 +203,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setCoffee(coffees[0] ?? null);
     setRateTarget(null);
     setDidSplit(false);
+    setDidGuest(false);
     setFinishCandidate(null);
     finishRef.current = null;
   }
@@ -301,24 +308,29 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           <div className="rise rise-1" style={{ fontSize: 20, fontWeight: 600, marginTop: 18 }}>Logged.</div>
           <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-faint)", marginTop: 6 }}>{coffee && coffee.name}</div>
           <div className="rise rise-2" style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5, maxWidth: 260, marginTop: 12 }}>
-            {didSplit && otherMember
-              ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate — yours is waiting whenever you&apos;re ready.</>
-              : "We'll keep it on your home screen so you can rate it once you've had a cup."}
+            {didGuest
+              ? "Brewed for your guest — no rating needed."
+              : didSplit && otherMember
+                ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate — yours is waiting whenever you&apos;re ready.</>
+                : "We'll keep it on your home screen so you can rate it once you've had a cup."}
           </div>
           {finishCandidate && (
             <div className="rise rise-3 mono" style={{ marginTop: 16, fontSize: 13, color: "var(--ink-faint)", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Icon name="check" size={13} stroke={2.2} /> Marked <strong style={{ color: "var(--ink-dim)", fontWeight: 600 }}>{finishCandidate.name}</strong> finished
             </div>
           )}
-          <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
-            marginTop: 22, background: "none", border: "none", cursor: "pointer",
-            color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "underline", textUnderlineOffset: 3,
-          }}>
-            Already had it? Rate now
-          </button>
-          {/* Only show the manual "send to rate" option when a sibling was NOT already spawned. */}
-          {!didSplit && otherMember && (
+          {/* Guest cups are never rated — suppress both the "rate now" and "send to rate" actions. */}
+          {!didGuest && (
+            <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
+              marginTop: 22, background: "none", border: "none", cursor: "pointer",
+              color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 600,
+              display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "underline", textUnderlineOffset: 3,
+            }}>
+              Already had it? Rate now
+            </button>
+          )}
+          {/* Only show the manual "send to rate" option when a sibling was NOT already spawned and this isn't a guest cup. */}
+          {!didGuest && !didSplit && otherMember && (
             <button className="rise rise-3" onClick={sendToRate} style={{
               marginTop: 14, background: "none", border: "1px solid var(--line)", borderRadius: 999,
               cursor: "pointer", color: "var(--ink-dim)", fontFamily: "var(--font-ui)",

@@ -56,6 +56,9 @@ export interface Brew {
   /** Links the two rows of a split (double) brew — one physical cup split between
    *  two drinkers. Each row is rated independently via the normal flow. null = single brew. */
   session_id: string | null;
+  /** This cup was made for a guest — never enters the rating queue, excluded from palate
+   *  stats, but still draws down bean inventory on the shelf. */
+  guest: boolean;
   // rating fields (null until rated)
   stars: number | null;
   stars2: number | null;
