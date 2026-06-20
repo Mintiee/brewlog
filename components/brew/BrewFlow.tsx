@@ -32,10 +32,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [rateTarget, setRateTarget] = useState<Brew | null>(null);
   const [detailBrew, setDetailBrew] = useState<Brew | null>(null);
-  // True when the last logged brew spawned a sibling for the other member (split brew).
-  const [didSplit, setDidSplit] = useState(false);
-  // True when the last logged brew was marked as a guest cup (no rating expected).
-  const [didGuest, setDidGuest] = useState(false);
+  // Audience chosen for the last log — drives the confirmation screen copy and action visibility.
+  const [loggedAudience, setLoggedAudience] = useState<Audience>("me");
   // Persistence state of the just-logged brew(s): the confirmation screen shows
   // optimistically, but the auto-dismiss timer only starts once the insert is
   // confirmed — a failed save must not melt away as if it had worked.
@@ -75,6 +73,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     const isGuest = audience === "guest";
     // Assign a shared session_id when splitting with the other household member.
     const sessionId = audience === "split" && otherMember ? crypto.randomUUID() : null;
+    // "partner" mode: whole cup for the other member — hand off the single row for them to rate.
+    const rateFor = audience === "partner" && otherMember ? otherMember.id : null;
     const newBrew: Brew = {
       id: crypto.randomUUID(),
       household_id: profile.household_id,
@@ -88,7 +88,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       bypass: r.bypass || 0,
       ratio: (r.water + (r.bypass || 0)) / r.dose,
       pending: true,
-      rate_for: null,
+      rate_for: rateFor,
       session_id: sessionId,
       guest: isGuest,
       started_at: String(startedAt),
@@ -148,8 +148,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       lastLogged.current = [newBrew];
     }
 
-    setDidSplit(!!sessionId && !!otherMember);
-    setDidGuest(isGuest);
+    setLoggedAudience(audience);
     setRateTarget(newBrew);
     // Last-dose check: `brews` doesn't yet include the just-logged row(s), and a
     // split still draws one physical dose. Less than a serving left → probably done.
@@ -202,8 +201,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setStep("what");
     setCoffee(coffees[0] ?? null);
     setRateTarget(null);
-    setDidSplit(false);
-    setDidGuest(false);
+    setLoggedAudience("me");
     setFinishCandidate(null);
     finishRef.current = null;
   }
@@ -226,13 +224,6 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
 
   function discardRating() {
     if (rateTarget) dismissBrew(rateTarget.id);
-    backHome();
-  }
-
-  // Hand the just-logged brew to the other member to rate — it leaves my pending
-  // list and surfaces only on theirs.
-  function sendToRate() {
-    if (rateTarget && otherMember) updateBrew(rateTarget.id, { rate_for: otherMember.id });
     backHome();
   }
 
@@ -308,36 +299,27 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           <div className="rise rise-1" style={{ fontSize: 20, fontWeight: 600, marginTop: 18 }}>Logged.</div>
           <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-faint)", marginTop: 6 }}>{coffee && coffee.name}</div>
           <div className="rise rise-2" style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5, maxWidth: 260, marginTop: 12 }}>
-            {didGuest
+            {loggedAudience === "guest"
               ? "Brewed for your guest — no rating needed."
-              : didSplit && otherMember
-                ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate — yours is waiting whenever you&apos;re ready.</>
-                : "We'll keep it on your home screen so you can rate it once you've had a cup."}
+              : loggedAudience === "partner" && otherMember
+                ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate.</>
+                : loggedAudience === "split" && otherMember
+                  ? <>Sent a cup to <strong>{otherMember.name}</strong> to rate — yours is waiting whenever you&apos;re ready.</>
+                  : "We'll keep it on your home screen so you can rate it once you've had a cup."}
           </div>
           {finishCandidate && (
             <div className="rise rise-3 mono" style={{ marginTop: 16, fontSize: 13, color: "var(--ink-faint)", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Icon name="check" size={13} stroke={2.2} /> Marked <strong style={{ color: "var(--ink-dim)", fontWeight: 600 }}>{finishCandidate.name}</strong> finished
             </div>
           )}
-          {/* Guest cups are never rated — suppress both the "rate now" and "send to rate" actions. */}
-          {!didGuest && (
+          {/* "Rate now" only makes sense when you have a cup to rate (me or split). */}
+          {(loggedAudience === "me" || loggedAudience === "split") && (
             <button className="rise rise-3" onClick={() => { if (logTimer.current) clearTimeout(logTimer.current); setStep("rate"); }} style={{
               marginTop: 22, background: "none", border: "none", cursor: "pointer",
               color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 600,
               display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "underline", textUnderlineOffset: 3,
             }}>
               Already had it? Rate now
-            </button>
-          )}
-          {/* Only show the manual "send to rate" option when a sibling was NOT already spawned and this isn't a guest cup. */}
-          {!didGuest && !didSplit && otherMember && (
-            <button className="rise rise-3" onClick={sendToRate} style={{
-              marginTop: 14, background: "none", border: "1px solid var(--line)", borderRadius: 999,
-              cursor: "pointer", color: "var(--ink-dim)", fontFamily: "var(--font-ui)",
-              fontSize: 13.5, fontWeight: 600, padding: "10px 18px",
-              display: "inline-flex", alignItems: "center", gap: 7,
-            }}>
-              <Icon name="chev" size={15} stroke={2} /> Send to {otherMember.name} to rate
             </button>
           )}
         </div>

@@ -11,9 +11,11 @@ interface StepperProps {
   min?: number;
   max?: number;
   format?: (v: number) => string;
+  /** Reduce vertical padding (8px vs 12px) for space-constrained screens. */
+  dense?: boolean;
 }
 
-export function Stepper({ icon, label, value, unit, onChange, step = 1, min = 0, max = 999, format }: StepperProps) {
+export function Stepper({ icon, label, value, unit, onChange, step = 1, min = 0, max = 999, format, dense }: StepperProps) {
   const dec = () => onChange(Math.max(min, +(value - step).toFixed(2)));
   const inc = () => onChange(Math.min(max, +(value + step).toFixed(2)));
   const btnStyle: React.CSSProperties = {
@@ -22,7 +24,7 @@ export function Stepper({ icon, label, value, unit, onChange, step = 1, min = 0,
     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
   };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 0", minWidth: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: dense ? "8px 0" : "12px 0", minWidth: 0 }}>
       <div style={{ color: "var(--ink-faint)", display: "flex", flexShrink: 0 }}>
         <Icon name={icon} size={18} stroke={1.6} />
       </div>

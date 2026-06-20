@@ -6,15 +6,15 @@ import { Icon, Stepper } from "@/components/ui";
 import { Sheet } from "@/components/ui/Sheet";
 import { CoffeePin } from "./CoffeePin";
 
-export type Audience = "me" | "split" | "guest";
+export type Audience = "me" | "partner" | "split" | "guest";
 
 interface StepHowProps {
   coffee: Coffee;
   brews: Brew[];
   config: Config;
-  /** Show the "Split with {name}" option — only truthy when another household member exists. */
+  /** Show the partner options (Kris / Split) — only truthy when another household member exists. */
   canSplit?: boolean;
-  /** Display name of the partner to split with (e.g. "Kris"). */
+  /** Display name of the partner (e.g. "Kris"). */
   splitPartnerName?: string;
   onChangeCoffee: () => void;
   onLog: (brewer: Brewer, recipe: Recipe, audience: Audience) => void;
@@ -37,7 +37,7 @@ function AudiencePill({ label, active, onClick }: { label: string; active: boole
     <button
       onClick={onClick}
       style={{
-        flex: 1, padding: "9px 6px", borderRadius: 10, cursor: "pointer", fontSize: 12.5, fontWeight: 600,
+        flex: 1, padding: "8px 5px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 600,
         fontFamily: "var(--font-ui)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         background: active ? "var(--ink)" : "none",
         color: active ? "var(--bg)" : "var(--ink-faint)",
@@ -109,15 +109,15 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
     <div className="screen-pad">
       <div className="rise rise-1"><CoffeePin coffee={coffee} brews={brews} onChange={onChangeCoffee} /></div>
 
-      <h2 className="h-ask rise rise-2" style={{ fontSize: 21, marginTop: 14 }}>How are you brewing?</h2>
+      <h2 className="h-ask rise rise-2" style={{ fontSize: 21, marginTop: 10 }}>How are you brewing?</h2>
 
       {/* brewer tiles */}
-      <div className="rise rise-2" style={{ display: "flex", gap: 9, marginTop: 12 }}>
+      <div className="rise rise-2" style={{ display: "flex", gap: 9, marginTop: 10 }}>
         {config.brewers.map((b) => {
           const on = b.id === brewer.id;
           return (
             <button key={b.id} onClick={() => selectBrewer(b)} style={{
-              flex: 1, padding: "12px 8px 10px", borderRadius: 16, cursor: "pointer",
+              flex: 1, padding: "10px 8px 8px", borderRadius: 16, cursor: "pointer",
               background: on ? "var(--ink)" : "var(--surface)",
               color: on ? "var(--bg)" : "var(--ink-dim)",
               border: `1px solid ${on ? "var(--ink)" : "var(--line)"}`,
@@ -130,9 +130,10 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         })}
       </div>
 
-      {/* recipe — grind-led, now as an inline Stepper matching Dose/Water/Temp */}
-      <div className="card rise rise-3" style={{ marginTop: 12, padding: "2px 16px" }}>
+      {/* recipe — grind-led, dense steppers to save vertical space */}
+      <div className="card rise rise-3" style={{ marginTop: 10, padding: "2px 16px" }}>
         <Stepper
+          dense
           icon="grind"
           label={`Grind · ${config.grinder.name}`}
           value={r.grind}
@@ -147,29 +148,29 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         <div style={{ height: 1, background: "var(--line)" }} />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
-          <Stepper icon="scale"  label="Dose"  value={r.dose}   unit="g"   step={0.5} min={8}  max={40}  onChange={setDose} />
-          <Stepper icon="drop"   label={brewer.bypass ? "Brew" : "Water"} value={r.water} unit="g" step={1} min={50} max={600} onChange={setWater} />
-          <Stepper icon="thermo" label="Temp"  value={r.temp}   unit="°C"  step={1}   min={80} max={100} onChange={setTemp} />
+          <Stepper dense icon="scale"  label="Dose"  value={r.dose}   unit="g"   step={0.5} min={8}  max={40}  onChange={setDose} />
+          <Stepper dense icon="drop"   label={brewer.bypass ? "Brew" : "Water"} value={r.water} unit="g" step={1} min={50} max={600} onChange={setWater} />
+          <Stepper dense icon="thermo" label="Temp"  value={r.temp}   unit="°C"  step={1}   min={80} max={100} onChange={setTemp} />
           {brewer.bypass && (
-            <Stepper icon="snow" label="After" value={r.bypass || 0} unit="g" step={1} min={0} max={400} onChange={setBypass} />
+            <Stepper dense icon="snow" label="After" value={r.bypass || 0} unit="g" step={1} min={0} max={400} onChange={setBypass} />
           )}
         </div>
 
-        <div className="mono" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, color: "var(--ink-faint)", fontSize: 12, marginTop: 6, paddingTop: 12, paddingBottom: 12, borderTop: "1px solid var(--line)" }}>
+        <div className="mono" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, color: "var(--ink-faint)", fontSize: 12, marginTop: 4, paddingTop: 8, paddingBottom: 8, borderTop: "1px solid var(--line)" }}>
           {brewer.bypass
             ? <span>{r.water}g brew + {r.bypass || 0}g after · {total}g · 1:{ratio.toFixed(1)}</span>
             : <span>{r.dose}g in <Icon name="chev" size={11} stroke={2} /> {total}g out · 1:{ratio.toFixed(1)}</span>}
         </div>
       </div>
 
-      {/* Water + Split — compact options card */}
-      <div className="card rise rise-4" style={{ marginTop: 12, padding: "2px 16px" }}>
+      {/* Water + Who's it for */}
+      <div className="card rise rise-4" style={{ marginTop: 10, padding: "2px 16px" }}>
         {/* Water — tap row opens the picker sheet */}
         <button
           onClick={() => setWaterPickerOpen(true)}
           style={{
             display: "flex", alignItems: "center", gap: 12, width: "100%",
-            padding: "14px 0", background: "none", border: "none",
+            padding: "11px 0", background: "none", border: "none",
             cursor: "pointer", color: "var(--ink)", textAlign: "left",
           }}
         >
@@ -179,19 +180,22 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         </button>
 
         <div style={{ height: 1, background: "var(--line)" }} />
-        <div style={{ padding: "12px 0" }}>
-          <span className="label" style={{ display: "block", marginBottom: 8 }}>Who&apos;s it for?</span>
-          <div style={{ display: "flex", gap: 6, background: "var(--surface-2)", borderRadius: 12, padding: 3 }}>
-            <AudiencePill label="Just me" active={audience === "me"} onClick={() => setAudience("me")} />
+        <div style={{ padding: "10px 0" }}>
+          <span className="label" style={{ display: "block", marginBottom: 6 }}>Who&apos;s it for?</span>
+          <div style={{ display: "flex", gap: 5, background: "var(--surface-2)", borderRadius: 12, padding: 3 }}>
+            <AudiencePill label="Me"    active={audience === "me"}      onClick={() => setAudience("me")} />
             {canSplit && (
-              <AudiencePill label={`Split · ${splitPartnerName ?? "partner"}`} active={audience === "split"} onClick={() => setAudience("split")} />
+              <AudiencePill label={splitPartnerName ?? "Partner"} active={audience === "partner"} onClick={() => setAudience("partner")} />
             )}
-            <AudiencePill label="For a guest" active={audience === "guest"} onClick={() => setAudience("guest")} />
+            {canSplit && (
+              <AudiencePill label="Split" active={audience === "split"} onClick={() => setAudience("split")} />
+            )}
+            <AudiencePill label="Guest" active={audience === "guest"}   onClick={() => setAudience("guest")} />
           </div>
         </div>
       </div>
 
-      <div className="rise rise-5" style={{ marginTop: 14 }}>
+      <div className="rise rise-5" style={{ marginTop: 10 }}>
         <button className="btn btn-accent" onClick={() => onLog(brewer, r, audience)}>
           <Icon name="check" size={19} stroke={2} /> Log coffee
         </button>
