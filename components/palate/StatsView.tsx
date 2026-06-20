@@ -5,7 +5,7 @@ import { BrewingTips } from "./BrewingTips";
 import { RatingTrend } from "./RatingTrend";
 import { TasterFaceoff } from "./TasterFaceoff";
 import { BarCard } from "./BarCard";
-import { buildPalateStats } from "@/lib/palate/stats";
+import { buildPalateStats, inferSharedSessions } from "@/lib/palate/stats";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface StatsViewProps {
@@ -30,17 +30,18 @@ export function StatsView({ rated, allBrews, coffees, config, llmEnabled }: Stat
   });
 
   const stats = useMemo(() => buildPalateStats(rated, allBrews, coffees, config), [rated, allBrews, coffees, config]);
+  const inferredRated = useMemo(() => inferSharedSessions(rated), [rated]);
 
   // Bespoke-card visibility (so empty section headers never show).
   const showTrend = rated.length >= 4;
   const hasFaceoff = useMemo(() => {
     const names = new Set<string>();
-    rated.forEach((b) => {
+    inferredRated.forEach((b) => {
       if (b.stars != null) names.add((b.taster1 || "You").trim());
       if (b.stars2 != null) names.add((b.taster2 || config.taster2 || "Partner").trim());
     });
     return names.size >= 2;
-  }, [rated, config]);
+  }, [inferredRated, config]);
 
   const keep = (cards: typeof stats.love) => (notable ? cards.filter((c) => c.notable) : cards);
   const trendCards = keep(stats.trends);
@@ -86,7 +87,7 @@ export function StatsView({ rated, allBrews, coffees, config, llmEnabled }: Stat
       {hasFaceoff && (
         <>
           <div className="label" style={sectionHdr}>Head to head</div>
-          <TasterFaceoff brews={rated} coffees={coffees} config={config} />
+          <TasterFaceoff brews={inferredRated} coffees={coffees} config={config} />
         </>
       )}
 

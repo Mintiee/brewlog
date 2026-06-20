@@ -28,6 +28,41 @@ const VOLUME_SHARE_MIN = 0.4;    // top entry's share of cups to count as notabl
 
 const coffeeMapOf = (coffees: Coffee[]) => new Map(coffees.map((c) => [c.id, c] as const));
 
+function toCalendarDay(started_at: string | number): string {
+  const d = new Date(typeof started_at === "string" ? Number(started_at) : started_at);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Assigns a synthetic session_id to groups of un-tagged brews that share the
+ *  same coffee, brewer, dose, and calendar day — treating them as implicit shared brews. */
+export function inferSharedSessions(brews: Brew[]): Brew[] {
+  const keyCount = new Map<string, number>();
+  for (const b of brews) {
+    if (b.session_id) continue;
+    const key = `${b.coffee_id}|${b.brewer_id}|${b.dose}|${toCalendarDay(b.started_at)}`;
+    keyCount.set(key, (keyCount.get(key) ?? 0) + 1);
+  }
+  const keyToSession = new Map<string, string>();
+  keyCount.forEach((count, key) => { if (count >= 2) keyToSession.set(key, `inferred:${key}`); });
+  if (!keyToSession.size) return brews;
+  return brews.map((b) => {
+    if (b.session_id) return b;
+    const key = `${b.coffee_id}|${b.brewer_id}|${b.dose}|${toCalendarDay(b.started_at)}`;
+    const sid = keyToSession.get(key);
+    return sid ? { ...b, session_id: sid } : b;
+  });
+}
+
+function deduplicateSessions(brews: Brew[]): Brew[] {
+  const seen = new Set<string>();
+  return brews.filter((b) => {
+    if (!b.session_id) return true;
+    if (seen.has(b.session_id)) return false;
+    seen.add(b.session_id);
+    return true;
+  });
+}
+
 // Raw process name, anaerobic/anoxic variants lumped (matches the texture-free
 // stats grouping used elsewhere).
 function processLabel(raw: string): string | null {
@@ -160,6 +195,9 @@ export function buildPalateStats(rated: Brew[], allBrews: Brew[], coffees: Coffe
   const cm = coffeeMapOf(coffees);
   const byScore = (a: StatCard, b: StatCard) => b.score - a.score;
 
+  // Deduplicate implicit shared brews for volume counts — each shared session counts once.
+  const volumeBrews = deduplicateSessions(inferSharedSessions(allBrews));
+
   const love = [
     flavourCard(rated, cm),
     ratingCard("roaster", "Roasters you're enjoying", rated, (b) => {
@@ -185,15 +223,15 @@ export function buildPalateStats(rated: Brew[], allBrews: Brew[], coffees: Coffe
   ].filter((c): c is StatCard => c != null).sort(byScore);
 
   const drink = [
-    volumeCard("vol-origin", "Cups by origin", allBrews, (b) => {
+    volumeCard("vol-origin", "Cups by origin", volumeBrews, (b) => {
       const o = cm.get(b.coffee_id)?.origin?.trim();
       return o ? { key: o, label: o } : null;
     }),
-    volumeCard("vol-roaster", "Cups by roaster", allBrews, (b) => {
+    volumeCard("vol-roaster", "Cups by roaster", volumeBrews, (b) => {
       const r = cm.get(b.coffee_id)?.roaster?.trim();
       return r ? { key: r, label: r } : null;
     }),
-    volumeCard("vol-process", "Cups by process", allBrews, (b) => {
+    volumeCard("vol-process", "Cups by process", volumeBrews, (b) => {
       const p = processLabel(cm.get(b.coffee_id)?.process || "");
       return p ? { key: p, label: p } : null;
     }),

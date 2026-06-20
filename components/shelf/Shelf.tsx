@@ -46,8 +46,8 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
 
   const groups = [
     { key: "peak", title: "In peak", items: sortRested(activeList.filter((d) => d.st.state === "peak")) },
-    { key: "resting", title: "Resting", items: sortRested(activeList.filter((d) => d.st.state === "resting")) },
     { key: "past", title: "Past peak", items: sortRested(activeList.filter((d) => d.st.state === "past")) },
+    { key: "resting", title: "Resting", items: sortRested(activeList.filter((d) => d.st.state === "resting")) },
   ].filter((g) => g.items.length);
 
   // keep detail in sync with latest coffee data after an update
