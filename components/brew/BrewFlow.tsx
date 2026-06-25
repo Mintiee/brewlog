@@ -21,7 +21,7 @@ interface BrewFlowProps {
 }
 
 export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
-  const { coffees, brews, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrew, dismissBrewSession } = useApp();
+  const { coffees, brews, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
   const otherMember = members.find((m) => m.name !== profile.name) ?? null;
@@ -32,6 +32,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [rateTarget, setRateTarget] = useState<Brew | null>(null);
   const [detailBrew, setDetailBrew] = useState<Brew | null>(null);
+  // How the rating step resolved — drives the "done" screen copy.
+  const [doneKind, setDoneKind] = useState<"rated" | "unrated">("rated");
   // Audience chosen for the last log — drives the confirmation screen copy and action visibility.
   const [loggedAudience, setLoggedAudience] = useState<Audience>("me");
   // Persistence state of the just-logged brew(s): the confirmation screen shows
@@ -207,6 +209,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   }
 
   function saveRating(rating: object) {
+    setDoneKind("rated");
     setStep("done");
     if (logTimer.current) clearTimeout(logTimer.current);
     logTimer.current = setTimeout(backHome, 1600);
@@ -222,9 +225,24 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     });
   }
 
-  function discardRating() {
-    if (rateTarget) dismissBrew(rateTarget.id);
-    backHome();
+  // "Don't rate this one" — keep the cup in the log but resolve it as unrated, so
+  // it drops off the brew screen / pending count instead of being deleted. Setting
+  // a rated_at (with stars left null) is what clears `pending` — which is derived
+  // from rated_at on load — so the cup stays gone after a refresh too. Stars-null
+  // keeps it out of stats and shows an "Unrated" badge in the journal.
+  function skipRating() {
+    if (!rateTarget) { backHome(); return; }
+    setDoneKind("unrated");
+    setStep("done");
+    if (logTimer.current) clearTimeout(logTimer.current);
+    logTimer.current = setTimeout(backHome, 1600);
+    // Touch only this row — a split sibling (the other member's cup) must stay intact.
+    void rateBrew(rateTarget.id, { stars: null }).then((ok) => {
+      if (!ok && authed) {
+        if (logTimer.current) clearTimeout(logTimer.current);
+        setStep("rate");
+      }
+    });
   }
 
   return (
@@ -263,7 +281,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           profile={profile}
           config={config}
           onSave={saveRating}
-          onDiscard={discardRating}
+          onSkip={skipRating}
         />
       )}
       {step === "logged" && saveState === "failed" && (
@@ -332,7 +350,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
               <Icon name="check" size={40} stroke={2.2} />
             </div>
           </div>
-          <div className="rise rise-1" style={{ fontSize: 19, fontWeight: 600 }}>Rated.</div>
+          <div className="rise rise-1" style={{ fontSize: 19, fontWeight: 600 }}>{doneKind === "unrated" ? "Left unrated." : "Rated."}</div>
           <div className="rise rise-2 mono" style={{ fontSize: 13, color: "var(--ink-dim)" }}>{coffee && coffee.name}</div>
         </div>
       )}

@@ -12,11 +12,10 @@ interface StepRateProps {
   profile: Profile;
   config: Config;
   onSave: (rating: object) => void;
-  onDiscard?: () => void;
+  onSkip?: () => void;
 }
 
-export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave, onDiscard }: StepRateProps) {
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave, onSkip }: StepRateProps) {
   const meName = profile.name || "You";
   const [stars, setStars] = useState(0);
   const [acidity, setAcidity] = useState(0);
@@ -93,20 +92,10 @@ export function StepRate({ coffee, brewer, recipe, brew, profile, config, onSave
         <Icon name="check" size={20} stroke={2} /> Save rating
       </button>
 
-      {onDiscard && (
-        confirmDiscard ? (
-          <div style={{ marginTop: 14, padding: 14, borderRadius: 16, background: "var(--surface)", border: "1px solid var(--line)", textAlign: "center" }}>
-            <div style={{ fontSize: 13.5, color: "var(--ink-dim)", lineHeight: 1.5 }}>Remove this cup from your log without rating it?</div>
-            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-              <button className="btn btn-soft" style={{ flex: 1, height: 42 }} onClick={() => setConfirmDiscard(false)}>Keep it</button>
-              <button className="btn" style={{ flex: 1, height: 42, background: "transparent", border: "1px solid var(--bad, #b65f4f)", color: "var(--bad, #c9755f)" }} onClick={onDiscard}>Discard</button>
-            </div>
-          </div>
-        ) : (
-          <button className="btn btn-ghost" style={{ marginTop: 6, height: 42, justifyContent: "center", color: "var(--ink-faint)" }} onClick={() => setConfirmDiscard(true)}>
-            Don&apos;t rate this one
-          </button>
-        )
+      {onSkip && (
+        <button className="btn btn-ghost" style={{ marginTop: 6, height: 42, justifyContent: "center", color: "var(--ink-faint)" }} onClick={onSkip}>
+          Don&apos;t rate this one — keep it unrated
+        </button>
       )}
       <div className="screen-bottom" />
     </div>

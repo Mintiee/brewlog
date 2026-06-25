@@ -31,8 +31,10 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
   const rateCoffee = rating ? coffees.find((c) => c.id === rating.coffee_id) ?? null : null;
 
   // The Journal lists every brew (rated + unrated), matching the Recently strip.
-  // Stats stay rated-only so unrated brews don't skew rankings/insight/tips.
-  const rated = useMemo(() => brews.filter((b) => !b.pending), [brews]);
+  // Stats stay rated-only so unrated brews don't skew rankings/insight/tips —
+  // a brew resolved as "unrated" (rated_at set, stars null) is non-pending but
+  // must still be excluded here, hence the explicit stars check.
+  const rated = useMemo(() => brews.filter((b) => !b.pending && b.stars != null), [brews]);
 
   const handleUpdate = (id: string, patch: Partial<Brew>) => {
     updateBrew(id, patch);

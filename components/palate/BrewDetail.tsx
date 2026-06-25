@@ -97,10 +97,12 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
       grind: ef.grind,
       ratio: ef.ratio,
       water_type: ef.water_type,
-      // Only carry stars/rated_at forward when the brew was already rated.
-      // Writing null for both on an unrated brew keeps it pending, and also
-      // self-heals any row that was accidentally stamped stars:3 with no rated_at.
-      stars: wasRated ? ef.stars : null,
+      // Key the stars-write on the actual edited value (0 from the stepper means
+      // "no rating"), not on wasRated alone: a brew resolved as "unrated"
+      // (rated_at set, stars null) must NOT pick up a phantom stars:0 on edit, and
+      // a corrupted stars-without-rated_at row still self-heals to null. Bumping
+      // the stepper above 0 re-rates it.
+      stars: wasRated && ef.stars > 0 ? ef.stars : null,
       note: ef.note || null,
       started_at: String(newStartMs),
       rated_at: wasRated && brew.rated_at
@@ -194,7 +196,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
       <div key={row.id}>
         {row.stars == null ? (
           <div style={{ fontSize: 13, color: "var(--ink-faint)", fontStyle: "italic" }}>
-            Waiting on {displayName} to rate…
+            {row.rated_at != null ? "Not rated" : `Waiting on ${displayName} to rate…`}
           </div>
         ) : (
           <>
