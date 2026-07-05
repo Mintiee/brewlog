@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
-  todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions, bagAvgRating,
+  todayISO, frozenDays, canonicalRoaster, roasterSuggestions, bagAvgRating,
 } from "@/lib/domain";
 import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
 import { useEditForm } from "@/lib/hooks/useEditForm";
@@ -27,7 +27,7 @@ interface EditForm {
   process: string;
   notes: string;
   remaining: number;   // grams left now; stored bag size is back-computed as remaining + used
-  roastDaysAgo: number;
+  roastedAt: string;   // ISO YYYY-MM-DD; edited directly (no freeze-adjusted round-trip)
 }
 
 interface CoffeeDetailProps {
@@ -96,15 +96,17 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
       process: coffee.process,
       notes: (coffee.notes || []).join(", "),
       remaining,
-      roastDaysAgo: st.day,
+      roastedAt: coffee.roasted_at,
     });
   };
   const saveEdit = () => {
     if (!ef) return;
     const notes = ef.notes ? ef.notes.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    // Local date, not toISOString() — UTC formatting shifted the roast date back
-    // a day in ahead-of-UTC timezones.
-    const roasted_at = daysAgoISO(ef.roastDaysAgo);
+    // Edit the stored roast date directly — no freeze-adjusted round-trip. Seeding
+    // from st.day (freeze-adjusted) then converting back re-subtracted the frozen
+    // span on read, shrinking the value every save. frozen_at/thawed_at ride along
+    // on ...coffee unchanged, so the freeze span is applied exactly once.
+    const roasted_at = ef.roastedAt || coffee.roasted_at;
     // "Remaining" is what's left now; the stored bag size (grams) is remaining +
     // what's already been brewed, so remainingGrams() reads back the edited value.
     const newRemaining = Number.isFinite(Number(ef.remaining)) ? Number(ef.remaining) : remaining;
@@ -153,8 +155,29 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
               <ProcessPicker value={ef.process} onChange={setE("process")} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", marginBottom: 4 }}>
-            <Stepper icon="timer" label="Roasted" value={Number(ef.roastDaysAgo) || 0} unit="days ago" step={1} min={0} max={200} onChange={setE("roastDaysAgo")} />
+          <div style={{ marginBottom: 12 }}>
+            <div className="label" style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              <Icon name="timer" size={13} stroke={1.8} /> Roast date
+            </div>
+            <input
+              type="date"
+              value={ef.roastedAt}
+              max={todayISO()}
+              onChange={(e) => setE("roastedAt")(e.target.value)}
+              style={{
+                width: "100%", padding: "12px 14px", borderRadius: 13,
+                background: "var(--surface)", border: "1px solid var(--line)",
+                color: "var(--ink)", outline: "none",
+                fontFamily: "var(--font-mono)", fontSize: 16, boxSizing: "border-box",
+              }}
+            />
+            {frozenDays(coffee) > 0 && (
+              <div className="label" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                <Icon name="snow" size={13} stroke={1.8} /> Frozen for {frozenDays(coffee)}d — aging paused, so it drinks like {st.day}d old.
+              </div>
+            )}
+          </div>
+          <div style={{ marginBottom: 4 }}>
             <Stepper icon="scale" label="Remaining" value={Number(ef.remaining) || 0} unit="g" step={2.5} min={0} max={1000} format={(v) => (v % 1 === 0 ? String(v) : v.toFixed(1))} onChange={setE("remaining")} />
           </div>
           <Field label="Tasting notes" value={ef.notes} onChange={setE("notes")} placeholder="comma, separated" />
@@ -188,7 +211,9 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
               <div className="label">{k}</div>
               <div style={{ fontSize: 15, fontWeight: 600, marginTop: 3, color: k === "Status" ? freshColor(st.state) : "var(--ink)" }}>{v}</div>
               {k === "Roasted" && (
-                <div className="label" style={{ marginTop: 2 }}>{roastDateText(coffee.roasted_at)}</div>
+                <div className="label" style={{ marginTop: 2 }}>
+                  {roastDateText(coffee.roasted_at)}{frozenDays(coffee) > 0 && ` · frozen ${frozenDays(coffee)}d`}
+                </div>
               )}
               {k === "Status" && st.state === "frozen" && coffee.frozen_at && (
                 <div className="label" style={{ marginTop: 2 }}>since {roastDateText(coffee.frozen_at)}</div>

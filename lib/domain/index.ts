@@ -82,6 +82,16 @@ export function effectiveDaysAgo(coffee: Coffee): number {
   return restDaysAt(coffee, today.getTime());
 }
 
+// Days this coffee has spent frozen (aging paused): frozen_at → thawed_at,
+// or → today if still frozen. 0 if never frozen. frozenSpanMs already caps at
+// thawed_at, so passing today works for both current and past freeze cycles.
+export function frozenDays(coffee: Coffee): number {
+  if (!coffee.frozen_at) return 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round(frozenSpanMs(coffee, today.getTime()) / 86400000);
+}
+
 export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
