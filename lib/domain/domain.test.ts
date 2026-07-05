@@ -4,7 +4,7 @@ import {
   gramsUsed, avgDailyGrams,
   brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
   roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
-  effectiveDaysAgo, restDaysAt,
+  effectiveDaysAgo, restDaysAt, restForBrew,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
@@ -70,6 +70,38 @@ describe("freeze-adjusted age (effectiveDaysAgo / restDaysAt)", () => {
     const c = makeCoffee({ roasted_at: daysAgoDate(50), frozen_at: daysAgoDate(40), thawed_at: null });
     // Brewed now, straight from the freezer: rest ≈ days roast→freeze = 10.
     expect(restDaysAt(c, now)).toBe(10);
+  });
+});
+
+describe("partial-freeze aging (only the frozen portion pauses)", () => {
+  it("coffeeStatus: unfrozen half keeps aging by the calendar while the rest is frozen", () => {
+    // Roasted 34d ago, half the bag put in the freezer 10d ago. The out-of-freezer
+    // half was never paused → still ages by calendar (day 34), not paused at ~24.
+    const c = makeCoffee({ roasted_at: daysAgoDate(34), grams: 200, frozen_grams: 100, frozen_at: daysAgoDate(10), thawed_at: null });
+    const st = coffeeStatus(c, []);
+    expect(st.state).toBe("peak");
+    expect(st.day).toBe(34);
+    expect(st.label).toBe("22d left");
+  });
+
+  it("coffeeStatus: only-frozen bag shows the paused age", () => {
+    const c = makeCoffee({ roasted_at: daysAgoDate(34), grams: 100, frozen_grams: 100, frozen_at: daysAgoDate(10), thawed_at: null });
+    const st = coffeeStatus(c, []);
+    expect(st.state).toBe("frozen");
+    expect(st.day).toBe(24); // aged 34-10=24d before the freeze, then paused
+  });
+
+  it("restForBrew: brewing from the out-of-freezer portion snapshots calendar rest", () => {
+    const now = Date.now();
+    const c = makeCoffee({ roasted_at: daysAgoDate(34), grams: 200, frozen_grams: 100, frozen_at: daysAgoDate(10), thawed_at: null });
+    expect(restForBrew(c, [], now)).toBe(34);
+  });
+
+  it("restForBrew: brewing from the freezer (nothing active) snapshots freeze-adjusted rest", () => {
+    const now = Date.now();
+    const c = makeCoffee({ roasted_at: daysAgoDate(50), grams: 100, frozen_grams: 100, frozen_at: daysAgoDate(40), thawed_at: null });
+    expect(restForBrew(c, [], now)).toBe(restDaysAt(c, now));
+    expect(restForBrew(c, [], now)).toBe(10);
   });
 });
 

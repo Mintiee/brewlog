@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { Brew, Brewer, Recipe } from "@/lib/types";
 import { useApp } from "@/lib/store/AppContext";
-import { restDaysAt, activeGrams } from "@/lib/domain";
+import { restForBrew, activeGrams } from "@/lib/domain";
 import { Icon } from "@/components/ui";
 import { StepWhat } from "./StepWhat";
 import { StepHow, type Audience } from "./StepHow";
@@ -96,7 +96,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       started_at: String(startedAt),
       // Snapshot the freeze-adjusted rest now, so it stays correct if the
       // coffee is later re-frozen or its dates edited.
-      rest_days: coffee ? restDaysAt(coffee, startedAt) : null,
+      rest_days: coffee ? restForBrew(coffee, brews, startedAt) : null,
       rated_at: null,
       logged_by: profile.id,
       stars: null,
@@ -132,7 +132,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
         session_id: sessionId,
         guest: false,
         started_at: String(startedAt),
-        rest_days: coffee ? restDaysAt(coffee, startedAt) : null,
+        rest_days: coffee ? restForBrew(coffee, brews, startedAt) : null,
         rated_at: null,
         logged_by: profile.id,
         stars: null,

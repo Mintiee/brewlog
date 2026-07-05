@@ -56,6 +56,20 @@ export function restDaysAt(coffee: Coffee, atMs: number): number {
   return Math.max(0, Math.round((atMs - roastedAt - frozenSpanMs(coffee, atMs)) / 86400000));
 }
 
+// Calendar days roast→atMs, ignoring any freeze — the out-of-freezer portion
+// never paused, so it ages by the wall clock.
+function calendarDaysAt(coffee: Coffee, atMs: number): number {
+  const roastedAt = parseLocalDate(coffee.roasted_at).getTime();
+  return Math.max(0, Math.round((atMs - roastedAt) / 86400000));
+}
+
+// Rest snapshot for a brew: you pull from the out-of-freezer portion when there
+// is one (calendar rest — those beans never paused), and only pull from the
+// freezer when nothing's active (freeze-adjusted pre-freeze rest).
+export function restForBrew(coffee: Coffee, brews: Brew[], atMs: number): number {
+  return activeGrams(coffee, brews) > 0 ? calendarDaysAt(coffee, atMs) : restDaysAt(coffee, atMs);
+}
+
 // Freeze-adjusted rest at the moment this brew was pulled.
 export function restDaysAtBrew(coffee: Coffee, brew: Brew): number {
   return restDaysAt(coffee, parseTs(brew.started_at));
@@ -69,7 +83,6 @@ export function effectiveDaysAgo(coffee: Coffee): number {
 }
 
 export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
-  const d = effectiveDaysAgo(coffee);
   const frozen = frozenGramsOf(coffee, brews);
   const active = activeGrams(coffee, brews);
   // Global windows (one knob for all coffees) — see setRestWindow.
@@ -77,9 +90,19 @@ export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
   const peak = Math.max(peakWindow, rest + 1);
 
   if (active <= 0 && frozen > 0) {
-    const restLeft = Math.max(0, rest - d);
-    return { state: "frozen", label: restLeft > 0 ? `Ready in ${restLeft}d` : "Ready", day: d, ready: false, pct: 1, restLeft };
+    // Only frozen beans left — show their paused age.
+    const fd = effectiveDaysAgo(coffee);
+    const restLeft = Math.max(0, rest - fd);
+    return { state: "frozen", label: restLeft > 0 ? `Ready in ${restLeft}d` : "Ready", day: fd, ready: false, pct: 1, restLeft };
   }
+
+  // The drinkable (out-of-freezer) portion drives the resting/peak/past clock.
+  // While any beans are still frozen, that portion was never paused → calendar age.
+  // Once nothing is frozen (never-frozen or fully thawed), effectiveDaysAgo carries
+  // the right pause.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = frozen > 0 ? calendarDaysAt(coffee, today.getTime()) : effectiveDaysAgo(coffee);
   if (d < rest) {
     return { state: "resting", label: `Ready in ${rest - d}d`, day: d, ready: false, pct: d / rest };
   }
