@@ -132,6 +132,9 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   };
 
   if (editing && ef) {
+    // Effective (freeze-adjusted) age of the *draft* roast date, so the caption
+    // tracks the date picker live rather than the last-saved value.
+    const previewDay = coffeeStatus({ ...coffee, roasted_at: ef.roastedAt || coffee.roasted_at }, brews).day;
     return (
       <Sheet open={true} onClose={onClose}>
         <div className="screen-pad" style={{ paddingTop: 6 }}>
@@ -173,7 +176,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
             />
             {frozenDays(coffee) > 0 && (
               <div className="label" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                <Icon name="snow" size={13} stroke={1.8} /> Frozen for {frozenDays(coffee)}d — aging paused, so it drinks like {st.day}d old.
+                <Icon name="snow" size={13} stroke={1.8} /> Frozen for {frozenDays(coffee)}d — aging paused, so it drinks like {previewDay}d old.
               </div>
             )}
           </div>
