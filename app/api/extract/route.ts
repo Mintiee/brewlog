@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { complete } from "@/lib/llm";
 import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
+import { safeFetchText, UnsafeUrlError } from "@/lib/api/ssrf";
+import { sanitizeExtractOutput } from "@/lib/api/extractOutput";
 
 const SYSTEM_PHOTO = `You are reading a specialty-coffee bag label to extract structured data.
 Return ONLY minified JSON (no prose, no markdown, no backticks):
@@ -40,15 +42,23 @@ export async function POST(req: NextRequest) {
       });
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error("No JSON in response");
-      const data = JSON.parse(match[0]);
+      const data = sanitizeExtractOutput(JSON.parse(match[0]));
       return NextResponse.json(data);
     }
 
     if (url) {
-      // URL extraction — server fetches the page, then extracts
-      const pageRes = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 brewlog/1.0" }, signal: AbortSignal.timeout(8000) });
-      if (!pageRes.ok) throw new Error(`Page fetch failed: ${pageRes.status}`);
-      const html = await pageRes.text();
+      // URL extraction — server fetches the page (SSRF-guarded: https-only,
+      // rejects private/loopback/link-local/metadata addresses on every
+      // redirect hop, capped response size), then extracts.
+      let html: string;
+      try {
+        html = await safeFetchText(url, { headers: { "User-Agent": "Mozilla/5.0 brewlog/1.0" }, timeoutMs: 8000 });
+      } catch (err) {
+        if (err instanceof UnsafeUrlError) {
+          return NextResponse.json({ error: err.message }, { status: 400 });
+        }
+        throw err;
+      }
       // Strip to text content (very basic; the LLM handles the noise)
       const text = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 4000);
 
@@ -59,7 +69,7 @@ export async function POST(req: NextRequest) {
       });
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error("No JSON in response");
-      const data = JSON.parse(match[0]);
+      const data = sanitizeExtractOutput(JSON.parse(match[0]));
       return NextResponse.json(data);
     }
 
