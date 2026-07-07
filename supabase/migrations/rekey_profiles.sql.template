@@ -1,0 +1,145 @@
+-- =============================================================
+-- rekey_profiles.sql.template  —  ONE-TIME, PARAMETERISED SCRIPT
+-- =============================================================
+-- This is NOT part of the numbered migration sequence. Do not rename it to
+-- NNN_*.sql and do not let it run in an automated migration pass. It is a
+-- one-time, hand-run data fix for the auth cutover (see docs/auth-cutover.md).
+--
+-- WHAT IT DOES
+--   Re-points one household member's data from their OLD (anonymous) profile id
+--   to their NEW (email-auth) profile id, then deletes the old profile — all in
+--   a single transaction you COMMIT or ROLLBACK by hand after reading the counts.
+--
+--   Both profiles must already exist in the SAME household before you run this:
+--     - OLD_PROFILE_ID : the anonymous-phase profile that owns the brews.
+--     - NEW_PROFILE_ID : the profile created when the member signed in with
+--                        email+code and joined via invite code.
+--
+--   Profile-id foreign keys re-pointed (every one in the schema as of migration
+--   017 — grep the migrations before trusting this list if the schema has moved):
+--     - public.brews.logged_by     (NOT NULL, FK -> profiles ON DELETE CASCADE)
+--     - public.brews.rate_for      (nullable, FK -> profiles ON DELETE SET NULL)
+--     - public.household_ai.set_by (NOT NULL, FK -> profiles ON DELETE CASCADE)
+--   Then the OLD row in public.profiles is deleted.
+--
+--   NOT re-pointed (they are display-name TEXT, not profile ids):
+--     - public.brews.taster1 / public.brews.taster2
+--     - public.config.taster2
+--   See the OPTIONAL name-fix block at the bottom if a member re-spelled their
+--   name and you want the old rating labels to match.
+--
+-- FK ORDERING / WHY NO DEFERRAL
+--   The child FKs have ON DELETE actions but NO "ON UPDATE CASCADE", and
+--   profiles.id cannot be updated in place while children reference it. So we do
+--   a MERGE, not a rename: the new profile already exists, we move the children
+--   onto it FIRST, then delete the now-unreferenced old parent. No deferrable
+--   constraints or session_replication_role changes are needed.
+--
+-- HOW TO RUN
+--   psql (recommended — supports interactive COMMIT/ROLLBACK):
+--     1. Fill in the two \set lines below.
+--     2. psql "$DATABASE_URL" -f rekey_profiles.sql.template
+--     3. Read the BEFORE/AFTER notices, then type  COMMIT;  (or  ROLLBACK;).
+--
+--   Supabase SQL editor: it wraps each run in its own transaction and
+--   auto-commits on success, so you cannot pause at COMMIT. To get a dry run
+--   there, uncomment the "ROLLBACK;" at the very end, run it, read the NOTICE
+--   output, then re-run with ROLLBACK replaced by COMMIT. In the SQL editor,
+--   also replace the psql  :'old_id' / :'new_id'  references with the literal
+--   UUIDs (the \set mechanism is psql-only).
+--
+--   RUN ONCE PER MEMBER (twice total for a two-person household).
+-- =============================================================
+
+-- ---- 1. FILL THESE IN (psql) --------------------------------------------
+\set old_id 'OLD_PROFILE_ID'
+\set new_id 'NEW_PROFILE_ID'
+-- -------------------------------------------------------------------------
+
+begin;
+
+-- ---- 2. PRE-FLIGHT GUARDS (abort the transaction on any mismatch) --------
+-- Both profiles must exist and be in the same household; ids must differ.
+do $$
+declare
+  v_old uuid := :'old_id';
+  v_new uuid := :'new_id';
+  v_old_hh uuid;
+  v_new_hh uuid;
+  v_old_name text;
+  v_new_name text;
+  v_old_brews int;
+  v_new_brews int;
+begin
+  if v_old = v_new then
+    raise exception 'old_id and new_id are identical (%). Nothing to re-key.', v_old;
+  end if;
+
+  select household_id, name into v_old_hh, v_old_name from public.profiles where id = v_old;
+  if v_old_hh is null then
+    raise exception 'OLD profile % not found.', v_old;
+  end if;
+
+  select household_id, name into v_new_hh, v_new_name from public.profiles where id = v_new;
+  if v_new_hh is null then
+    raise exception 'NEW profile % not found. The member must sign in and join first.', v_new;
+  end if;
+
+  if v_old_hh <> v_new_hh then
+    raise exception 'Profiles are in different households (old=%, new=%). Refusing to cross households.', v_old_hh, v_new_hh;
+  end if;
+
+  select count(*) into v_old_brews from public.brews where logged_by = v_old;
+  select count(*) into v_new_brews from public.brews where logged_by = v_new;
+
+  raise notice 'BEFORE re-key:';
+  raise notice '  household         : %', v_old_hh;
+  raise notice '  OLD % (%) logged % brews', v_old, v_old_name, v_old_brews;
+  raise notice '  NEW % (%) logged % brews', v_new, v_new_name, v_new_brews;
+  raise notice '  brews.rate_for pointing at OLD : %', (select count(*) from public.brews where rate_for = v_old);
+  raise notice '  household_ai.set_by = OLD      : %', (select count(*) from public.household_ai where set_by = v_old);
+end $$;
+
+-- ---- 3. RE-POINT CHILDREN (old -> new) ----------------------------------
+update public.brews        set logged_by = :'new_id' where logged_by = :'old_id';
+update public.brews        set rate_for  = :'new_id' where rate_for  = :'old_id';
+update public.household_ai  set set_by    = :'new_id' where set_by    = :'old_id';
+
+-- ---- 4. OPTIONAL: fix display-name text on old rating labels -------------
+-- taster1/taster2/config.taster2 store the member's NAME, not their id. If the
+-- member re-spelled their name at join time and you want historical labels to
+-- match, uncomment and set OLD_NAME / NEW_NAME. Otherwise leave commented.
+--
+-- update public.brews  set taster1 = 'NEW_NAME' where taster1 = 'OLD_NAME';
+-- update public.brews  set taster2 = 'NEW_NAME' where taster2 = 'OLD_NAME';
+-- update public.config set taster2 = 'NEW_NAME' where taster2 = 'OLD_NAME';
+
+-- ---- 5. DELETE THE OLD PROFILE (now unreferenced) -----------------------
+-- Safe: all profile-id children above have been moved to new_id. profiles.id
+-- references auth.users; deleting the profile row does NOT delete the old
+-- auth.users row (that FK is the other direction). Removing the stale auth user
+-- itself, if desired, is a separate dashboard/admin action.
+delete from public.profiles where id = :'old_id';
+
+-- ---- 6. AFTER counts -----------------------------------------------------
+do $$
+declare
+  v_new uuid := :'new_id';
+begin
+  raise notice 'AFTER re-key:';
+  raise notice '  NEW % now logged % brews', v_new, (select count(*) from public.brews where logged_by = v_new);
+  raise notice '  brews.rate_for pointing at NEW : %', (select count(*) from public.brews where rate_for = v_new);
+  raise notice '  household_ai.set_by = NEW      : %', (select count(*) from public.household_ai where set_by = v_new);
+  raise notice '  OLD profile rows remaining     : % (expected 0)', (select count(*) from public.profiles where id = :'old_id');
+end $$;
+
+-- ---- 7. DECIDE --------------------------------------------------------------
+-- Review the BEFORE/AFTER notices above.
+--   - Looks right  -> run:  COMMIT;
+--   - Anything off -> run:  ROLLBACK;
+-- (psql leaves the transaction open here so you can choose.)
+--
+-- Supabase SQL editor only: uncomment ONE of the following to end the txn,
+-- since the editor won't pause for an interactive command.
+-- rollback;   -- dry run: verify the NOTICE output, changes discarded
+-- commit;     -- apply for real
