@@ -296,6 +296,31 @@ export function pendingBrews(brews: Brew[]): Brew[] {
     .sort((a, b) => parseTs(b.started_at) - parseTs(a.started_at));
 }
 
+/** The ids to remove for a "delete this brew" action rooted at `id`: if the
+ *  target brew is part of a split session (shares a session_id with another
+ *  row), every row in that session is included so a session-delete removes
+ *  both cups atomically. Falls back to just `id` for a solo brew or an id
+ *  that isn't found. Pulled out of AppContext's dismissBrewSession so the
+ *  grouping rule is independently testable. */
+export function sessionDeleteIds(brews: Brew[], id: string): Set<string> {
+  const brew = brews.find((x) => x.id === id);
+  return new Set(
+    brew?.session_id
+      ? brews.filter((x) => x.session_id === brew.session_id).map((x) => x.id)
+      : [id],
+  );
+}
+
+/** After removing `nextBrews` worth of brews for `coffee`, should an
+ *  archived bag be auto-restored? True only if the bag was archived (i.e.
+ *  it was previously marked finished) and the deletion left it with active
+ *  grams again — deleting the brew that finished it off un-finishes it.
+ *  Pulled out of AppContext's deleteBrews (Bug 1c) so the decision is
+ *  independently testable. */
+export function shouldUnarchiveAfterDelete(coffee: Coffee | undefined, nextBrews: Brew[]): boolean {
+  return !!coffee?.archived && activeGrams(coffee, nextBrews) > 0;
+}
+
 /** Whose "waiting to rate" list a brew belongs in: the person it was handed off
  *  to (rate_for) if set, otherwise the person who logged it. A logged brew is
  *  the logger's to rate until they send it to someone else. */

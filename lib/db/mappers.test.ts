@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { rowToBrew, brewToRow, brewPatchToRow, rowToSavedRecipe, savedRecipeToRow } from "@/lib/db/mappers";
+import { rowToBrew, brewToRow, brewPatchToRow, rowToSavedRecipe, savedRecipeToRow, rowToConfig } from "@/lib/db/mappers";
 import type { Tables } from "@/lib/db/database.types";
 import type { Brew, SavedRecipe } from "@/lib/types";
+import { SEED_BREWERS } from "@/lib/domain/seed";
 
 /** Fill in the DB-side columns an insert payload doesn't carry. */
 function asRow(partial: object): Tables<"brews"> {
@@ -151,5 +152,101 @@ describe("savedRecipeToRow / rowToSavedRecipe round-trip", () => {
     expect(back.dose).toBe(15);
     expect(back.ratio).toBe(16.7);
     expect(back.brewer_id).toBeNull();
+  });
+});
+
+describe("rowToConfig — backfill defaults for rows stored before newer fields existed", () => {
+  /** Minimal config row; overrides layer on top. */
+  function asConfigRow(overrides: Partial<Tables<"config">> = {}): Tables<"config"> {
+    return {
+      household_id: "h1",
+      grinder: { name: "Comandante C40", unit: "clicks", grind_min: 0, grind_max: 50, grind_step: 1 },
+      brewers: SEED_BREWERS,
+      waters: ["Third Wave", "Filtered"],
+      default_water: "Third Wave",
+      taster2: "Kris",
+      random_greeting: true,
+      rest_days: 28,
+      serving_grams: 12.5,
+      peak_days: 56,
+      ...overrides,
+    } as Tables<"config">;
+  }
+
+  it("passes through a fully-populated row unchanged", () => {
+    const row = asConfigRow();
+    const config = rowToConfig(row);
+    expect(config.grinder).toEqual(row.grinder);
+    expect(config.brewers).toEqual(row.brewers);
+    expect(config.rest_days).toBe(28);
+    expect(config.peak_days).toBe(56);
+    expect(config.serving_grams).toBe(12.5);
+  });
+
+  it("backfills brewer `water` from dose*ratio when a stored brewer predates the field", () => {
+    const legacyBrewer = { id: "v60", name: "V60", short: "V60", dose: 15, ratio: 16 };
+    const row = asConfigRow({ brewers: [legacyBrewer] as unknown as Tables<"config">["brewers"] });
+    const config = rowToConfig(row);
+    expect(config.brewers[0].water).toBe(240); // 15 * 16
+  });
+
+  it("leaves an existing brewer `water` value alone", () => {
+    const brewer = { id: "v60", name: "V60", short: "V60", dose: 15, ratio: 16, water: 999 };
+    const row = asConfigRow({ brewers: [brewer] as unknown as Tables<"config">["brewers"] });
+    const config = rowToConfig(row);
+    expect(config.brewers[0].water).toBe(999);
+  });
+
+  it("falls back to SEED_BREWERS when brewers is missing or empty", () => {
+    const empty = rowToConfig(asConfigRow({ brewers: [] }));
+    expect(empty.brewers.length).toBe(SEED_BREWERS.length);
+    const missing = rowToConfig(asConfigRow({ brewers: null as unknown as Tables<"config">["brewers"] }));
+    expect(missing.brewers.length).toBe(SEED_BREWERS.length);
+  });
+
+  it("backfills grinder range/step defaults when a stored grinder predates those fields", () => {
+    const row = asConfigRow({ grinder: { name: "Old Grinder", unit: "numbers" } as unknown as Tables<"config">["grinder"] });
+    const config = rowToConfig(row);
+    expect(config.grinder.name).toBe("Old Grinder");   // preserved
+    expect(config.grinder.unit).toBe("numbers");        // preserved
+    expect(config.grinder.grind_min).toBe(0);           // backfilled default
+    expect(config.grinder.grind_max).toBe(50);          // backfilled default
+    expect(config.grinder.grind_step).toBe(1);          // backfilled default
+  });
+
+  it("falls back to the default grinder entirely when grinder is null/malformed", () => {
+    const config = rowToConfig(asConfigRow({ grinder: null as unknown as Tables<"config">["grinder"] }));
+    expect(config.grinder.name).toBe("Comandante C40");
+    expect(config.grinder.grind_max).toBe(50);
+  });
+
+  it("backfills waters/default_water/taster2/random_greeting/rest_days/peak_days/serving_grams when absent", () => {
+    const row = asConfigRow({
+      waters: null as unknown as string[],
+      default_water: null as unknown as string,
+      taster2: null as unknown as string,
+      random_greeting: null as unknown as boolean,
+      rest_days: null as unknown as number,
+      peak_days: null as unknown as number,
+      serving_grams: null as unknown as number,
+    });
+    const config = rowToConfig(row);
+    expect(config.waters).toEqual(["Third Wave", "Filtered", "Volvic", "Tap"]);
+    expect(config.default_water).toBe("Third Wave");
+    expect(config.taster2).toBe("Kris");
+    expect(config.random_greeting).toBe(true);
+    expect(config.rest_days).toBe(28);
+    expect(config.peak_days).toBe(56);
+    expect(config.serving_grams).toBe(12.5);
+  });
+
+  it("coerces a numeric-string serving_grams from PostgREST", () => {
+    const config = rowToConfig(asConfigRow({ serving_grams: "18" as unknown as number }));
+    expect(config.serving_grams).toBe(18);
+  });
+
+  it("random_greeting is only false when explicitly false (not merely falsy/absent)", () => {
+    expect(rowToConfig(asConfigRow({ random_greeting: false })).random_greeting).toBe(false);
+    expect(rowToConfig(asConfigRow({ random_greeting: undefined as unknown as boolean })).random_greeting).toBe(true);
   });
 });

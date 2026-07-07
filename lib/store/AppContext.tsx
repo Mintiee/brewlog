@@ -11,7 +11,7 @@ import {
 } from "@/lib/db";
 import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
-import { setRestWindow, setServingGrams, setPeakWindow, activeGrams } from "@/lib/domain";
+import { setRestWindow, setServingGrams, setPeakWindow, activeGrams, sessionDeleteIds, shouldUnarchiveAfterDelete } from "@/lib/domain";
 import { persist, writesIdle, writesInFlight } from "@/lib/store/persist";
 import { drainOutbox } from "@/lib/store/outbox";
 import type { WriteDescriptor } from "@/lib/db/writeExecutors";
@@ -396,7 +396,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     const prevCoffees = coffees;
     const nextBrews = brews.filter((x) => !ids.has(x.id));
     const coffee = anchor ? coffees.find((c) => c.id === anchor.coffee_id) : undefined;
-    const restored = coffee?.archived && activeGrams(coffee, nextBrews) > 0
+    const restored = coffee && shouldUnarchiveAfterDelete(coffee, nextBrews)
       ? { ...coffee, household_id: coffee.household_id || profile.household_id, archived: false }
       : null;
     const removed = brews.filter((x) => ids.has(x.id));
@@ -446,12 +446,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
    *  leave Kris's sibling row intact. */
   const dismissBrewSession = useCallback((id: string) => {
     const brew = brews.find((x) => x.id === id);
-    const ids = new Set(
-      brew?.session_id
-        ? brews.filter((x) => x.session_id === brew.session_id).map((x) => x.id)
-        : [id],
-    );
-    return deleteBrews(ids, brew);
+    return deleteBrews(sessionDeleteIds(brews, id), brew);
   }, [deleteBrews, brews]);
 
   const importCoffees = useCallback((incoming: Coffee[]) => {

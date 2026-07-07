@@ -6,6 +6,7 @@ import {
   roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
   effectiveDaysAgo, restDaysAt, restForBrew,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
+  sessionDeleteIds, shouldUnarchiveAfterDelete,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -459,5 +460,56 @@ describe("bagAvgRating", () => {
 
   it("returns null with no rated brews", () => {
     expect(bagAvgRating("none", brews)).toBeNull();
+  });
+});
+
+describe("sessionDeleteIds — session-sibling grouping for delete", () => {
+  const brews = [
+    makeBrew({ id: "solo", session_id: null }),
+    makeBrew({ id: "s1", session_id: "sess-a" }),
+    makeBrew({ id: "s2", session_id: "sess-a" }),
+    makeBrew({ id: "other", session_id: "sess-b" }),
+  ];
+
+  it("groups every row sharing the target's session_id", () => {
+    expect(sessionDeleteIds(brews, "s1")).toEqual(new Set(["s1", "s2"]));
+    expect(sessionDeleteIds(brews, "s2")).toEqual(new Set(["s1", "s2"]));
+  });
+
+  it("falls back to just the target id for a solo (non-session) brew", () => {
+    expect(sessionDeleteIds(brews, "solo")).toEqual(new Set(["solo"]));
+  });
+
+  it("falls back to just the target id when the id isn't found", () => {
+    expect(sessionDeleteIds(brews, "missing")).toEqual(new Set(["missing"]));
+  });
+
+  it("doesn't pull in an unrelated session", () => {
+    const ids = sessionDeleteIds(brews, "s1");
+    expect(ids.has("other")).toBe(false);
+  });
+});
+
+describe("shouldUnarchiveAfterDelete — auto-restore an archived bag (Bug 1c)", () => {
+  it("restores when the coffee was archived and the delete leaves active grams", () => {
+    const coffee = makeCoffee({ archived: true, grams: 200, frozen_grams: 0 });
+    // No brews left consuming grams → activeGrams is the bag's full weight.
+    expect(shouldUnarchiveAfterDelete(coffee, [])).toBe(true);
+  });
+
+  it("does not restore an already-unarchived coffee", () => {
+    const coffee = makeCoffee({ archived: false, grams: 200 });
+    expect(shouldUnarchiveAfterDelete(coffee, [])).toBe(false);
+  });
+
+  it("does not restore an archived coffee that still has no active grams left", () => {
+    // All 200g consumed by remaining brews → activeGrams is 0 even after the delete.
+    const coffee = makeCoffee({ id: "c9", archived: true, grams: 200 });
+    const remaining = [makeBrew({ coffee_id: "c9", dose: 200, pending: false })];
+    expect(shouldUnarchiveAfterDelete(coffee, remaining)).toBe(false);
+  });
+
+  it("returns false when there's no coffee (anchor brew's coffee not found)", () => {
+    expect(shouldUnarchiveAfterDelete(undefined, [])).toBe(false);
   });
 });
