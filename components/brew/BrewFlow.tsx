@@ -20,6 +20,52 @@ interface BrewFlowProps {
   onGotoShelf?: () => void;
 }
 
+// Minimal in-progress draft: enough to restore "what coffee, which brewer, what
+// recipe was dialed in" if iOS evicts the backgrounded PWA mid-flow. Only the
+// pre-log steps ("what"/"how") are worth restoring — once a brew is logged it's
+// persisted for real (outbox/DB), and "rate"/"done"/"logged" are transient.
+const DRAFT_KEY = "brewflow:draft:v1";
+
+interface BrewDraft {
+  step: "what" | "how";
+  coffeeId: string | null;
+  brewerId: string | null;
+  recipe: Recipe | null;
+}
+
+function loadDraft(): BrewDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as BrewDraft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(step: Step, coffeeId: string | null, brewerId: string | null, recipe: Recipe | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (step === "what" || step === "how") {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ step, coffeeId, brewerId, recipe }));
+    } else {
+      sessionStorage.removeItem(DRAFT_KEY);
+    }
+  } catch {
+    // sessionStorage unavailable (private mode, etc.) — draft persistence is best-effort.
+  }
+}
+
+function clearDraft() {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // best-effort
+  }
+}
+
 export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
   const { coffees, brews, recipes, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession, addRecipe } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
@@ -51,9 +97,33 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const logTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRestored = useRef(false);
 
   useEffect(() => () => { if (logTimer.current) clearTimeout(logTimer.current); }, []);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; onStep?.(step); }, [step, onStep]);
+  // Restore an in-progress draft once coffee data is loaded (coffees arrives
+  // async from the store, so we can't validate the referenced coffee any earlier).
+  // Only restores if the referenced coffee still exists — a deleted/archived-away
+  // coffee just drops the stale draft.
+  useEffect(() => {
+    if (draftRestored.current) return;
+    if (coffees.length === 0) return;
+    draftRestored.current = true;
+    const draft = loadDraft();
+    if (!draft) return;
+    const c = draft.coffeeId ? coffeeById(draft.coffeeId) : null;
+    if (!c) { clearDraft(); return; }
+    setCoffee(c);
+    const b = draft.brewerId ? brewerById(draft.brewerId) : null;
+    if (b) setBrewer(b);
+    if (draft.recipe) setRecipe(draft.recipe);
+    if (draft.step === "how") setStep("how");
+  }, [coffees]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Persist the draft on every change to the pre-log state. saveDraft itself
+  // clears the entry once step leaves "what"/"how".
+  useEffect(() => {
+    saveDraft(step, coffee?.id ?? null, brewer?.id ?? null, recipe);
+  }, [step, coffee, brewer, recipe]);
   // Reset to "what" when resetKey changes (tab switch)
   useEffect(() => { if (resetKey !== undefined) { setStep("what"); setCoffee(coffees[0] ?? null); } }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // Jump to "how" when brewThis is called from another screen
@@ -222,6 +292,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setLoggedAudience("me");
     setFinishCandidate(null);
     finishRef.current = null;
+    clearDraft();
   }
 
   function saveRating(rating: object) {
