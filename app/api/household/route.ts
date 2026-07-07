@@ -1,19 +1,18 @@
 /**
- * POST /api/household — join an existing household by invite code.
- * Body: { name: string, inviteCode: string }
+ * POST /api/household — called after picking an identity (no-auth test mode).
+ * Body: { name?: string } — the display name (e.g. "Min-Taec" / "Kris").
  *
- * Called after email+OTP verification, only for users who don't yet have a
- * profile. Validates the submitted invite code against households.invite_code
- * (service-role lookup, bypassing RLS) and, on a match, creates the caller's
- * profile in that household under the given name. A wrong/unknown code → 403.
- *
- * Household *creation* is deliberately NOT a flow here: the shared household
- * already exists and members only ever join it. There is no first-caller
- * seeding — that would let a stranger with a valid session mint a household.
+ * Everyone joins ONE shared household (fixed invite code) so Min-Taec and Kris
+ * see the same shelf + brew log. The first caller creates and seeds it; the
+ * rest join it. Reversible: when real auth returns, restore invite-code logic.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { seedHousehold } from "@/lib/db/seed";
 import { requireUser } from "@/lib/api/guards";
+
+// Single shared household for the no-auth phase.
+const SHARED_INVITE_CODE = "BREWMK";
 
 export async function POST(req: NextRequest) {
   const userGuard = await requireUser();
@@ -21,24 +20,43 @@ export async function POST(req: NextRequest) {
   const user = userGuard.value;
 
   const body = await req.json().catch(() => ({}));
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
-
-  if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
-  if (!inviteCode) return NextResponse.json({ error: "Invite code is required" }, { status: 400 });
+  const name: string =
+    typeof body.name === "string" && body.name.trim() ? body.name.trim() : "You";
 
   const service = createServiceClient();
 
-  // Validate the invite code against an existing household. No match → 403.
-  const { data: household, error: lookupErr } = await service
-    .from("households").select("id").eq("invite_code", inviteCode).maybeSingle();
-  if (lookupErr) return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
-  if (!household) return NextResponse.json({ error: "Invalid invite code" }, { status: 403 });
+  // Find the shared household, or create + seed it (tolerating a creation race).
+  let householdId: string;
+  let justCreated = false;
 
-  // Create/refresh this user's profile in the household (idempotent on re-submit).
-  const { error: profileErr } = await service
-    .from("profiles").upsert({ id: user.id, household_id: household.id, name });
-  if (profileErr) return NextResponse.json({ error: "Could not create profile" }, { status: 500 });
+  const { data: existing } = await service
+    .from("households").select("id").eq("invite_code", SHARED_INVITE_CODE).maybeSingle();
 
-  return NextResponse.json({ household_id: household.id });
+  if (existing) {
+    householdId = existing.id;
+  } else {
+    const { data: created, error } = await service
+      .from("households").insert({ invite_code: SHARED_INVITE_CODE }).select("id").single();
+    if (error) {
+      // Likely a unique-violation race — another request created it first. Re-fetch.
+      const { data: again } = await service
+        .from("households").select("id").eq("invite_code", SHARED_INVITE_CODE).maybeSingle();
+      if (!again) return NextResponse.json({ error: "Failed to create household" }, { status: 500 });
+      householdId = again.id;
+    } else {
+      householdId = created.id;
+      justCreated = true;
+    }
+  }
+
+  // Create/refresh this user's profile in the shared household (idempotent).
+  // Must exist before seeding, since seeded brews reference profiles via logged_by.
+  await service.from("profiles").upsert({ id: user.id, household_id: householdId, name });
+
+  // Seed demo data only for the first user who created the household.
+  if (justCreated) {
+    try { await seedHousehold(service, householdId, user.id); } catch { /* non-fatal */ }
+  }
+
+  return NextResponse.json({ household_id: householdId });
 }
