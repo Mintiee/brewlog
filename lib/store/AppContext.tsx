@@ -263,19 +263,17 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   const updateCoffee = useCallback((c: Coffee) => {
     const coffee = { ...c, household_id: c.household_id || profile.household_id };
-    // Capture previous state for rollback before the optimistic update.
-    let prev: Coffee | undefined;
+    // Snapshot the previous row at CALL time (not inside apply()) — apply() re-runs
+    // on Retry and would otherwise capture the already-applied value (R9).
+    const prev = coffees.find((x) => x.id === c.id);
     void learnNotes(coffee.notes ?? []);
     return save(
       "Coffee save",
       () => upsertCoffee(coffee),
-      () => setCoffees((prev_) => {
-        prev = prev_.find((x) => x.id === c.id) ?? prev;
-        return prev_.map((x) => x.id === c.id ? coffee : x);
-      }),
-      () => { if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev! : x)); },
+      () => setCoffees((cs) => cs.map((x) => x.id === c.id ? coffee : x)),
+      () => { if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev : x)); },
     );
-  }, [save, profile.household_id, learnNotes]);
+  }, [save, coffees, profile.household_id, learnNotes]);
 
   const startBrew = useCallback((b: Brew) => {
     if (!authed) {
@@ -298,33 +296,30 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // Rating always clears the handoff flag — once rated it's no longer "awaiting"
     // anyone, and the rater is recorded as taster1 by the caller (StepRate).
     const patch = { ...rating, pending: false, rated_at: String(Date.now()), rate_for: null };
-    let prev: Brew | undefined;
+    // Snapshot the prior row at CALL time (see R9): apply() re-runs on Retry and
+    // would otherwise capture the already-rated value.
+    const prev = brews.find((x) => x.id === id);
     return save(
       "Rating save",
       () => dbUpdateBrew(id, patch),
-      () => setBrews((bs) => {
-        prev = bs.find((x) => x.id === id) ?? prev;
-        return bs.map((x) => x.id === id ? { ...x, ...patch } : x);
-      }),
+      () => setBrews((bs) => bs.map((x) => x.id === id ? { ...x, ...patch } : x)),
       // Restore the full prior row (not just pending/rated_at) so rate_for and
       // any earlier rating fields survive the rollback.
-      () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev! : x)); },
+      () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev : x)); },
     );
-  }, [save]);
+  }, [save, brews]);
 
   // Pure patch — no forced pending/rated_at (use for BrewDetail edits, not the rating flow).
   const updateBrew = useCallback((id: string, patch: Partial<Brew>) => {
-    let prev: Brew | undefined;
+    // Snapshot the prior row at CALL time (see R9): apply() re-runs on Retry.
+    const prev = brews.find((x) => x.id === id);
     return save(
       "Brew update",
       () => dbUpdateBrew(id, patch),
-      () => setBrews((bs) => {
-        prev = bs.find((x) => x.id === id) ?? prev;
-        return bs.map((x) => x.id === id ? { ...x, ...patch } : x);
-      }),
-      () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev! : x)); },
+      () => setBrews((bs) => bs.map((x) => x.id === id ? { ...x, ...patch } : x)),
+      () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev : x)); },
     );
-  }, [save]);
+  }, [save, brews]);
 
   /** Shared core for single / session deletes: removes the given brew rows and,
    *  if that restores beans to a finished bag (Bug 1c), un-archives the coffee.
@@ -410,11 +405,10 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   }, [save, profile.household_id, learnNotes]);
 
   // ---- Recipes ----
-  // Optimistic add/update/delete on the saved-recipe library. IMPORTANT: the
-  // previous value is snapshotted OUTSIDE the re-runnable apply() callback — the
-  // coffee/brew actions capture prev inside apply(), which is stale on a Retry
-  // re-run (apply() runs again and overwrites the snapshot with the already-
-  // applied value). These actions avoid that flaw.
+  // Optimistic add/update/delete on the saved-recipe library. As with every
+  // mutation here, the previous value is snapshotted OUTSIDE the re-runnable
+  // apply() callback — apply() runs again on Retry, so capturing prev inside it
+  // would overwrite the snapshot with the already-applied value (R9).
 
   const addRecipe = useCallback((r: SavedRecipe) => {
     const recipe = { ...r, household_id: r.household_id || profile.household_id };
