@@ -1,9 +1,30 @@
 // Minimal service worker — enough to make brewlog installable on Android/desktop Chrome.
 // (iOS installs via Add-to-Home-Screen and doesn't require this.)
-// A network-first passthrough with an offline fallback to the app shell.
+//
+// Strategy:
+//  - Cross-origin requests (Supabase, etc.) are never intercepted — they pass straight through.
+//  - Navigations: network-first, falling back to the cached app shell when offline.
+//  - Same-origin static assets (hashed /_next/static/ chunks, icons, manifest): cache-first
+//    with a background revalidate (stale-while-revalidate), since hashed assets are immutable
+//    and non-hashed ones are cheap to refresh silently.
+//  - Everything else same-origin GET: runtime-cached as it's fetched, so a previously-visited
+//    app keeps working offline (warm-offline). A full cold-offline precache of hashed Next
+//    chunks would need a build-time asset manifest — out of scope here.
+//
+// Bump CACHE_VERSION whenever the caching strategy or precache list changes; old versioned
+// caches are pruned on activate.
 
-const CACHE = "brewlog-shell-v1";
+const CACHE_VERSION = "v2";
+const CACHE = `brewlog-shell-${CACHE_VERSION}`;
 const SHELL = ["/"];
+
+const isStaticAsset = (url) =>
+  url.pathname.startsWith("/_next/static/") ||
+  url.pathname === "/manifest.webmanifest" ||
+  url.pathname === "/icon-192.png" ||
+  url.pathname === "/icon-512.png" ||
+  url.pathname === "/apple-touch-icon.png" ||
+  url.pathname === "/favicon.ico";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
@@ -19,20 +40,64 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+function cacheFirstWithRevalidate(req) {
+  return caches.open(CACHE).then((cache) =>
+    cache.match(req).then((cached) => {
+      const fetchAndUpdate = fetch(req)
+        .then((res) => {
+          if (res.ok) cache.put(req, res.clone());
+          return res;
+        })
+        .catch(() => undefined);
+      // Serve cached immediately if present; otherwise wait on the network.
+      return cached || fetchAndUpdate || fetch(req);
+    })
+  );
+}
+
+function networkFirstNavigation(req) {
+  return fetch(req)
+    .then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => caches.match(req).then((hit) => hit || caches.match("/")));
+}
+
+function runtimeCacheGet(req) {
+  return fetch(req)
+    .then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => caches.match(req));
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  // Only handle GET navigations/assets; let everything else (POST to /api, auth) pass through.
   if (req.method !== "GET") return;
-  event.respondWith(
-    fetch(req)
-      .then((res) => {
-        // Cache same-origin successful responses for offline use.
-        if (res.ok && new URL(req.url).origin === self.location.origin) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      })
-      .catch(() => caches.match(req).then((hit) => hit || caches.match("/")))
-  );
+
+  const url = new URL(req.url);
+  // Never intercept cross-origin requests (Supabase, third-party APIs, etc.) — let the
+  // browser handle them untouched so failures surface as real network errors, not a
+  // JSON-parse error from an HTML shell fallback.
+  if (url.origin !== self.location.origin) return;
+
+  if (req.mode === "navigate") {
+    event.respondWith(networkFirstNavigation(req));
+    return;
+  }
+
+  if (isStaticAsset(url)) {
+    event.respondWith(cacheFirstWithRevalidate(req));
+    return;
+  }
+
+  event.respondWith(runtimeCacheGet(req));
 });
