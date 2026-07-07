@@ -10,8 +10,8 @@
  * tolerant JSON parse). Uses an array system prompt like tips/route.ts.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getHouseholdKey } from "@/lib/llm/getKey";
 import { complete } from "@/lib/llm";
+import { requireHouseholdKey } from "@/lib/api/guards";
 import type { ImportedCoffee } from "@/lib/import/types";
 
 const MAX_INPUT = 8000; // characters — generous but bounded
@@ -46,8 +46,9 @@ function parseImportResponse(raw: string): ImportedCoffee[] | null {
 }
 
 export async function POST(req: NextRequest) {
-  const hk = await getHouseholdKey();
-  if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
+  const hkGuard = await requireHouseholdKey();
+  if (!hkGuard.ok) return hkGuard.response;
+  const hk = hkGuard.value;
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body.text !== "string" || !body.text.trim()) {

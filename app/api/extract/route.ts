@@ -4,8 +4,8 @@
  * Returns: { roaster, name, origin, region, varietal, process, roast, roastDaysAgo, notes[] }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getHouseholdKey } from "@/lib/llm/getKey";
 import { complete } from "@/lib/llm";
+import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
 
 const SYSTEM_PHOTO = `You are reading a specialty-coffee bag label to extract structured data.
 Return ONLY minified JSON (no prose, no markdown, no backticks):
@@ -18,14 +18,13 @@ Return ONLY minified JSON (no prose, no markdown, no backticks):
 {"roaster":"","name":"","origin":"","region":"","varietal":"","process":"","roast":"light|medium|dark","roastDaysAgo":null,"notes":["","",""]}`;
 
 export async function POST(req: NextRequest) {
-  const hk = await getHouseholdKey();
-  if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
+  const hkGuard = await requireHouseholdKey();
+  if (!hkGuard.ok) return hkGuard.response;
+  const hk = hkGuard.value;
 
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
-  }
-  const { image, url } = body;
+  const bodyGuard = await parseJsonBody(req);
+  if (!bodyGuard.ok) return bodyGuard.response;
+  const { image, url } = bodyGuard.value as { image?: string; url?: string };
 
   try {
     if (image) {

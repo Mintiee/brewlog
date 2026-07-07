@@ -3,15 +3,15 @@
  * DELETE /api/ai-key — remove the household AI key
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { encryptKey } from "@/lib/llm/encrypt";
 import { detectProvider, validateKey } from "@/lib/llm";
+import { requireUser } from "@/lib/api/guards";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const userGuard = await requireUser();
+  if (!userGuard.ok) return userGuard.response;
+  const user = userGuard.value;
 
   const body = await req.json().catch(() => null);
   const key: string | undefined = body && typeof body === "object" ? body.key : undefined;
@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const userGuard = await requireUser();
+  if (!userGuard.ok) return userGuard.response;
+  const user = userGuard.value;
 
   const service = createServiceClient();
   const { data: profile } = await service.from("profiles").select("household_id").eq("id", user.id).single();

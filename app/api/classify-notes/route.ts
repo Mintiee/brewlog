@@ -5,9 +5,9 @@
  * Side effect: upserts learned_notes in the global shared table.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getHouseholdKey } from "@/lib/llm/getKey";
 import { complete } from "@/lib/llm";
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
 
 const FAMILIES = "floral, citrus, yellow fruit, red fruit, dark fruit, chocolate, roasty, nutty, sweet, spice, winey, herbal, other";
 const NOTE_CATMAP: Record<string, string> = {
@@ -27,14 +27,13 @@ const NOTE_CATMAP: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  const hk = await getHouseholdKey();
-  if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
+  const hkGuard = await requireHouseholdKey();
+  if (!hkGuard.ok) return hkGuard.response;
+  const hk = hkGuard.value;
 
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
-  }
-  const { notes: rawNotes } = body;
+  const bodyGuard = await parseJsonBody(req);
+  if (!bodyGuard.ok) return bodyGuard.response;
+  const { notes: rawNotes } = bodyGuard.value as { notes?: unknown };
   if (!Array.isArray(rawNotes) || rawNotes.length === 0) {
     return NextResponse.json({ map: {} });
   }

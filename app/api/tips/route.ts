@@ -6,9 +6,9 @@
  * enough signal / generation failed (client falls back to heuristic tips).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getHouseholdKey } from "@/lib/llm/getKey";
 import { createServiceClient } from "@/lib/supabase/server";
 import { complete } from "@/lib/llm";
+import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
 
 // Icons the UI can render (see components/ui/Icon.tsx). The model must pick from this set.
 const ALLOWED_ICONS = ["brew", "grind", "thermo", "timer", "drop", "scale", "citrus", "sugar", "bean", "spark"] as const;
@@ -70,14 +70,13 @@ function parseTips(raw: string): Tip[] {
 }
 
 export async function POST(req: NextRequest) {
-  const hk = await getHouseholdKey();
-  if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
+  const hkGuard = await requireHouseholdKey();
+  if (!hkGuard.ok) return hkGuard.response;
+  const hk = hkGuard.value;
 
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
-  }
-  const { stats, brews, tzOffsetMin } = body;
+  const bodyGuard = await parseJsonBody(req);
+  if (!bodyGuard.ok) return bodyGuard.response;
+  const { stats, brews, tzOffsetMin } = bodyGuard.value as { stats?: unknown; brews?: unknown; tzOffsetMin?: unknown };
   if (!Array.isArray(brews) || brews.length < MIN_BREWS) {
     // Not enough signal — client shows heuristic tips instead.
     return new NextResponse(null, { status: 204 });

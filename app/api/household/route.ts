@@ -7,17 +7,17 @@
  * rest join it. Reversible: when real auth returns, restore invite-code logic.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createServer } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { seedHousehold } from "@/lib/db/seed";
+import { requireUser } from "@/lib/api/guards";
 
 // Single shared household for the no-auth phase.
 const SHARED_INVITE_CODE = "BREWMK";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const userGuard = await requireUser();
+  if (!userGuard.ok) return userGuard.response;
+  const user = userGuard.value;
 
   const body = await req.json().catch(() => ({}));
   const name: string =

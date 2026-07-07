@@ -4,9 +4,9 @@
  * Returns: { text: string }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getHouseholdKey } from "@/lib/llm/getKey";
 import { createServiceClient } from "@/lib/supabase/server";
 import { complete } from "@/lib/llm";
+import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
 
 const SYSTEM = `You are the quietly delightful voice of a home coffee log, writing the "This fortnight" note.
 From the brews below — all rated in the last two weeks — surface ONE specific, true, slightly surprising observation: a quirk, a streak, a contrast, a standout favourite, or a pattern in the flavour scores (acidity, sweetness, body, clarity). It need not be statistical; it should feel like a small gift the drinker didn't expect to notice.
@@ -25,14 +25,13 @@ function localDay(ms: number, tzOffsetMin: number): string {
 }
 
 export async function POST(req: NextRequest) {
-  const hk = await getHouseholdKey();
-  if (!hk) return NextResponse.json({ error: "No AI key configured" }, { status: 403 });
+  const hkGuard = await requireHouseholdKey();
+  if (!hkGuard.ok) return hkGuard.response;
+  const hk = hkGuard.value;
 
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Malformed request body" }, { status: 400 });
-  }
-  const { brews, date, tzOffsetMin } = body;
+  const bodyGuard = await parseJsonBody(req);
+  if (!bodyGuard.ok) return bodyGuard.response;
+  const { brews, date, tzOffsetMin } = bodyGuard.value as { brews?: unknown; date?: unknown; tzOffsetMin?: unknown };
   if (!Array.isArray(brews) || brews.length === 0) {
     return NextResponse.json({ error: "No brew data" }, { status: 400 });
   }
