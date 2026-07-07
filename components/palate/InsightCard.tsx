@@ -103,9 +103,10 @@ export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardP
 
   useEffect(() => {
     if (!llmEnabled) return;
-    let cancelled = false;
-    void run(false).then(() => { if (cancelled) return; });
-    return () => { cancelled = true; };
+    // Deferred a tick: run() sets state synchronously on its cache-hit path,
+    // which must not happen directly in the effect body.
+    const t = setTimeout(() => void run(false), 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brews, coffees, config, llmEnabled]);
 
