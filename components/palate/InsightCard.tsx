@@ -73,6 +73,9 @@ export function InsightCard({ brews, coffees, config, llmEnabled }: InsightCardP
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ brews: digest, date: today, tzOffsetMin }),
+          // A hung request must not spin the card forever — land in the
+          // existing catch → failed-state path like any other fetch error.
+          signal: AbortSignal.timeout(35_000),
         });
         if (!res.ok) throw new Error("insight failed");
         const data = await res.json();

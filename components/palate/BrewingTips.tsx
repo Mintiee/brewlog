@@ -221,6 +221,9 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ stats, brews: digest, date: localISODate(Date.now()), tzOffsetMin }),
+          // A hung request must not block the heuristic fallback forever —
+          // land in the existing catch → keep-heuristic path like any other error.
+          signal: AbortSignal.timeout(35_000),
         });
         // 204 / error → keep the heuristic tips already on screen.
         if (res.status === 204 || !res.ok) return;
