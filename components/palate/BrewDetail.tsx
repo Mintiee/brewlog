@@ -8,7 +8,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Segmented } from "@/components/ui/Segmented";
 import { Stepper } from "@/components/ui/Stepper";
 import { Field } from "@/components/shelf/Field";
-import { journalDateText, localISODate, parseLocalDate } from "@/lib/domain";
+import { journalDateText, localISODate, parseLocalDate, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface EditForm {
@@ -70,6 +70,19 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
   const coffee = coffees.find((c) => c.id === brew.coffee_id);
   const brewer = config.brewers.find((b) => b.id === brew.brewer_id);
   const startMs = parseInt(brew.started_at, 10);
+
+  // Previous comparable brew: same coffee + brewer, strictly earlier, excluding
+  // this brew's own session siblings (same physical brew split between tasters).
+  const comparablePool = brew.session_id ? brews.filter((b) => b.session_id !== brew.session_id) : brews;
+  const prevBrew = previousBrewFor(brew.coffee_id, brew.brewer_id, comparablePool, brew.id, startMs);
+  const prevDelta = prevBrew ? recipeDelta(prevBrew, brew) : null;
+  const changedRows = prevDelta ? prevDelta.filter((d) => d.changed) : [];
+  const prevRating = prevBrew && prevBrew.stars != null ? brewRating(prevBrew) : null;
+  const currentRating = brew.stars != null ? brewRating(brew) : null;
+  const ratingMovementText = prevRating != null && currentRating != null
+    ? `★${prevRating.toFixed(1)} → ★${currentRating.toFixed(1)}`
+    : null;
+  const DELTA_SUFFIX: Record<string, string> = { grind: config.grinder.unit[0], temp: "°", dose: "g", water: "mL" };
 
   const startEdit = () => {
     setTodayISO(localISODate(Date.now()));
@@ -299,6 +312,20 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
             </div>
           ))}
         </div>
+
+        {prevBrew && (
+          <div style={{ marginTop: 18 }}>
+            <div className="label" style={{ marginBottom: 8 }}>Vs previous</div>
+            <div style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.5 }}>
+              {changedRows.length > 0
+                ? changedRows
+                    .map((d) => `${d.label} ${d.prev}${DELTA_SUFFIX[d.key]} → ${d.current}${DELTA_SUFFIX[d.key]}`)
+                    .join(" · ")
+                : "Same recipe"}
+              {ratingMovementText && ` · ${ratingMovementText}`}
+            </div>
+          </div>
+        )}
 
         {isSplit ? (
           // Split session: tab per taster; pending sibling shows "waiting on…".
