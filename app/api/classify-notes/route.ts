@@ -10,6 +10,16 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 
 const FAMILIES = "floral, citrus, yellow fruit, red fruit, dark fruit, chocolate, roasty, nutty, sweet, spice, winey, herbal, other";
+
+// Guard for the global learned_notes primary key. learned_notes is a shared,
+// cross-household table, so a bad key written once poisons everyone's lookups.
+// Match the lookup normalisation in lib/flavour (lower-cased, trimmed) and only
+// admit strings that plausibly are a tasting note: letters plus spaces, hyphens
+// and ampersands, no digits/punctuation/control chars, capped at 40 chars.
+const NOTE_KEY_RE = /^[\p{L}][\p{L} &-]*$/u;
+function isValidNoteKey(note: string): boolean {
+  return note.length >= 1 && note.length <= 40 && NOTE_KEY_RE.test(note);
+}
 const NOTE_CATMAP: Record<string, string> = {
   floral: "flower",
   citrus: "citrus",
@@ -68,14 +78,21 @@ Return ONLY minified JSON mapping each input note (verbatim, lowercase) to its c
       if (fam) map[n] = fam;
     });
 
-    // Upsert into the global learned_notes table (service role — bypasses RLS)
-    if (Object.keys(map).length) {
+    // Persist into the global learned_notes table (service role — bypasses RLS).
+    // Insert-only: ignoreDuplicates so a later run can never overwrite an
+    // existing global mapping, and skip keys that fail validation so junk from
+    // a bad LLM response can't be written to the shared table.
+    const rows = Object.entries(map)
+      .filter(([note]) => isValidNoteKey(note))
+      .map(([note, family]) => ({ note, family }));
+    if (rows.length) {
       const service = createServiceClient();
-      const rows = Object.entries(map).map(([note, family]) => ({ note, family }));
-      const { error } = await service.from("learned_notes").upsert(rows, { onConflict: "note" });
+      const { error } = await service
+        .from("learned_notes")
+        .upsert(rows, { onConflict: "note", ignoreDuplicates: true });
       // Classification still succeeded for this client — log so a broken global
       // cache (every session re-classifying the same notes) is diagnosable.
-      if (error) console.error("/api/classify-notes learned_notes upsert failed:", error);
+      if (error) console.error("/api/classify-notes learned_notes insert failed:", error);
     }
 
     return NextResponse.json({ map });

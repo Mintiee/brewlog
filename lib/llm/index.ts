@@ -72,7 +72,7 @@ async function completeAnthropic(apiKey: string, req: LLMRequest): Promise<strin
   userContent.push({ type: "text", text: req.prompt });
 
   const response = await client.messages.create({
-    model: req.model ?? "claude-sonnet-4-6",
+    model: req.model ?? "claude-sonnet-5",
     system: req.system,
     messages: [{ role: "user", content: userContent }],
     max_tokens: req.maxTokens ?? 512,
