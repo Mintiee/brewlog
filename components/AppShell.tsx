@@ -68,7 +68,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
 }
 
 function Shell() {
-  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState, queuedCount } = useApp();
+  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState, queuedCount, setAiKey, removeAiKey } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -109,22 +109,6 @@ function Shell() {
     setTab("brew");
   }, []);
 
-  const { llmEnabled: ctxLlmEnabled } = useApp();
-  const [localLlmEnabled, setLocalLlmEnabled] = useState(ctxLlmEnabled);
-
-  const handleSetAiKey = async (key: string) => {
-    const res = await fetch("/api/ai-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
-    if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to save key"); }
-    const { provider } = await res.json();
-    setLocalLlmEnabled(true);
-    return provider;
-  };
-  const handleRemoveAiKey = async () => {
-    await fetch("/api/ai-key", { method: "DELETE" });
-    setLocalLlmEnabled(false);
-  };
-  const effectiveLlmEnabled = localLlmEnabled || ctxLlmEnabled;
-
   const users = [profile];
 
   if (!ready || !mounted || !floorDone) {
@@ -151,7 +135,7 @@ function Shell() {
           onAdd={addCoffee}
           onBrew={brewThis}
           onUpdate={updateCoffee}
-          llmEnabled={effectiveLlmEnabled}
+          llmEnabled={llmEnabled}
         />
       )}
       {tab === "palate" && (
@@ -159,7 +143,7 @@ function Shell() {
           brews={brews}
           coffees={coffees}
           config={config}
-          llmEnabled={effectiveLlmEnabled}
+          llmEnabled={llmEnabled}
         />
       )}
       {tab === "settings" && (
@@ -175,9 +159,9 @@ function Shell() {
           recipes={recipes}
           onUpdateRecipe={updateRecipe}
           onDeleteRecipe={deleteRecipe}
-          llmEnabled={effectiveLlmEnabled}
-          onSetAiKey={handleSetAiKey}
-          onRemoveAiKey={handleRemoveAiKey}
+          llmEnabled={llmEnabled}
+          onSetAiKey={setAiKey}
+          onRemoveAiKey={removeAiKey}
         />
       )}
 

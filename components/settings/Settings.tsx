@@ -20,7 +20,7 @@ interface SettingsProps {
   onUpdateRecipe: (r: SavedRecipe) => void;
   onDeleteRecipe: (id: string) => void;
   llmEnabled: boolean;
-  onSetAiKey: (key: string, provider: string) => Promise<void>;
+  onSetAiKey: (key: string, provider: string) => Promise<string>;
   onRemoveAiKey: () => Promise<void>;
 }
 

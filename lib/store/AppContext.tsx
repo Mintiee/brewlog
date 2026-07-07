@@ -79,6 +79,12 @@ interface AppActions {
   updateRecipe: (r: SavedRecipe) => Promise<boolean>;
   /** Delete a saved recipe from the library. */
   deleteRecipe: (id: string) => Promise<boolean>;
+  /** Save a household AI key. Resolves the provider on success, throws on failure
+   *  (matches the previous inline fetch's contract — callers surface the error). */
+  setAiKey: (key: string) => Promise<string>;
+  /** Remove the household AI key. Never throws — a failed DELETE just leaves the
+   *  server-side key in place; llmEnabled reflects the client's optimistic intent. */
+  removeAiKey: () => Promise<void>;
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null);
@@ -515,11 +521,28 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   const clearError = useCallback(() => setLastError(null), []);
 
+  // Single owner of AI-key state: llmEnabled/aiProvider are updated here so no
+  // other component needs its own shadow flag for "is AI on right now".
+  const setAiKey = useCallback(async (key: string) => {
+    const res = await fetch("/api/ai-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed to save key"); }
+    const { provider } = await res.json();
+    setLlmEnabled(true);
+    setAiProvider(provider);
+    return provider as string;
+  }, []);
+
+  const removeAiKey = useCallback(async () => {
+    await fetch("/api/ai-key", { method: "DELETE" });
+    setLlmEnabled(false);
+    setAiProvider(undefined);
+  }, []);
+
   return (
     <AppContext.Provider value={{
       coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, notesVersion, authed, lastError, undoState, queuedCount,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError, importCoffees,
-      addRecipe, updateRecipe, deleteRecipe,
+      addRecipe, updateRecipe, deleteRecipe, setAiKey, removeAiKey,
     }}>
       {children}
     </AppContext.Provider>
