@@ -37,6 +37,46 @@ interface AddCoffeeProps {
 
 const ROAST_LEVELS = ["light", "medium-light", "medium", "medium-dark", "dark"];
 
+// A scan/manual entry in progress is thrown away today if the sheet closes and
+// reopens (e.g. backgrounding mid-scan, or a fat-fingered close). Persist the
+// review-phase draft (and its source) to sessionStorage so it survives that —
+// cleared on a successful save or an explicit "Clear" from the restored banner.
+const DRAFT_KEY = "addcoffee:draft:v1";
+
+interface AddCoffeeDraft {
+  form: ReviewForm;
+  source: Source;
+}
+
+function loadDraft(): AddCoffeeDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as AddCoffeeDraft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft: AddCoffeeDraft) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // best-effort — private mode etc.
+  }
+}
+
+function clearDraftStorage() {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // best-effort
+  }
+}
+
 export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: AddCoffeeProps) {
   const [phase, setPhase] = useState<Phase>(llmEnabled ? "capture" : "review");
   const [form, setForm] = useState<ReviewForm | null>(null);
@@ -44,22 +84,49 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
   const [url, setUrl] = useState("");
   const [source, setSource] = useState<Source>("photo");
   const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(undefined);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   useEffect(() => {
     if (open) {
-      if (llmEnabled) {
+      const draft = loadDraft();
+      if (draft) {
+        setForm(draft.form);
+        setSource(draft.source);
+        setPhase("review");
+        setDraftRestored(true);
+      } else if (llmEnabled) {
         setPhase("capture");
         setForm(null);
+        setDraftRestored(false);
       } else {
         setPhase("review");
         setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
         setSource("manual");
+        setDraftRestored(false);
       }
       setScanPct(0);
       setUrl("");
       setPhotoDataUrl(undefined);
     }
   }, [open, llmEnabled]);
+
+  // Persist the review-phase draft as it's edited.
+  useEffect(() => {
+    if (phase === "review" && form) saveDraft({ form, source });
+  }, [phase, form, source]);
+
+  function clearDraft() {
+    clearDraftStorage();
+    setDraftRestored(false);
+    if (llmEnabled) {
+      setPhase("capture");
+      setForm(null);
+    } else {
+      setPhase("review");
+      setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
+      setSource("manual");
+    }
+  }
 
   async function runScan(fromUrl: boolean) {
     setSource(fromUrl ? "url" : "photo");
@@ -143,6 +210,8 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
       cc: originCode(form.origin),
     };
     onAdd(c);
+    clearDraftStorage();
+    setDraftRestored(false);
     onClose();
   }
 
@@ -231,6 +300,19 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
           const fromSrc = source === "url" ? "the link" : source === "photo" ? "the bag" : null;
           return (
             <div>
+              {draftRestored && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14, padding: "9px 13px", borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-faint)", fontSize: 12.5 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Icon name="timer" size={14} stroke={1.6} /> Restored your unsaved draft
+                  </span>
+                  <button
+                    onClick={clearDraft}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", fontFamily: "var(--font-ui)", fontSize: 12.5, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 2, padding: 0 }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
               {!llmEnabled && (
                 <div style={{ display: "flex", gap: 8, marginBottom: 16, padding: "10px 13px", borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-faint)", fontSize: 12.5 }}>
                   <Icon name="key" size={15} stroke={1.6} style={{ flexShrink: 0, marginTop: 1 }} />
