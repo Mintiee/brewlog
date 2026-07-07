@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { completeJSON } from "@/lib/llm";
-import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
+import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 
 // Icons the UI can render (see components/ui/Icon.tsx). The model must pick from this set.
 const ALLOWED_ICONS = ["brew", "grind", "thermo", "timer", "drop", "scale", "citrus", "sugar", "bean", "spark"] as const;
@@ -95,12 +95,21 @@ export async function POST(req: NextRequest) {
 
   const bodyGuard = await parseJsonBody(req);
   if (!bodyGuard.ok) return bodyGuard.response;
-  const { stats, brews, tzOffsetMin } = bodyGuard.value as { stats?: unknown; brews?: unknown; tzOffsetMin?: unknown };
+  const { stats, brews, tzOffsetMin, force } = bodyGuard.value as { stats?: unknown; brews?: unknown; tzOffsetMin?: unknown; force?: unknown };
   if (!Array.isArray(brews) || brews.length < MIN_BREWS) {
     // Not enough signal — client shows heuristic tips instead.
     return new NextResponse(null, { status: 204 });
   }
   const offset = typeof tzOffsetMin === "number" ? tzOffsetMin : 0;
+  const forceRefresh = force === true;
+
+  // A manual force-refresh bypasses the once-a-week cache gate below, so it
+  // needs its own guard against a runaway client loop burning the household's
+  // LLM budget — the normal path is already self-limiting via the weekly cache.
+  if (forceRefresh) {
+    const rateGuard = checkRateLimit(hk.householdId);
+    if (!rateGuard.ok) return rateGuard.response;
+  }
 
   const service = createServiceClient();
 
@@ -116,7 +125,7 @@ export async function POST(req: NextRequest) {
     .eq("household_id", hk.householdId)
     .single();
 
-  if (cached && localDayNum(Date.now(), offset) - localDayNum(new Date(cached.generated_at).getTime(), offset) < 7) {
+  if (!forceRefresh && cached && localDayNum(Date.now(), offset) - localDayNum(new Date(cached.generated_at).getTime(), offset) < 7) {
     return NextResponse.json({ tips: cached.tips, cached: true });
   }
 

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { complete } from "@/lib/llm";
-import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
+import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 
 const SYSTEM = `You are the quietly delightful voice of a home coffee log, writing the "This fortnight" note.
 From the brews below — all rated in the last two weeks — surface ONE specific, true, slightly surprising observation: a quirk, a streak, a contrast, a standout favourite, or a pattern in the flavour scores (acidity, sweetness, body, clarity). It need not be statistical; it should feel like a small gift the drinker didn't expect to notice.
@@ -31,13 +31,22 @@ export async function POST(req: NextRequest) {
 
   const bodyGuard = await parseJsonBody(req);
   if (!bodyGuard.ok) return bodyGuard.response;
-  const { brews, date, tzOffsetMin } = bodyGuard.value as { brews?: unknown; date?: unknown; tzOffsetMin?: unknown };
+  const { brews, date, tzOffsetMin, force } = bodyGuard.value as { brews?: unknown; date?: unknown; tzOffsetMin?: unknown; force?: unknown };
   if (!Array.isArray(brews) || brews.length === 0) {
     return NextResponse.json({ error: "No brew data" }, { status: 400 });
   }
   // Client's local "today" and offset; fall back to a UTC day if absent (older clients).
   const offset = typeof tzOffsetMin === "number" ? tzOffsetMin : 0;
   const clientToday = typeof date === "string" ? date : localDay(Date.now(), offset);
+  const forceRefresh = force === true;
+
+  // A manual force-refresh bypasses the once-a-day cache gate below, so it
+  // needs its own guard against a runaway client loop burning the household's
+  // LLM budget — the normal path is already self-limiting via the day cache.
+  if (forceRefresh) {
+    const rateGuard = checkRateLimit(hk.householdId);
+    if (!rateGuard.ok) return rateGuard.response;
+  }
 
   const service = createServiceClient();
 
@@ -50,7 +59,7 @@ export async function POST(req: NextRequest) {
     .eq("household_id", hk.householdId)
     .maybeSingle();
 
-  if (cached && localDay(new Date(cached.generated_at).getTime(), offset) === clientToday) {
+  if (!forceRefresh && cached && localDay(new Date(cached.generated_at).getTime(), offset) === clientToday) {
     return NextResponse.json({ text: cached.text, cached: true });
   }
 

@@ -198,6 +198,15 @@ button { color: inherit; font-family: inherit; }
 }
 .shimmer { animation: shimmer 1.6s ease infinite; }
 
+/* spin for in-progress refresh affordances (insight/tips manual refresh) */
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.8s linear infinite; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+}
+
 /* splash logo — gentle breathing pulse that stays clearly visible (never dims
    to skeleton levels), so the icon + wordmark read against the warm-black bg */
 @keyframes splashPulse {

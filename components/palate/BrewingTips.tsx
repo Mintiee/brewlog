@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Icon } from "@/components/ui";
 import { brewRating, roastedDaysAgo, localISODate } from "@/lib/domain";
 import type { Brew, Coffee, Config } from "@/lib/types";
@@ -179,69 +179,80 @@ function buildDigest(rated: Brew[], coffees: Coffee[], config: Config): string[]
 // over the full rated set — only the per-brew lines are capped.
 const MAX_DIGEST_BREWS = 40;
 
+const TIPS_LS_KEY = "brew_tips_v4";  // bumped: tighter copy + full-history input (no caps)
+const TIPS_MIN_BREWS = 5;
+
 export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsProps) {
   // Heuristic tips render immediately — they're the fallback and the placeholder.
   const heuristic = useMemo(() => buildTips(brews, coffees, config), [brews, coffees, config]);
   const [llmTips, setLlmTips] = useState<Tip[] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (!llmEnabled) return;
-    let cancelled = false;
-
-    const LS_KEY = "brew_tips_v4";  // bumped: tighter copy + full-history input (no caps)
-    const MIN_BREWS = 5;
-    // Local calendar-day index (not UTC, not a rolling window), so a weekly
-    // refresh rolls over at local midnight and lands on the morning of the 7th day.
+  // Shared fetch path for both the mount-time load and a manual force-refresh.
+  // Local calendar-day index (not UTC, not a rolling window), so a weekly
+  // refresh rolls over at local midnight and lands on the morning of the 7th day.
+  const run = useCallback(async (force: boolean) => {
     const tzOffsetMin = new Date().getTimezoneOffset();
     const localDayNum = Math.floor((Date.now() - tzOffsetMin * 60000) / 86400000);
 
     const rated = brews
       .filter((b) => b.stars != null)
       .sort((a, b) => Number(b.started_at) - Number(a.started_at));
-    if (rated.length < MIN_BREWS) return; // too little signal — keep heuristic
+    if (rated.length < TIPS_MIN_BREWS) return; // too little signal — keep heuristic
 
-    // Weekly local cache: skip the network round-trip until 7 local days have passed.
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (raw) {
-        const c = JSON.parse(raw) as { day: number; tips: Tip[] };
-        if (typeof c.day === "number" && localDayNum - c.day < 7 && Array.isArray(c.tips) && c.tips.length) {
-          setLlmTips(c.tips);
-          return;
+    if (!force) {
+      // Weekly local cache: skip the network round-trip until 7 local days have passed.
+      try {
+        const raw = localStorage.getItem(TIPS_LS_KEY);
+        if (raw) {
+          const c = JSON.parse(raw) as { day: number; tips: Tip[] };
+          if (typeof c.day === "number" && localDayNum - c.day < 7 && Array.isArray(c.tips) && c.tips.length) {
+            setLlmTips(c.tips);
+            return;
+          }
         }
-      }
-    } catch { /* ignore malformed cache */ }
+      } catch { /* ignore malformed cache */ }
+    } else {
+      try { localStorage.removeItem(TIPS_LS_KEY); } catch { /* ignore */ }
+      setRefreshing(true);
+    }
 
     const stats = buildStats(rated, coffees, config);
     const digest = buildDigest(rated.slice(0, MAX_DIGEST_BREWS), coffees, config);
 
-    (async () => {
-      try {
-        const res = await fetch("/api/tips", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stats, brews: digest, date: localISODate(Date.now()), tzOffsetMin }),
-          // A hung request must not block the heuristic fallback forever —
-          // land in the existing catch → keep-heuristic path like any other error.
-          signal: AbortSignal.timeout(35_000),
-        });
-        // 204 / error → keep the heuristic tips already on screen.
-        if (res.status === 204 || !res.ok) return;
-        const data = await res.json();
-        const tips: Tip[] = Array.isArray(data.tips)
-          ? data.tips
-              .filter((t: unknown): t is Tip =>
-                !!t && typeof t === "object" && typeof (t as Tip).text === "string" && (t as Tip).text.trim().length > 0)
-              .slice(0, 3)
-          : [];
-        if (!cancelled && tips.length) {
-          setLlmTips(tips);
-          try { localStorage.setItem(LS_KEY, JSON.stringify({ day: localDayNum, tips })); } catch { /* ignore */ }
-        }
-      } catch { /* keep heuristic */ }
-    })();
+    try {
+      const res = await fetch("/api/tips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stats, brews: digest, date: localISODate(Date.now()), tzOffsetMin, ...(force ? { force: true } : {}) }),
+        // A hung request must not block the heuristic fallback forever —
+        // land in the existing catch → keep-heuristic path like any other error.
+        signal: AbortSignal.timeout(35_000),
+      });
+      // 204 / error → keep the heuristic (or last LLM) tips already on screen.
+      if (res.status === 204 || !res.ok) return;
+      const data = await res.json();
+      const tips: Tip[] = Array.isArray(data.tips)
+        ? data.tips
+            .filter((t: unknown): t is Tip =>
+              !!t && typeof t === "object" && typeof (t as Tip).text === "string" && (t as Tip).text.trim().length > 0)
+            .slice(0, 3)
+        : [];
+      if (tips.length) {
+        setLlmTips(tips);
+        try { localStorage.setItem(TIPS_LS_KEY, JSON.stringify({ day: localDayNum, tips })); } catch { /* ignore */ }
+      }
+    } catch { /* keep heuristic */ } finally {
+      if (force) setRefreshing(false);
+    }
+  }, [brews, coffees, config]);
 
+  useEffect(() => {
+    if (!llmEnabled) return;
+    let cancelled = false;
+    void run(false).then(() => { if (cancelled) return; });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brews, coffees, config, llmEnabled]);
 
   const tips = llmTips ?? heuristic;
@@ -249,8 +260,24 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
 
   return (
     <>
-    <div className="label" style={{ margin: "6px 2px -2px" }}>Brewing tips</div>
-    <div className="card" style={{ padding: "6px 18px" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "6px 2px -2px" }}>
+      <div className="label">Brewing tips</div>
+      {llmEnabled && (
+        <button
+          onClick={() => void run(true)}
+          disabled={refreshing}
+          aria-label="Refresh brewing tips"
+          title="Refresh brewing tips"
+          style={{
+            background: "none", border: "none", cursor: refreshing ? "default" : "pointer",
+            color: "var(--ink-faint)", padding: 4, display: "flex", opacity: refreshing ? 0.5 : 1,
+          }}
+        >
+          <Icon name="refresh" size={13} stroke={2} className={refreshing ? "spin" : undefined} />
+        </button>
+      )}
+    </div>
+    <div className="card" style={{ padding: "6px 18px", opacity: refreshing ? 0.6 : 1 }}>
       {tips.map((t, i) => (
         <div
           key={i}

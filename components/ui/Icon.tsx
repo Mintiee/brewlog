@@ -62,6 +62,8 @@ export function Icon({ name, size = 22, stroke = 1.7, style, className }: IconPr
     // Upload / import — upward arrow with a tray underline
     upload: <g {...ps}><path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M4 19h16"/></g>,
     key: <g {...ps}><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3"/></g>,
+    // Manual refresh — circular arrow
+    refresh: <g {...ps}><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.4"/><path d="M20 4v4.4h-4.4"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.6"/><path d="M4 20v-4.4h4.4"/></g>,
     // ---- Brewer silhouettes (selectable method tiles) ----
     // V60 — steep open cone with ridge lines on a small base
     dripperV60: <g {...ps}><path d="M5.5 7h13l-6.5 10.5L5.5 7Z"/><path d="M9 7l1.4 8.6M15 7l-1.4 8.6"/><path d="M9.6 17.5h4.8"/></g>,
