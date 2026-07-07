@@ -246,6 +246,50 @@ export function lastBrewOf(coffeeId: string, brews: Brew[]): Brew | null {
   return rated[0] ?? null;
 }
 
+/** Most recent non-pending brew of a coffee, optionally scoped to a brewer,
+ *  excluding a specific brew (e.g. itself) and/or brews at or after `beforeMs`
+ *  (so "previous" means previous-to-THIS-brew, not latest overall). */
+export function previousBrewFor(
+  coffeeId: string,
+  brewerId: string | null,
+  brews: Brew[],
+  excludeId?: string,
+  beforeMs?: number,
+): Brew | null {
+  const candidates = brews
+    .filter((b) => b.coffee_id === coffeeId && !b.pending)
+    .filter((b) => (brewerId ? b.brewer_id === brewerId : true))
+    .filter((b) => (excludeId ? b.id !== excludeId : true))
+    .filter((b) => (beforeMs != null ? parseTs(b.started_at) < beforeMs : true))
+    .sort((a, b) => parseTs(b.started_at) - parseTs(a.started_at));
+  return candidates[0] ?? null;
+}
+
+export interface RecipeDeltaRow {
+  key: string;
+  label: string;
+  prev: number;
+  current: number;
+  changed: boolean;
+}
+
+/** Field-by-field comparison of a previous brew's recipe against the current
+ *  one — pure display data, no interpretation of which direction is "better". */
+export function recipeDelta(
+  prev: Brew,
+  current: { dose: number; water: number; temp: number; grind: number },
+): RecipeDeltaRow[] {
+  const fields: Array<{ key: string; label: string; prevVal: number; curVal: number }> = [
+    { key: "grind", label: "Grind", prevVal: prev.grind, curVal: current.grind },
+    { key: "temp", label: "Temp", prevVal: prev.temp, curVal: current.temp },
+    { key: "dose", label: "Dose", prevVal: prev.dose, curVal: current.dose },
+    { key: "water", label: "Water", prevVal: prev.water, curVal: current.water },
+  ];
+  return fields.map(({ key, label, prevVal, curVal }) => ({
+    key, label, prev: prevVal, current: curVal, changed: prevVal !== curVal,
+  }));
+}
+
 export function pendingBrews(brews: Brew[]): Brew[] {
   return brews
     .filter((b) => b.pending && !b.guest)

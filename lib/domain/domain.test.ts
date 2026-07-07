@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   gramsUsed, avgDailyGrams,
-  brewRating, lastBrewOf, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
+  brewRating, lastBrewOf, previousBrewFor, recipeDelta, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
   roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
   effectiveDaysAgo, restDaysAt, restForBrew,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
@@ -246,6 +246,68 @@ describe("lastBrewOf / pendingBrews", () => {
     ];
     const pending = pendingBrews(brews);
     expect(pending[0].id).toBe("b2");
+  });
+});
+
+describe("previousBrewFor", () => {
+  const now = Date.now();
+  const brews = [
+    makeBrew({ id: "v1", coffee_id: "c1", brewer_id: "v60", started_at: String(now - 3 * 86400000) }),
+    makeBrew({ id: "v2", coffee_id: "c1", brewer_id: "v60", started_at: String(now - 2 * 86400000) }),
+    makeBrew({ id: "o1", coffee_id: "c1", brewer_id: "oxo", started_at: String(now - 1 * 86400000) }),
+    makeBrew({ id: "p1", coffee_id: "c1", brewer_id: "v60", pending: true, started_at: String(now) }),
+    makeBrew({ id: "x1", coffee_id: "other", brewer_id: "v60", started_at: String(now) }),
+  ];
+
+  it("scopes to a brewer when brewerId is given", () => {
+    const result = previousBrewFor("c1", "v60", brews);
+    expect(result?.id).toBe("v2");
+  });
+
+  it("ignores brewer scoping when brewerId is null (most recent across brewers)", () => {
+    const result = previousBrewFor("c1", null, brews);
+    expect(result?.id).toBe("o1");
+  });
+
+  it("excludes the given excludeId", () => {
+    const result = previousBrewFor("c1", "v60", brews, "v2");
+    expect(result?.id).toBe("v1");
+  });
+
+  it("only returns brews strictly older than beforeMs", () => {
+    const result = previousBrewFor("c1", "v60", brews, undefined, now - 2 * 86400000);
+    expect(result?.id).toBe("v1");
+  });
+
+  it("excludes pending brews", () => {
+    const result = previousBrewFor("c1", "v60", brews);
+    expect(result?.id).not.toBe("p1");
+  });
+
+  it("returns null when there is no matching brew", () => {
+    expect(previousBrewFor("none", "v60", brews)).toBeNull();
+    expect(previousBrewFor("c1", "gabi", brews)).toBeNull();
+    expect(previousBrewFor("c1", "v60", [])).toBeNull();
+  });
+});
+
+describe("recipeDelta", () => {
+  const prev = makeBrew({ dose: 15, water: 240, temp: 96, grind: 22 });
+
+  it("flags changed fields and leaves unchanged ones", () => {
+    const rows = recipeDelta(prev, { dose: 15, water: 250, temp: 93, grind: 20 });
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+    expect(byKey.dose.changed).toBe(false);
+    expect(byKey.water.changed).toBe(true);
+    expect(byKey.water.prev).toBe(240);
+    expect(byKey.water.current).toBe(250);
+    expect(byKey.temp.changed).toBe(true);
+    expect(byKey.grind.changed).toBe(true);
+  });
+
+  it("reports no changes when the recipe is identical", () => {
+    const rows = recipeDelta(prev, { dose: 15, water: 240, temp: 96, grind: 22 });
+    expect(rows.every((r) => !r.changed)).toBe(true);
   });
 });
 
