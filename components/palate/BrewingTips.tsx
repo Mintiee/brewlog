@@ -174,6 +174,11 @@ function buildDigest(rated: Brew[], coffees: Coffee[], config: Config): string[]
   });
 }
 
+// Cap the per-brew prompt digest so the LLM prompt (and its token cost) don't
+// grow unbounded with brewing history. Aggregate stats are still computed
+// over the full rated set — only the per-brew lines are capped.
+const MAX_DIGEST_BREWS = 40;
+
 export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsProps) {
   // Heuristic tips render immediately — they're the fallback and the placeholder.
   const heuristic = useMemo(() => buildTips(brews, coffees, config), [brews, coffees, config]);
@@ -208,7 +213,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
     } catch { /* ignore malformed cache */ }
 
     const stats = buildStats(rated, coffees, config);
-    const digest = buildDigest(rated, coffees, config);
+    const digest = buildDigest(rated.slice(0, MAX_DIGEST_BREWS), coffees, config);
 
     (async () => {
       try {

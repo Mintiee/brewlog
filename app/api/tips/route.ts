@@ -102,7 +102,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const digest = (brews as string[]).join("\n");
+    // Defensive backstop — the client already caps to the 40 most recent rated
+    // brews before sending, but don't trust that blindly for prompt cost.
+    const digest = (brews as string[]).slice(0, 40).join("\n");
     const statsBlock = typeof stats === "string" && stats.trim() ? `STATS:\n${stats.trim()}\n\n` : "";
     const raw = await complete(hk.key, hk.provider, {
       system: SYSTEM,
