@@ -68,7 +68,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
 }
 
 function Shell() {
-  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState } = useApp();
+  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState, queuedCount } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -183,12 +183,24 @@ function Shell() {
 
       <TabBar active={tab} onChange={gotoTab} pendingCount={pendingCount} />
 
-      {(lastError || undoState) && (
+      {(lastError || undoState || queuedCount > 0) && (
         <div style={{
           position: "absolute", bottom: "calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 14px)",
           left: 16, right: 16, zIndex: 50,
           display: "flex", flexDirection: "column", gap: 8,
         }}>
+          {queuedCount > 0 && (
+            <div style={{
+              background: "var(--surface-2)", border: "1px solid var(--line)",
+              color: "var(--ink-dim)", borderRadius: 12, padding: "9px 13px",
+              fontSize: 12.5, fontWeight: 500, lineHeight: 1.4,
+              display: "flex", alignItems: "center", gap: 8,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+            }}>
+              <span className="dot" style={{ width: 6, height: 6, background: "var(--accent)", flexShrink: 0 }} />
+              <span>{queuedCount === 1 ? "1 change" : `${queuedCount} changes`} saved offline — will sync</span>
+            </div>
+          )}
           {undoState && (
             <div style={{
               background: "var(--surface-2)", border: "1px solid var(--line)",

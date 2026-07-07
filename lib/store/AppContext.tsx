@@ -13,6 +13,8 @@ import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
 import { setRestWindow, setServingGrams, setPeakWindow, activeGrams } from "@/lib/domain";
 import { persist, writesIdle, writesInFlight } from "@/lib/store/persist";
+import { drainOutbox } from "@/lib/store/outbox";
+import type { WriteDescriptor } from "@/lib/db/writeExecutors";
 
 /** Push household-wide settings into the domain module's freshness/serving knobs. */
 function applyConfigToDomain(c: Config) {
@@ -48,6 +50,9 @@ interface AppState {
   lastError: AppError | null; // last failed DB write, shown as a banner
   /** Transient post-delete affordance ("Brew deleted — Undo"), auto-clears. */
   undoState: { message: string; undo: () => void } | null;
+  /** Number of kitchen writes queued offline in the durable outbox, awaiting
+   *  sync. Drives the subtle "queued — will sync" indicator. */
+  queuedCount: number;
 }
 
 /** Mutations resolve true once the write is confirmed in the DB, false on
@@ -114,6 +119,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const [authed, setAuthed] = useState(!!initialData?.profile);
   const [lastError, setLastError] = useState<AppError | null>(null);
   const [undoState, setUndoState] = useState<{ message: string; undo: () => void } | null>(null);
+  const [queuedCount, setQueuedCount] = useState(0);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check auth + load data — only when the server did NOT prefetch (demo/unauthed
@@ -190,6 +196,23 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     } catch { /* transient — keep current state */ }
   }, [authed]);
 
+  // Drain the durable offline outbox: run any writes that were queued while
+  // offline, in order, then reconcile with the server. `drainOutbox` no-ops when
+  // offline or already draining, and reports how many entries remain so the
+  // "queued — will sync" indicator stays accurate.
+  const syncOutbox = useCallback(async () => {
+    if (!authed) return;
+    const res = await drainOutbox({
+      onPermanentError: (entry, err) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const e = err as any;
+        setLastError({ message: `${entry.label} failed: ${e?.message ?? e?.code ?? String(err)}` });
+      },
+    });
+    setQueuedCount(res.remaining);
+    if (res.drained > 0) void refresh();
+  }, [authed, refresh]);
+
   // On the seeded first-load path the household members aren't prefetched, so
   // pull them once; and refresh data whenever the app returns to the foreground
   // (throttled), so handed-off brews surface without a manual reload.
@@ -210,6 +233,25 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       window.removeEventListener("focus", onForeground);
     };
   }, [authed, refresh]);
+
+  // Drain the outbox on app start, whenever the browser comes back online, and
+  // when the app returns to the foreground — the three moments connectivity is
+  // most likely to have just been restored.
+  useEffect(() => {
+    if (!authed) return;
+    // Defer the initial drain a tick so it doesn't set state synchronously during
+    // the effect (drainOutbox is async and only sets state after its await).
+    const kick = setTimeout(() => void syncOutbox(), 0);
+    const onOnline = () => void syncOutbox();
+    const onVisible = () => { if (document.visibilityState === "visible") void syncOutbox(); };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(kick);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [authed, syncOutbox]);
 
   // Send lexicon-missed tasting notes to the LLM (once each — classify.ts dedupes).
   // classifyUnknownNotes merges validated families into the module learned map;
@@ -243,11 +285,17 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     write: () => Promise<unknown>,
     apply: () => void,
     rollback: () => void,
+    // Serialisable form of the write. When supplied, an offline failure enqueues
+    // it to the durable outbox (keeping the optimistic state) instead of rolling
+    // back — the kitchen flows pass this; other mutations stay on rollback.
+    descriptor?: WriteDescriptor,
   ): Promise<boolean> => {
     apply();
     if (!authed) return Promise.resolve(false); // demo mode — local-only by design
     const run = (): Promise<boolean> => persist(label, write, {
       rollback,
+      descriptor,
+      onQueued: () => setQueuedCount((c) => c + 1),
       onError: (message) => setLastError({
         message,
         retry: () => { setLastError(null); apply(); void run(); },
@@ -265,6 +313,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       () => upsertCoffee(coffee),
       () => setCoffees((prev) => [coffee, ...prev]),
       () => setCoffees((prev) => prev.filter((x) => x.id !== coffee.id)),
+      { kind: "upsertCoffee", payload: coffee },
     );
   }, [save, profile.household_id, learnNotes]);
 
@@ -279,6 +328,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       () => upsertCoffee(coffee),
       () => setCoffees((cs) => cs.map((x) => x.id === c.id ? coffee : x)),
       () => { if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev : x)); },
+      { kind: "upsertCoffee", payload: coffee },
     );
   }, [save, coffees, profile.household_id, learnNotes]);
 
@@ -296,6 +346,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       () => insertBrew(b),
       () => setBrews((prev) => [b, ...prev]),
       () => setBrews((prev) => prev.filter((x) => x.id !== b.id)),
+      { kind: "insertBrew", payload: b },
     );
   }, [authed, save]);
 
@@ -313,6 +364,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       // Restore the full prior row (not just pending/rated_at) so rate_for and
       // any earlier rating fields survive the rollback.
       () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev : x)); },
+      { kind: "updateBrew", id, patch },
     );
   }, [save, brews]);
 
@@ -325,6 +377,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       () => dbUpdateBrew(id, patch),
       () => setBrews((bs) => bs.map((x) => x.id === id ? { ...x, ...patch } : x)),
       () => { if (prev) setBrews((bs) => bs.map((x) => x.id === id ? prev : x)); },
+      { kind: "updateBrew", id, patch },
     );
   }, [save, brews]);
 
@@ -464,7 +517,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, notesVersion, authed, lastError, undoState,
+      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, notesVersion, authed, lastError, undoState, queuedCount,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError, importCoffees,
       addRecipe, updateRecipe, deleteRecipe,
     }}>

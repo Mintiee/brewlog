@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+// Mock the outbox so persist's offline-enqueue path is observable without IDB.
+vi.mock("@/lib/store/outbox", () => ({ enqueueWrite: vi.fn() }));
 import { persist, writesInFlight, writesIdle } from "@/lib/store/persist";
+import { enqueueWrite } from "@/lib/store/outbox";
+const mockEnqueue = enqueueWrite as unknown as ReturnType<typeof vi.fn>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const anyDescriptor = { kind: "insertBrew", payload: { id: "b1" } } as any;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
@@ -99,6 +105,65 @@ describe("persist", () => {
     void writesIdle().then(() => { idle = true; });
     await Promise.resolve();
     expect(idle).toBe(true);
+  });
+
+  it("enqueues the descriptor and keeps optimistic state when offline", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    mockEnqueue.mockReset();
+    mockEnqueue.mockResolvedValue(true);
+    const onError = vi.fn(); const rollback = vi.fn(); const onQueued = vi.fn();
+    const ok = await persist("Brew save", async () => { throw new Error("offline"); }, {
+      onError, rollback, onQueued, descriptor: anyDescriptor, retries: 0,
+    });
+    expect(ok).toBe(false);
+    expect(mockEnqueue).toHaveBeenCalledWith(anyDescriptor, "Brew save");
+    expect(onQueued).toHaveBeenCalledTimes(1);
+    expect(rollback).not.toHaveBeenCalled();   // optimistic state kept
+    expect(onError).not.toHaveBeenCalled();    // no error banner
+    onLine.mockRestore();
+  });
+
+  it("rolls back (never enqueues) on a permanent error even when offline", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    mockEnqueue.mockReset();
+    const onError = vi.fn(); const rollback = vi.fn();
+    const ok = await persist("Brew save", async () => { throw { code: "23505" }; }, {
+      onError, rollback, descriptor: anyDescriptor, retries: 0,
+    });
+    expect(ok).toBe(false);
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(rollback).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    onLine.mockRestore();
+  });
+
+  it("falls back to rollback when the outbox has no backend", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    mockEnqueue.mockReset();
+    mockEnqueue.mockResolvedValue(false); // no IDB — enqueue declined
+    const onError = vi.fn(); const rollback = vi.fn(); const onQueued = vi.fn();
+    const ok = await persist("Brew save", async () => { throw new Error("offline"); }, {
+      onError, rollback, onQueued, descriptor: anyDescriptor, retries: 0,
+    });
+    expect(ok).toBe(false);
+    expect(mockEnqueue).toHaveBeenCalledTimes(1);
+    expect(onQueued).not.toHaveBeenCalled();
+    expect(rollback).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    onLine.mockRestore();
+  });
+
+  it("does not enqueue when online (stays on the rollback path)", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    mockEnqueue.mockReset();
+    const onError = vi.fn(); const rollback = vi.fn();
+    const ok = await settle(persist("Brew save", async () => { throw new Error("server down"); }, {
+      onError, rollback, descriptor: anyDescriptor,
+    }));
+    expect(ok).toBe(false);
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(rollback).toHaveBeenCalledTimes(1);
+    onLine.mockRestore();
   });
 
   it("waits for the online event before retrying while offline", async () => {

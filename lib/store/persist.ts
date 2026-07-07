@@ -10,6 +10,9 @@
  * server mid-write (see AppContext.refresh).
  */
 
+import { enqueueWrite } from "./outbox";
+import type { WriteDescriptor } from "@/lib/db/writeExecutors";
+
 export interface PersistOptions {
   /** Restore the optimistic state when the write finally fails. */
   rollback?: () => void;
@@ -18,6 +21,14 @@ export interface PersistOptions {
   onError: (message: string, retry: () => void) => void;
   /** Transient-failure retries after the first attempt (default 2). */
   retries?: number;
+  /** Serialisable form of the write. When present and the write fails purely
+   *  because the device is offline, the descriptor is enqueued to the durable
+   *  outbox and the optimistic state is KEPT (no rollback) — the write syncs
+   *  when connectivity returns. Omit for mutations that should stay on the
+   *  rollback path. */
+  descriptor?: WriteDescriptor;
+  /** Called (instead of rollback/onError) when the write was queued offline. */
+  onQueued?: (label: string) => void;
 }
 
 const RETRY_DELAYS_MS = [600, 2500];
@@ -45,11 +56,17 @@ function settleIdle() {
 }
 
 /** Errors that retrying can never fix: constraint violations (23xxx), SQL/
- *  schema errors (42xxx), and PostgREST auth/JWT errors. */
+ *  schema errors (42xxx), and PostgREST auth/JWT errors. Exported so the outbox
+ *  drain classifies drain failures the same way. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isPermanent(err: any): boolean {
+export function isPermanent(err: any): boolean {
   const code = String(err?.code ?? "");
   return /^23\d{3}$/.test(code) || /^42\w{3}$/.test(code) || /^PGRST3\d{2}$/.test(code);
+}
+
+/** True when the browser reports it's offline (SSR-safe). */
+function isOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -93,6 +110,19 @@ export async function persist(
         lastErr = err;
         if (isPermanent(err)) break;
       }
+    }
+    // Offline and the write is outbox-eligible: enqueue and KEEP the optimistic
+    // state rather than rolling back. The drain (on reconnect / app foreground)
+    // will land it. Only for connectivity failures — a permanent error (e.g. a
+    // constraint) would never sync, so it still rolls back below.
+    if (opts.descriptor && isOffline() && !isPermanent(lastErr)) {
+      const queued = await enqueueWrite(opts.descriptor, label);
+      if (queued) {
+        console.warn(`[persist] ${label} queued offline — will sync on reconnect`);
+        opts.onQueued?.(label);
+        return false;
+      }
+      // No outbox backend (SSR / storage unavailable) — fall through to rollback.
     }
     console.error(`[persist] ${label} failed:`, lastErr);
     opts.rollback?.();
