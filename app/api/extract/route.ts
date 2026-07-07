@@ -4,10 +4,30 @@
  * Returns: { roaster, name, origin, region, varietal, process, roast, roastDaysAgo, notes[] }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { complete } from "@/lib/llm";
+import { completeJSON } from "@/lib/llm";
 import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 import { safeFetchText, UnsafeUrlError } from "@/lib/api/ssrf";
 import { sanitizeExtractOutput } from "@/lib/api/extractOutput";
+
+// Structured-output schema mirroring the fields the prompts describe. All keys
+// required (nullable where a value may be absent) for strict-mode compatibility;
+// sanitizeExtractOutput remains the authoritative validator on the parsed result.
+const EXTRACT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["roaster", "name", "origin", "region", "varietal", "process", "roast", "roastDaysAgo", "notes"],
+  properties: {
+    roaster: { type: "string" },
+    name: { type: "string" },
+    origin: { type: "string" },
+    region: { type: "string" },
+    varietal: { type: "string" },
+    process: { type: "string" },
+    roast: { type: ["string", "null"] },
+    roastDaysAgo: { type: ["integer", "null"] },
+    notes: { type: "array", items: { type: "string" } },
+  },
+} as const;
 
 const SYSTEM_PHOTO = `You are reading a specialty-coffee bag label to extract structured data.
 Return ONLY minified JSON (no prose, no markdown, no backticks):
@@ -34,15 +54,16 @@ export async function POST(req: NextRequest) {
   try {
     if (image) {
       // Photo extraction — vision model reads the actual bag
-      const raw = await complete(hk.key, hk.provider, {
+      const parsed = await completeJSON(hk.key, hk.provider, {
         system: SYSTEM_PHOTO,
         prompt: "Extract the coffee details from this bag label.",
         image,
         maxTokens: 400,
+        schemaName: "coffee_details",
+        schema: EXTRACT_SCHEMA,
       });
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("No JSON in response");
-      const data = sanitizeExtractOutput(JSON.parse(match[0]));
+      if (!parsed) throw new Error("No JSON in response");
+      const data = sanitizeExtractOutput(parsed);
       return NextResponse.json(data);
     }
 
@@ -62,14 +83,15 @@ export async function POST(req: NextRequest) {
       // Strip to text content (very basic; the LLM handles the noise)
       const text = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 4000);
 
-      const raw = await complete(hk.key, hk.provider, {
+      const parsed = await completeJSON(hk.key, hk.provider, {
         system: SYSTEM_URL,
         prompt: `Extract the coffee details from this page content:\n\n${text}`,
         maxTokens: 400,
+        schemaName: "coffee_details",
+        schema: EXTRACT_SCHEMA,
       });
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("No JSON in response");
-      const data = sanitizeExtractOutput(JSON.parse(match[0]));
+      if (!parsed) throw new Error("No JSON in response");
+      const data = sanitizeExtractOutput(parsed);
       return NextResponse.json(data);
     }
 

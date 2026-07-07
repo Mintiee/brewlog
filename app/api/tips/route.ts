@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { complete } from "@/lib/llm";
+import { completeJSON } from "@/lib/llm";
 import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
 
 // Icons the UI can render (see components/ui/Icon.tsx). The model must pick from this set.
@@ -20,10 +20,33 @@ Each tip: ONE imperative sentence, 15 words or fewer, leading with the lever —
 Choose the single most fitting icon for each tip from EXACTLY this list:
 brew, grind, thermo, timer, drop, scale, citrus, sugar, bean, spark.
 
-Output ONLY a JSON array — no prose, no markdown fences, nothing else. Each element: {"icon": "<one icon from the list>", "text": "<the tip>"}. Return 1 to 3 elements.`;
+Output ONLY a JSON object of the form {"tips":[...]} — no prose, no markdown fences, nothing else. Each array element: {"icon": "<one icon from the list>", "text": "<the tip>"}. Return 1 to 3 elements.`;
 
 // Most capable model per provider — these tips are worth it.
 const TIPS_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-5.5" } as const;
+
+// Structured-output schema — the array is wrapped in an object per JSON-schema
+// best practice (structured-output roots must be objects). parseTips remains the
+// authoritative validator (icon allowlist, text length) on the parsed result.
+const TIPS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["tips"],
+  properties: {
+    tips: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["icon", "text"],
+        properties: {
+          icon: { type: "string", enum: [...ALLOWED_ICONS] },
+          text: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
 
 const MIN_BREWS = 3;
 
@@ -40,21 +63,17 @@ interface Tip {
 }
 
 /**
- * Tolerant parse of the model's reply into validated tips. Returns [] on any
- * problem so the caller can fall back rather than cache/serve garbage.
+ * Validate the parsed reply into tips. Accepts the structured object
+ * `{tips:[...]}` or a bare array (fallback path). Returns [] on any problem so
+ * the caller can fall back rather than cache/serve garbage.
  */
-function parseTips(raw: string): Tip[] {
-  const s = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  const start = s.indexOf("[");
-  const end = s.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) return [];
-  let arr: unknown;
-  try {
-    arr = JSON.parse(s.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(arr)) return [];
+function parseTips(parsed: unknown): Tip[] {
+  const arr = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === "object" && Array.isArray((parsed as { tips?: unknown }).tips)
+      ? (parsed as { tips: unknown[] }).tips
+      : null;
+  if (!arr) return [];
   const allowed = new Set<string>(ALLOWED_ICONS);
   const out: Tip[] = [];
   for (const it of arr) {
@@ -106,14 +125,16 @@ export async function POST(req: NextRequest) {
     // brews before sending, but don't trust that blindly for prompt cost.
     const digest = (brews as string[]).slice(0, 40).join("\n");
     const statsBlock = typeof stats === "string" && stats.trim() ? `STATS:\n${stats.trim()}\n\n` : "";
-    const raw = await complete(hk.key, hk.provider, {
+    const parsed = await completeJSON(hk.key, hk.provider, {
       system: SYSTEM,
       prompt: `${statsBlock}BREW LOG (most recent first):\n${digest}`,
       model: TIPS_MODEL[hk.provider],
       maxTokens: 1024,
+      schemaName: "brewing_tips",
+      schema: TIPS_SCHEMA,
     });
 
-    const tips = parseTips(raw);
+    const tips = parseTips(parsed);
     if (!tips.length) {
       // Parse failed or empty — never cache garbage. Serve stale if we have it,
       // else tell the client to fall back to heuristic tips.

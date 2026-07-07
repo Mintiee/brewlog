@@ -16,11 +16,72 @@ export interface LLMRequest {
   maxTokens?: number;
   /** Override the model id. Defaults to a sensible per-provider choice. */
   model?: string;
+  /** JSON Schema constraining the reply. When set, the provider's structured-
+   *  output mode is used (Anthropic `output_config.format`, OpenAI
+   *  `response_format: json_schema`). Prefer completeJSON(), which layers a
+   *  tolerant text-parse fallback on top for provider/model combos that reject
+   *  or ignore the schema. */
+  schema?: Record<string, unknown>;
+  /** Schema name (OpenAI requires one; a–z/0–9/_/- only). */
+  schemaName?: string;
 }
 
 export async function complete(key: string, provider: Provider, req: LLMRequest): Promise<string> {
   if (provider === "anthropic") return completeAnthropic(key, req);
   return completeOpenAI(key, req);
+}
+
+/**
+ * Tolerant JSON extraction from a raw model reply — the shared fallback used
+ * when structured output is unavailable or the reply isn't already clean JSON.
+ * Strips markdown fences, then tries the whole string, the first balanced
+ * `{...}`, and the first `[...]`. Returns null when nothing parses.
+ */
+export function extractJson(raw: string): unknown | null {
+  const s = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const candidates = [s];
+  const obj = s.match(/\{[\s\S]*\}/);
+  if (obj) candidates.push(obj[0]);
+  const arr = s.match(/\[[\s\S]*\]/);
+  if (arr) candidates.push(arr[0]);
+  for (const c of candidates) {
+    try { return JSON.parse(c); } catch { /* try next candidate */ }
+  }
+  return null;
+}
+
+/**
+ * Structured JSON completion with a single shared fallback path.
+ *
+ * 1. Asks the provider for schema-constrained output (see LLMRequest.schema) and
+ *    parses the reply.
+ * 2. If the structured request throws (provider/model doesn't support it) or the
+ *    reply doesn't parse, retries once WITHOUT the schema and extracts JSON
+ *    tolerantly (extractJson).
+ *
+ * Returns the parsed value (object or array) or null. Callers keep their own
+ * domain validation as a second line of defence — this only guarantees "some
+ * parsed JSON or null", never a validated shape.
+ */
+export async function completeJSON(
+  key: string,
+  provider: Provider,
+  req: LLMRequest & { schema: Record<string, unknown> },
+): Promise<unknown | null> {
+  try {
+    const raw = await complete(key, provider, req);
+    const parsed = extractJson(raw);
+    if (parsed != null) return parsed;
+    // Structured call returned unparseable text — fall through to a plain retry.
+  } catch (err) {
+    console.warn("[llm] structured output failed; falling back to plain parse:", err);
+  }
+  // Fallback: same request minus the schema, tolerant extraction.
+  const plain: LLMRequest = { ...req };
+  delete plain.schema;
+  delete plain.schemaName;
+  const raw = await complete(key, provider, plain);
+  return extractJson(raw);
 }
 
 async function completeOpenAI(apiKey: string, req: LLMRequest): Promise<string> {
@@ -46,6 +107,14 @@ async function completeOpenAI(apiKey: string, req: LLMRequest): Promise<string> 
     // GPT-5 family rejects `max_tokens`; `max_completion_tokens` is the current
     // param and is also accepted by the gpt-4o models used elsewhere.
     max_completion_tokens: req.maxTokens ?? 512,
+    ...(req.schema
+      ? {
+          response_format: {
+            type: "json_schema" as const,
+            json_schema: { name: req.schemaName ?? "result", schema: req.schema },
+          },
+        }
+      : {}),
   });
 
   return response.choices[0]?.message?.content ?? "";
@@ -76,6 +145,9 @@ async function completeAnthropic(apiKey: string, req: LLMRequest): Promise<strin
     system: req.system,
     messages: [{ role: "user", content: userContent }],
     max_tokens: req.maxTokens ?? 512,
+    ...(req.schema
+      ? { output_config: { format: { type: "json_schema" as const, schema: req.schema } } }
+      : {}),
   });
 
   // Return the first text block (robust to leading non-text blocks).

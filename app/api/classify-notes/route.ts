@@ -5,7 +5,7 @@
  * Side effect: upserts learned_notes in the global shared table.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { complete } from "@/lib/llm";
+import { completeJSON } from "@/lib/llm";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 
@@ -55,7 +55,11 @@ export async function POST(req: NextRequest) {
   if (notes.length === 0) return NextResponse.json({ map: {} });
 
   try {
-    const raw = await complete(hk.key, hk.provider, {
+    // Schema keys are the exact input notes → one category enum each. Constrains
+    // the model to emit every note verbatim with a valid family, so the parse
+    // below can't drift. Falls back to plain parse if a provider rejects it.
+    const CATEGORIES = Object.keys(NOTE_CATMAP);
+    const parsed = await completeJSON(hk.key, hk.provider, {
       system: `You categorise coffee tasting notes onto the SCA flavour wheel.
 For each note pick exactly one category from: ${FAMILIES}.
 Notes that describe acidity, brightness or effervescence rather than a flavour (e.g. acidic, sparkling, lively, tangy) → citrus.
@@ -65,16 +69,25 @@ Use "other" ONLY for notes with no flavour or mouthfeel content at all (e.g. com
 Return ONLY minified JSON mapping each input note (verbatim, lowercase) to its category.`,
       prompt: `NOTES: ${JSON.stringify(notes)}`,
       maxTokens: 512,
+      schemaName: "note_families",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: notes,
+        properties: Object.fromEntries(
+          notes.map((n) => [n, { type: "string", enum: CATEGORIES }]),
+        ),
+      },
     });
 
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return NextResponse.json({ map: {} });
-
-    const llmMap: Record<string, string> = JSON.parse(match[0]);
+    // Second line of defence: validate/normalise regardless of how it parsed.
+    const llmMap = (parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {}) as Record<string, unknown>;
     const map: Record<string, string> = {};
 
     notes.forEach((n: string) => {
-      const fam = NOTE_CATMAP[(llmMap[n] ?? "").toLowerCase()];
+      const fam = NOTE_CATMAP[String(llmMap[n] ?? "").toLowerCase()];
       if (fam) map[n] = fam;
     });
 
