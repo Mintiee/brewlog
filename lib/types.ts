@@ -136,3 +136,22 @@ export interface Recipe {
   ratio: number;
   water_type: string;
 }
+
+/** A named, persisted recipe in the household library — distinct from the
+ *  transient `Recipe` shape above (which is the working recipe inside the brew
+ *  flow). Saved recipes are shown as chips in StepHow and managed in Settings. */
+export interface SavedRecipe {
+  id: string;
+  household_id?: string;
+  name: string;
+  dose: number;
+  water: number;
+  bypass: number;
+  temp: number;
+  grind: number;
+  ratio: number;
+  water_type: string;
+  /** Configured brewer this recipe was saved on, if any — applied on tap. */
+  brewer_id: string | null;
+  created_at?: string;
+}

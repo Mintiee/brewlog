@@ -1,12 +1,13 @@
 "use client";
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
-import type { Coffee, Brew, Config, Profile } from "@/lib/types";
+import type { Coffee, Brew, Config, Profile, SavedRecipe } from "@/lib/types";
 import { SEED_CONFIG } from "@/lib/domain/seed";
 import { createClient } from "@/lib/supabase/browser";
 import {
   fetchCoffees, fetchBrews, fetchConfig, fetchProfile, fetchHouseholdProfiles,
   insertBrew, updateBrew as dbUpdateBrew, deleteBrew, upsertCoffee, upsertConfig,
   fetchAiKeyStatus, fetchLearnedNotes, insertCoffees,
+  fetchRecipes, upsertRecipe as dbUpsertRecipe, deleteRecipe as dbDeleteRecipe,
 } from "@/lib/db";
 import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
@@ -30,6 +31,7 @@ export interface AppError {
 interface AppState {
   coffees: Coffee[];
   brews: Brew[];
+  recipes: SavedRecipe[];
   config: Config;
   profile: Profile;
   members: Profile[];      // all profiles in the household (self + others)
@@ -61,6 +63,12 @@ interface AppActions {
   /** Batch-import coffees. Optimistic prepend + single persist call so a failure
    *  rolls the entire batch back. Notes are classified after the write lands. */
   importCoffees: (coffees: Coffee[]) => Promise<boolean>;
+  /** Save a new named recipe to the household library. */
+  addRecipe: (r: SavedRecipe) => Promise<boolean>;
+  /** Update an existing saved recipe (e.g. inline rename). */
+  updateRecipe: (r: SavedRecipe) => Promise<boolean>;
+  /** Delete a saved recipe from the library. */
+  deleteRecipe: (id: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null);
@@ -72,6 +80,7 @@ export interface AppData {
   profile: Profile | null;
   coffees: Coffee[];
   brews: Brew[];
+  recipes: SavedRecipe[];
   config: Config | null;
   aiStatus: { set: boolean; provider?: string } | null;
   notes: Record<string, string>;
@@ -89,6 +98,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   const [coffees, setCoffees] = useState<Coffee[]>(initialData?.coffees ?? []);
   const [brews, setBrews] = useState<Brew[]>(initialData?.brews ?? []);
+  const [recipes, setRecipes] = useState<SavedRecipe[]>(initialData?.recipes ?? []);
   const [config, setConfigState] = useState<Config>(initialData?.config ?? SEED_CONFIG);
   const [profile, setProfileState] = useState<Profile>(initialData?.profile ?? SEED_PROFILE);
   const [members, setMembers] = useState<Profile[]>(initialData?.profile ? [initialData.profile] : []);
@@ -112,10 +122,14 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
         if (!user) { setReady(true); return; }
         setAuthed(true);
         try {
-          const [p, c, b, cfg, aiStatus, notes, mem] = await Promise.all([
+          const [p, c, b, rec, cfg, aiStatus, notes, mem] = await Promise.all([
             fetchProfile(user.id),
             fetchCoffees(),
             fetchBrews(),
+            // Degrade gracefully if the recipes table isn't migrated yet — a
+            // rejection here must not sink the whole initial load (Promise.all
+            // short-circuits), so swallow it to an empty library.
+            fetchRecipes().catch((e) => { console.warn("fetchRecipes failed — recipes unavailable", e); return []; }),
             fetchConfig(),
             fetchAiKeyStatus(),
             fetchLearnedNotes(),
@@ -127,6 +141,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
           // coffees/brews should see an empty shelf/journal, NOT the seed/dummy fallback.
           setCoffees(c);
           setBrews(b);
+          setRecipes(rec);
           if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
           if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
           if (notes) setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>);
@@ -138,7 +153,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // Listen for auth state changes (sign in / sign out)
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        setCoffees([]); setBrews([]); setConfigState(SEED_CONFIG);
+        setCoffees([]); setBrews([]); setRecipes([]); setConfigState(SEED_CONFIG);
         applyConfigToDomain(SEED_CONFIG);
         setProfileState(SEED_PROFILE); setMembers([]); setLlmEnabled(false); setAuthed(false);
       }
@@ -157,10 +172,15 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       // write started during the fetch (its data wouldn't be in the snapshot —
       // adopting it would clobber the optimistic state with stale rows).
       await writesIdle();
-      const [c, b] = await Promise.all([fetchCoffees(), fetchBrews()]);
+      const [c, b, rec] = await Promise.all([
+        fetchCoffees(),
+        fetchBrews(),
+        fetchRecipes().catch((e) => { console.warn("fetchRecipes failed — recipes unavailable", e); return []; }),
+      ]);
       if (writesInFlight() > 0) return; // next refresh reconciles
       setCoffees(c);
       setBrews(b);
+      setRecipes(rec);
     } catch { /* transient — keep current state */ }
   }, [authed]);
 
@@ -389,6 +409,44 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     );
   }, [save, profile.household_id, learnNotes]);
 
+  // ---- Recipes ----
+  // Optimistic add/update/delete on the saved-recipe library. IMPORTANT: the
+  // previous value is snapshotted OUTSIDE the re-runnable apply() callback — the
+  // coffee/brew actions capture prev inside apply(), which is stale on a Retry
+  // re-run (apply() runs again and overwrites the snapshot with the already-
+  // applied value). These actions avoid that flaw.
+
+  const addRecipe = useCallback((r: SavedRecipe) => {
+    const recipe = { ...r, household_id: r.household_id || profile.household_id };
+    return save(
+      "Recipe save",
+      () => dbUpsertRecipe(recipe),
+      () => setRecipes((prev) => [recipe, ...prev]),
+      () => setRecipes((prev) => prev.filter((x) => x.id !== recipe.id)),
+    );
+  }, [save, profile.household_id]);
+
+  const updateRecipe = useCallback((r: SavedRecipe) => {
+    const recipe = { ...r, household_id: r.household_id || profile.household_id };
+    const prev = recipes.find((x) => x.id === r.id);
+    return save(
+      "Recipe save",
+      () => dbUpsertRecipe(recipe),
+      () => setRecipes((rs) => rs.map((x) => x.id === r.id ? recipe : x)),
+      () => { if (prev) setRecipes((rs) => rs.map((x) => x.id === r.id ? prev : x)); },
+    );
+  }, [save, recipes, profile.household_id]);
+
+  const deleteRecipe = useCallback((id: string) => {
+    const prev = recipes;
+    return save(
+      "Recipe delete",
+      () => dbDeleteRecipe(id),
+      () => setRecipes((rs) => rs.filter((x) => x.id !== id)),
+      () => setRecipes(prev),
+    );
+  }, [save, recipes]);
+
   const setConfig = useCallback((c: Config) => {
     const prev = config;
     return save(
@@ -405,8 +463,9 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError, undoState,
+      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError, undoState,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError, importCoffees,
+      addRecipe, updateRecipe, deleteRecipe,
     }}>
       {children}
     </AppContext.Provider>

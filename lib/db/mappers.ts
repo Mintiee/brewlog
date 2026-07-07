@@ -2,7 +2,7 @@
  * Row mappers — domain types ↔ Supabase rows. Pure functions, no client import,
  * so they're unit-testable without Supabase.
  */
-import type { Coffee, Brew, Config } from "@/lib/types";
+import type { Coffee, Brew, Config, SavedRecipe } from "@/lib/types";
 import type { Tables, TablesInsert } from "./database.types";
 import { coffeeColor } from "@/lib/flavour";
 import { SEED_BREWERS } from "@/lib/domain/seed";
@@ -124,6 +124,34 @@ export function brewPatchToRow(patch: Partial<Brew>): Partial<TablesInsert<"brew
     if (k in patch) row[k] = patch[k] || null;
   }
   return row as Partial<TablesInsert<"brews">>;
+}
+
+export function rowToSavedRecipe(r: Tables<"recipes">): SavedRecipe {
+  return {
+    id: r.id,
+    household_id: r.household_id,
+    name: r.name,
+    dose: Number(r.dose),          // numeric in DB; coerce in case PostgREST returns a string
+    water: Number(r.water),
+    bypass: Number(r.bypass),
+    temp: Number(r.temp),
+    grind: Number(r.grind),
+    ratio: Number(r.ratio),
+    water_type: r.water_type,
+    brewer_id: r.brewer_id ?? null,
+    created_at: r.created_at,
+  };
+}
+
+export function savedRecipeToRow(rec: Omit<SavedRecipe, "id"> & { id?: string }): TablesInsert<"recipes"> {
+  return {
+    ...(rec.id ? { id: rec.id } : {}),
+    ...(rec.household_id ? { household_id: rec.household_id } : {}),
+    name: rec.name,
+    dose: rec.dose, water: rec.water, bypass: rec.bypass, temp: rec.temp,
+    grind: rec.grind, ratio: rec.ratio, water_type: rec.water_type,
+    brewer_id: rec.brewer_id ?? null,
+  };
 }
 
 export function rowToConfig(r: Tables<"config">): Config {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { rowToBrew, brewToRow, brewPatchToRow } from "@/lib/db/mappers";
+import { rowToBrew, brewToRow, brewPatchToRow, rowToSavedRecipe, savedRecipeToRow } from "@/lib/db/mappers";
 import type { Tables } from "@/lib/db/database.types";
-import type { Brew } from "@/lib/types";
+import type { Brew, SavedRecipe } from "@/lib/types";
 
 /** Fill in the DB-side columns an insert payload doesn't carry. */
 function asRow(partial: object): Tables<"brews"> {
@@ -108,5 +108,48 @@ describe("brewPatchToRow — partial updates must not clobber absent columns", (
     const row = brewPatchToRow({ household_id: undefined, logged_by: undefined, dose: 15 });
     expect("household_id" in row).toBe(false);
     expect("logged_by" in row).toBe(false);
+  });
+});
+
+describe("savedRecipeToRow / rowToSavedRecipe round-trip", () => {
+  function makeRecipe(overrides: Partial<SavedRecipe> = {}): SavedRecipe {
+    return {
+      id: "r1",
+      household_id: "h1",
+      name: "V60 bright",
+      dose: 15, water: 250, bypass: 0, temp: 93,
+      grind: 20, ratio: 16.7, water_type: "Third Wave",
+      brewer_id: "v60",
+      created_at: "2026-01-01T00:00:00Z",
+      ...overrides,
+    };
+  }
+
+  it("preserves all fields through row and back", () => {
+    const recipe = makeRecipe();
+    const row = savedRecipeToRow(recipe);
+    const back = rowToSavedRecipe({ ...row, id: recipe.id, created_at: recipe.created_at! } as Tables<"recipes">);
+    expect(back).toEqual(recipe);
+  });
+
+  it("emits id/household_id only when present (client insert omits them)", () => {
+    const { id: _id, household_id: _hh, created_at: _ca, ...rest } = makeRecipe();
+    void _id; void _hh; void _ca;
+    const row = savedRecipeToRow(rest);
+    expect("id" in row).toBe(false);
+    expect("household_id" in row).toBe(false);
+  });
+
+  it("coerces numeric strings from PostgREST and preserves a null brewer_id", () => {
+    const back = rowToSavedRecipe({
+      id: "r2", household_id: "h1", name: "no brewer",
+      dose: "15" as unknown as number, water: "250" as unknown as number,
+      bypass: "0" as unknown as number, temp: "93" as unknown as number,
+      grind: "20" as unknown as number, ratio: "16.7" as unknown as number,
+      water_type: "", brewer_id: null, created_at: "2026-01-01T00:00:00Z",
+    } as Tables<"recipes">);
+    expect(back.dose).toBe(15);
+    expect(back.ratio).toBe(16.7);
+    expect(back.brewer_id).toBeNull();
   });
 });

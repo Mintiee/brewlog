@@ -4,8 +4,8 @@
  */
 import { createClient } from "@/lib/supabase/browser";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Coffee, Brew, Config, Profile } from "@/lib/types";
-import { rowToCoffee, coffeeToRow, rowToBrew, brewToRow, brewPatchToRow, rowToConfig } from "./mappers";
+import type { Coffee, Brew, Config, Profile, SavedRecipe } from "@/lib/types";
+import { rowToCoffee, coffeeToRow, rowToBrew, brewToRow, brewPatchToRow, rowToConfig, rowToSavedRecipe, savedRecipeToRow } from "./mappers";
 
 export * from "./mappers";
 
@@ -81,6 +81,28 @@ export async function updateBrew(id: string, patch: Partial<Brew>): Promise<void
 export async function deleteBrew(id: string): Promise<void> {
   const sb = createClient();
   const { error } = await sb.from("brews").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---- Recipes (saved recipe library) ----
+
+export async function fetchRecipes(client?: DB): Promise<SavedRecipe[]> {
+  const sb = client ?? createClient();
+  const { data, error } = await sb.from("recipes").select("*").order("created_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  return (data ?? []).map(rowToSavedRecipe);
+}
+
+export async function upsertRecipe(recipe: SavedRecipe): Promise<SavedRecipe> {
+  const sb = createClient();
+  const { data, error } = await sb.from("recipes").upsert(savedRecipeToRow(recipe)).select().single();
+  if (error) throw error;
+  return rowToSavedRecipe(data);
+}
+
+export async function deleteRecipe(id: string): Promise<void> {
+  const sb = createClient();
+  const { error } = await sb.from("recipes").delete().eq("id", id);
   if (error) throw error;
 }
 
