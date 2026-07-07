@@ -70,29 +70,17 @@ export function parseCsv(text: string): ParseResult {
     return { coffees: [], warnings: ["CSV file is empty or has no data rows."] };
   }
 
-  // Build header map: original header → canonical field
+  // Build a lookup of raw header name → canonical field, tracking anything
+  // unrecognized along the way (single pass — previously built via two
+  // redundant loops, one of which stashed an unused, untyped `__rawMap`).
   const rawHeaders = Object.keys(result.data[0] ?? {});
-  const headerMap = new Map<string, typeof CSV_HEADERS[number]>();
+  const rawToCanon = new Map<string, typeof CSV_HEADERS[number]>();
   const unrecognized: string[] = [];
 
   rawHeaders.forEach((h) => {
     const mapped = mapHeader(normalizeHeader(h));
-    if (mapped) {
-      if (!headerMap.has(mapped)) headerMap.set(mapped, mapped);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (headerMap as any).__rawMap = (headerMap as any).__rawMap ?? {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (headerMap as any).__rawMap[h] = mapped;
-    } else {
-      unrecognized.push(h);
-    }
-  });
-
-  // Build a simpler lookup: raw header name → canonical field
-  const rawToCanon = new Map<string, typeof CSV_HEADERS[number]>();
-  rawHeaders.forEach((h) => {
-    const mapped = mapHeader(normalizeHeader(h));
     if (mapped) rawToCanon.set(h, mapped);
+    else unrecognized.push(h);
   });
 
   if (unrecognized.length) {

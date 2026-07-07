@@ -3,9 +3,14 @@
  * Called with the service-role client so it can write directly.
  */
 import { SEED_COFFEES, SEED_BREWS, SEED_CONFIG } from "@/lib/domain/seed";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function seedHousehold(service: any, householdId: string, userId: string) {
+// Untyped against the generated Database schema (rather than
+// SupabaseClient<Database>) because config.grinder/brewers are JSON columns and
+// our domain Grinder/Brewer types aren't structurally Json-compatible (no index
+// signature) — binding the schema generic here would need a wider Json cast at
+// every seed insert. Still a real SupabaseClient type, not `any`.
+export async function seedHousehold(service: SupabaseClient, householdId: string, userId: string) {
   // Insert coffees, capturing the id map (seed id → real uuid)
   const coffeeRows = SEED_COFFEES.map((c) => ({
     household_id: householdId,

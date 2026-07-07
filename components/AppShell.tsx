@@ -109,8 +109,6 @@ function Shell() {
     setTab("brew");
   }, []);
 
-  const users = [profile];
-
   if (!ready || !mounted || !floorDone) {
     return <Splash />;
   }
@@ -152,10 +150,6 @@ function Shell() {
           onConfig={setConfig}
           onClose={closeSettings}
           profile={profile}
-          users={users}
-          onSwitchUser={() => {}}
-          onAddUser={() => {}}
-          onRenameUser={() => {}}
           recipes={recipes}
           onUpdateRecipe={updateRecipe}
           onDeleteRecipe={deleteRecipe}

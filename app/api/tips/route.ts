@@ -7,8 +7,9 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { completeJSON } from "@/lib/llm";
+import { completeJSON, BEST_MODEL } from "@/lib/llm";
 import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
+import { localDayIndexAtOffset } from "@/lib/domain";
 
 // Icons the UI can render (see components/ui/Icon.tsx). The model must pick from this set.
 const ALLOWED_ICONS = ["brew", "grind", "thermo", "timer", "drop", "scale", "citrus", "sugar", "bean", "spark"] as const;
@@ -21,9 +22,6 @@ Choose the single most fitting icon for each tip from EXACTLY this list:
 brew, grind, thermo, timer, drop, scale, citrus, sugar, bean, spark.
 
 Output ONLY a JSON object of the form {"tips":[...]} — no prose, no markdown fences, nothing else. Each array element: {"icon": "<one icon from the list>", "text": "<the tip>"}. Return 1 to 3 elements.`;
-
-// Most capable model per provider — these tips are worth it.
-const TIPS_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-5.5" } as const;
 
 // Structured-output schema — the array is wrapped in an object per JSON-schema
 // best practice (structured-output roots must be objects). parseTips remains the
@@ -49,13 +47,6 @@ const TIPS_SCHEMA = {
 } as const;
 
 const MIN_BREWS = 3;
-
-// Local calendar-day index of a timestamp, shifted by the client's timezone
-// offset (minutes, per Date.prototype.getTimezoneOffset: positive west of UTC).
-// Lets a UTC server reason about the user's local week boundary.
-function localDayNum(ms: number, tzOffsetMin: number): number {
-  return Math.floor((ms - tzOffsetMin * 60000) / 86400000);
-}
 
 interface Tip {
   icon: string;
@@ -125,7 +116,7 @@ export async function POST(req: NextRequest) {
     .eq("household_id", hk.householdId)
     .single();
 
-  if (!forceRefresh && cached && localDayNum(Date.now(), offset) - localDayNum(new Date(cached.generated_at).getTime(), offset) < 7) {
+  if (!forceRefresh && cached && localDayIndexAtOffset(Date.now(), offset) - localDayIndexAtOffset(new Date(cached.generated_at).getTime(), offset) < 7) {
     return NextResponse.json({ tips: cached.tips, cached: true });
   }
 
@@ -137,7 +128,7 @@ export async function POST(req: NextRequest) {
     const parsed = await completeJSON(hk.key, hk.provider, {
       system: SYSTEM,
       prompt: `${statsBlock}BREW LOG (most recent first):\n${digest}`,
-      model: TIPS_MODEL[hk.provider],
+      model: BEST_MODEL[hk.provider],
       maxTokens: 1024,
       schemaName: "brewing_tips",
       schema: TIPS_SCHEMA,

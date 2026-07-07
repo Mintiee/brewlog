@@ -386,6 +386,24 @@ export function todayISO(): string {
   return localISODate(Date.now());
 }
 
+/**
+ * Local calendar day (YYYY-MM-DD) of a UTC timestamp, shifted by an explicit
+ * timezone offset in minutes (Date.prototype.getTimezoneOffset: positive west
+ * of UTC). For server routes (which run in UTC) reasoning about a client's
+ * local day — the client sends its own getTimezoneOffset() value. Shifts the
+ * timestamp then reads UTC fields, so it doesn't depend on the server's own
+ * timezone the way localISODate (which reads local fields) does.
+ */
+export function localDayAtOffset(ms: number, tzOffsetMin: number): string {
+  return new Date(ms - tzOffsetMin * 60000).toISOString().slice(0, 10);
+}
+
+/** Same shift as localDayAtOffset, but as a bucket-able day index rather than
+ *  a formatted string — for "N days since" cache-freshness comparisons. */
+export function localDayIndexAtOffset(ms: number, tzOffsetMin: number): number {
+  return Math.floor((ms - tzOffsetMin * 60000) / 86400000);
+}
+
 /** N days ago as local YYYY-MM-DD. */
 export function daysAgoISO(n: number): string {
   const d = new Date();

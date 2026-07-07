@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { encryptKey } from "@/lib/llm/encrypt";
 import { detectProvider, validateKey } from "@/lib/llm";
+import { householdIdFor } from "@/lib/llm/getKey";
 import { requireUser } from "@/lib/api/guards";
 
 export async function POST(req: NextRequest) {
@@ -25,13 +26,12 @@ export async function POST(req: NextRequest) {
 
   const { ciphertext, iv } = await encryptKey(key.trim());
 
-  const service = createServiceClient();
-  // Get household_id
-  const { data: profile } = await service.from("profiles").select("household_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  const householdId = await householdIdFor(user.id);
+  if (!householdId) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
+  const service = createServiceClient();
   await service.from("household_ai").upsert({
-    household_id: profile.household_id,
+    household_id: householdId,
     provider,
     key_ciphertext: ciphertext,
     key_iv: iv,
@@ -47,11 +47,11 @@ export async function DELETE() {
   if (!userGuard.ok) return userGuard.response;
   const user = userGuard.value;
 
-  const service = createServiceClient();
-  const { data: profile } = await service.from("profiles").select("household_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  const householdId = await householdIdFor(user.id);
+  if (!householdId) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
-  await service.from("household_ai").delete().eq("household_id", profile.household_id);
+  const service = createServiceClient();
+  await service.from("household_ai").delete().eq("household_id", householdId);
 
   return NextResponse.json({ set: false });
 }

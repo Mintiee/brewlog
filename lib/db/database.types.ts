@@ -4,7 +4,10 @@
  * Mirrors the shape `supabase gen types typescript` produces, so it can be
  * replaced by the generated file once CLI auth is set up:
  *   npx supabase login
- *   npx supabase gen types typescript --project-id amtyxwqwnjiqodoiazpt > lib/db/database.types.ts
+ *   npm run gen:types
+ * (the npm script wraps: supabase gen types typescript --project-id
+ * amtyxwqwnjiqodoiazpt --schema public > lib/db/database.types.ts — requires
+ * `supabase login` first; not run automatically by anything in this repo.)
  *
  * KEEP IN SYNC: any new migration that adds/renames a column must update this
  * file (or regenerate it) — the typed clients and mappers compile against it.

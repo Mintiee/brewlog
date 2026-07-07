@@ -8,6 +8,11 @@ import type { Provider } from "./detect";
 export type { Provider } from "./detect";
 export { detectProvider } from "./detect";
 
+/** Most capable model per provider — used by the routes whose output is
+ *  worth the extra cost (insight, tips): a single sentence or a couple of
+ *  short tips per household per day/week. */
+export const BEST_MODEL: Record<Provider, string> = { anthropic: "claude-opus-4-8", openai: "gpt-5.5" };
+
 export interface LLMRequest {
   system: string;
   prompt: string;

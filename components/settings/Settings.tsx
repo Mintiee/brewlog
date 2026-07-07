@@ -12,10 +12,6 @@ interface SettingsProps {
   onConfig: (c: Config) => void;
   onClose: () => void;
   profile: Profile;
-  users: Profile[];
-  onSwitchUser: (id: string) => void;
-  onAddUser: () => void;
-  onRenameUser: (id: string, name: string) => void;
   recipes: SavedRecipe[];
   onUpdateRecipe: (r: SavedRecipe) => void;
   onDeleteRecipe: (id: string) => void;
@@ -29,10 +25,6 @@ export function Settings({
   onConfig,
   onClose,
   profile,
-  users,
-  onSwitchUser,
-  onAddUser,
-  onRenameUser,
   recipes,
   onUpdateRecipe,
   onDeleteRecipe,
@@ -88,53 +80,12 @@ export function Settings({
               </span>
               <div style={{ flex: 1 }}>
                 <div className="label" style={{ marginBottom: 4 }}>Signed in as</div>
-                <SText
-                  value={profile.name}
-                  onChange={(v) => onRenameUser(profile.id, v)}
-                  placeholder="Your name"
-                />
+                {/* Renaming and multi-account switching aren't implemented yet
+                    (full auth is planned) — show the name read-only rather than
+                    an input that silently discards edits. */}
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{profile.name || "You"}</div>
               </div>
             </div>
-            {users
-              .filter((u) => u.id !== profile.id)
-              .map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => onSwitchUser(u.id)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 4px",
-                    background: "none",
-                    border: "none",
-                    borderTop: "1px solid var(--line)",
-                    cursor: "pointer",
-                    color: "var(--ink)",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "50%",
-                      background: "var(--surface-3)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {(u.name || "?")[0].toUpperCase()}
-                  </span>
-                  <span style={{ flex: 1, textAlign: "left", fontSize: 14.5 }}>{u.name}</span>
-                  <span className="label" style={{ fontSize: 9 }}>switch</span>
-                </button>
-              ))}
-            {/* TODO: restore when multi-account switching is built */}
           </div>
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 8, lineHeight: 1.5 }}>
             You and your household share one shelf and brew log — each rates and logs as themselves.
