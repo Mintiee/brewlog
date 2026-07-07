@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { complete } from "@/lib/llm";
-import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
+import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 
 const SYSTEM_PHOTO = `You are reading a specialty-coffee bag label to extract structured data.
 Return ONLY minified JSON (no prose, no markdown, no backticks):
@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
   const hkGuard = await requireHouseholdKey();
   if (!hkGuard.ok) return hkGuard.response;
   const hk = hkGuard.value;
+
+  const rateGuard = checkRateLimit(hk.householdId);
+  if (!rateGuard.ok) return rateGuard.response;
 
   const bodyGuard = await parseJsonBody(req);
   if (!bodyGuard.ok) return bodyGuard.response;

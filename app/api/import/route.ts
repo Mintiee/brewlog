@@ -11,7 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { complete } from "@/lib/llm";
-import { requireHouseholdKey } from "@/lib/api/guards";
+import { requireHouseholdKey, checkRateLimit } from "@/lib/api/guards";
 import type { ImportedCoffee } from "@/lib/import/types";
 
 const MAX_INPUT = 8000; // characters — generous but bounded
@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
   const hkGuard = await requireHouseholdKey();
   if (!hkGuard.ok) return hkGuard.response;
   const hk = hkGuard.value;
+
+  const rateGuard = checkRateLimit(hk.householdId);
+  if (!rateGuard.ok) return rateGuard.response;
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body.text !== "string" || !body.text.trim()) {

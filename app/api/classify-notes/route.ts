@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { complete } from "@/lib/llm";
 import { createServiceClient } from "@/lib/supabase/server";
-import { requireHouseholdKey, parseJsonBody } from "@/lib/api/guards";
+import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 
 const FAMILIES = "floral, citrus, yellow fruit, red fruit, dark fruit, chocolate, roasty, nutty, sweet, spice, winey, herbal, other";
 const NOTE_CATMAP: Record<string, string> = {
@@ -30,6 +30,9 @@ export async function POST(req: NextRequest) {
   const hkGuard = await requireHouseholdKey();
   if (!hkGuard.ok) return hkGuard.response;
   const hk = hkGuard.value;
+
+  const rateGuard = checkRateLimit(hk.householdId);
+  if (!rateGuard.ok) return rateGuard.response;
 
   const bodyGuard = await parseJsonBody(req);
   if (!bodyGuard.ok) return bodyGuard.response;
