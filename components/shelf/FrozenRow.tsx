@@ -2,6 +2,7 @@
 import { Fragment } from "react";
 import { coffeeStatus, cupsLeft, frozenGramsOf } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import { Icon } from "@/components/ui/Icon";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { CoffeeName } from "@/components/ui/CoffeeName";
@@ -14,6 +15,7 @@ interface FrozenRowProps {
 }
 
 export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
+  const colorOf = useCoffeeColor();
   const frozen = frozenGramsOf(coffee, brews);
   const serves = cupsLeft(frozen);
   const st = coffeeStatus(coffee, brews);
@@ -22,7 +24,7 @@ export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
       width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "flex-start",
     }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 46 }}>
-        <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} process={coffee.process} />
+        <OriginTile code={coffee.cc} roaster={coffee.roaster} color={colorOf(coffee.notes)} size={46} radius={11} process={coffee.process} />
         {coffee.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{coffee.origin}</span>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>

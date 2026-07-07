@@ -1,11 +1,10 @@
 /**
  * Converts an ImportedCoffee into a full Coffee domain object.
  * Replicates the logic in AddCoffee.commit() so imports are consistent with
- * manually-added coffees (canonicalRoaster, coffeeColor, originCode, defaults).
+ * manually-added coffees (canonicalRoaster, originCode, defaults).
  */
 import type { Coffee, Roast } from "@/lib/types";
 import { canonicalRoaster, originCode, todayISO } from "@/lib/domain";
-import { coffeeColor } from "@/lib/flavour";
 import type { ImportedCoffee } from "./types";
 
 const ROAST_ENUM: Roast[] = ["light", "medium-light", "medium", "medium-dark", "dark"];
@@ -57,7 +56,6 @@ export function toCoffee(imported: ImportedCoffee, existing: Coffee[]): Coffee {
     thawed_at: null,
     archived: imported.archived ?? false,
     notes,
-    color: coffeeColor(notes),
     cc: originCode(imported.origin ?? null),
   };
 }

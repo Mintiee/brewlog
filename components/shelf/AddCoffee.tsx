@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import { originCode, todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions } from "@/lib/domain";
-import { coffeeColor } from "@/lib/flavour";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import { SheetHeader } from "@/components/ui/SheetHeader";
@@ -141,7 +140,6 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
       thawed_at: null,
       archived: false,
       notes,
-      color: coffeeColor(notes),
       cc: originCode(form.origin),
     };
     onAdd(c);

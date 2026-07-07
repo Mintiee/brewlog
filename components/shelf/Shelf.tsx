@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { CoffeeName } from "@/components/ui/CoffeeName";
 import { FreshDot } from "@/components/ui/FreshDot";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import { ShelfRow } from "./ShelfRow";
 import { FrozenRow } from "./FrozenRow";
 import { CoffeeDetail } from "./CoffeeDetail";
@@ -25,6 +26,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<Coffee | null>(null);
   const [showArchive, setShowArchive] = useState(false);
+  const colorOf = useCoffeeColor();
 
   const live = coffees.filter((c) => !c.archived);
   const archived = coffees.filter((c) => c.archived);
@@ -121,7 +123,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
                 onKeyDown={(e) => e.key === "Enter" && setDetail(c)}
                 style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: "11px 14px", marginBottom: 8, cursor: "pointer" }}
               >
-                <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={34} radius={9} process={c.process} />
+                <OriginTile code={c.cc} roaster={c.roaster} color={colorOf(c.notes)} size={34} radius={9} process={c.process} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                   <div className="label" style={{ color: "var(--ink-faint)" }}>looks empty</div>
@@ -163,7 +165,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
                         background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 13, padding: "10px 14px", marginBottom: 8, opacity: 0.6,
                       }}
                     >
-                      <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={30} radius={8} process={c.process} />
+                      <OriginTile code={c.cc} roaster={c.roaster} color={colorOf(c.notes)} size={30} radius={8} process={c.process} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <CoffeeName coffee={c} style={{ fontSize: 14 }} />
                         <div className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}{c.grams ? ` · ${formatWeight(c.grams)}` : ""}</div>

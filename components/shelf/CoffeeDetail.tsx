@@ -4,7 +4,8 @@ import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
   todayISO, frozenDays, canonicalRoaster, roasterSuggestions, bagAvgRating,
 } from "@/lib/domain";
-import { coffeeColor, noteColor, noteIcon } from "@/lib/flavour";
+import { noteColor, noteIcon } from "@/lib/flavour";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
 import { IconButton } from "@/components/ui/IconButton";
@@ -47,6 +48,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   const [amt, setAmt] = useState(0);
   const [thawAmt, setThawAmt] = useState(0);
   const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
+  const colorOf = useCoffeeColor();
 
   useEffect(() => {
     setFreezing(false);
@@ -123,7 +125,6 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
       grams,
       roasted_at,
       cc: originCode(ef.origin),
-      color: coffeeColor(notes),
     });
     cancelEdit();
     // Empty bag → almost certainly finished; offer to archive right away
@@ -196,7 +197,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
     <Sheet open={!!coffee} onClose={onClose}>
       <div className="screen-pad" style={{ paddingTop: 8 }}>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={56} radius={13} process={coffee.process} />
+          <OriginTile code={coffee.cc} roaster={coffee.roaster} color={colorOf(coffee.notes)} size={56} radius={13} process={coffee.process} />
           <div style={{ flex: 1 }}>
             <div className="label">{coffee.roaster}</div>
             <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{coffee.name}</div>

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { coffeeStatus, activeGrams, frozenGramsOf, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useLongPress } from "@/lib/hooks/useLongPress";
@@ -38,6 +39,7 @@ interface CoffeeRowProps {
 // own component (rather than a helper function called from a .map) so the
 // long-press hook has a stable per-row identity.
 function CoffeeRow({ c, st, brews, i, dim = false, onPick, onBrewAgain }: CoffeeRowProps) {
+  const colorOf = useCoffeeColor();
   const lb = lastBrewOf(c.id, brews);
   const daysAgo = lb ? daysAgoFromStartedAt(lb.started_at) : null;
   const last = daysAgo !== null ? (daysAgo === 0 ? "today" : `${daysAgo}d`) : null;
@@ -58,7 +60,7 @@ function CoffeeRow({ c, st, brews, i, dim = false, onPick, onBrewAgain }: Coffee
         border: "1px solid var(--line)", opacity: dim ? 0.72 : 1, touchAction: "manipulation",
       }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 48 }}>
-        <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={48} radius={13} process={c.process} />
+        <OriginTile code={c.cc} roaster={c.roaster} color={colorOf(c.notes)} size={48} radius={13} process={c.process} />
         {c.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{c.origin}</span>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -91,6 +93,7 @@ function CoffeeRow({ c, st, brews, i, dim = false, onPick, onBrewAgain }: Coffee
 export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf, onBrewAgain }: StepWhatProps) {
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
   const [, setTick] = useState(0);
+  const colorOf = useCoffeeColor();
 
   // The other household member (if any) — the "send to rate" target. Matched by
   // NAME, not id, so duplicate same-name profiles (anonymous re-logins) don't
@@ -201,7 +204,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
                     borderRadius: "var(--r-tile)", padding: "13px 14px", cursor: "pointer", color: "var(--ink)",
                   }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 44 }}>
-                      <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={44} radius={12} process={c.process} />
+                      <OriginTile code={c.cc} roaster={c.roaster} color={colorOf(c.notes)} size={44} radius={12} process={c.process} />
                       {c.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{c.origin}</span>}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -307,7 +310,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
                   {day.brews.map((b, j) => {
                     const c = coffees.find((x) => x.id === b.coffee_id);
                     const tex = c ? processTexture(c.process) : {};
-                    return <span key={j} style={{ backgroundColor: c ? c.color : "var(--ink-ghost)", ...tex }} />;
+                    return <span key={j} style={{ backgroundColor: c ? colorOf(c.notes) : "var(--ink-ghost)", ...tex }} />;
                   })}
                 </span>
               );

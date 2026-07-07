@@ -2,6 +2,7 @@
 import { Fragment } from "react";
 import { activeGrams, coffeeStatus, cupsLeft, freshColor } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { CoffeeName } from "@/components/ui/CoffeeName";
 import type { Coffee, Brew } from "@/lib/types";
@@ -13,6 +14,7 @@ interface ShelfRowProps {
 }
 
 export function ShelfRow({ coffee, brews, onOpen }: ShelfRowProps) {
+  const colorOf = useCoffeeColor();
   const active = activeGrams(coffee, brews);
   const serves = cupsLeft(active);
   const low = serves <= 2;
@@ -22,7 +24,7 @@ export function ShelfRow({ coffee, brews, onOpen }: ShelfRowProps) {
       width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "flex-start",
     }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 46 }}>
-        <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={46} radius={11} process={coffee.process} />
+        <OriginTile code={coffee.cc} roaster={coffee.roaster} color={colorOf(coffee.notes)} size={46} radius={11} process={coffee.process} />
         {coffee.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{coffee.origin}</span>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>

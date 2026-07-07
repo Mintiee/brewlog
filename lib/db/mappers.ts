@@ -4,7 +4,6 @@
  */
 import type { Coffee, Brew, Config, SavedRecipe } from "@/lib/types";
 import type { Tables, TablesInsert } from "./database.types";
-import { coffeeColor } from "@/lib/flavour";
 import { SEED_BREWERS } from "@/lib/domain/seed";
 
 export function rowToCoffee(r: Tables<"coffees">): Coffee {
@@ -27,7 +26,8 @@ export function rowToCoffee(r: Tables<"coffees">): Coffee {
     thawed_at: r.thawed_at ?? null,
     archived: r.archived,
     notes: r.notes ?? [],
-    color: coffeeColor(r.notes ?? []), // derived on read — always reflects current notes
+    // No `color` — coffee colours are derived from notes at render time
+    // (see useCoffeeColor). Baking it here froze SSR/stale colours.
     cc: r.cc,
   };
 }
@@ -41,7 +41,8 @@ export function coffeeToRow(c: Omit<Coffee, "id"> & { id?: string }): TablesInse
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
     frozen_grams: c.frozen_grams, frozen_at: c.frozen_at ?? null, thawed_at: c.thawed_at ?? null,
     archived: c.archived, notes: c.notes,
-    color: c.notes ? coffeeColor(c.notes) : c.color, // keep column non-null; no longer authoritative
+    // `color` column intentionally omitted — it has a DB default and nothing
+    // reads it any more (colours are render-derived). Left vestigial; no migration.
     cc: c.cc,
   };
 }

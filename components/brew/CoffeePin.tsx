@@ -1,6 +1,7 @@
 "use client";
 import type { Coffee, Brew } from "@/lib/types";
 import { coffeeStatus } from "@/lib/domain";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
 
 interface CoffeePinProps {
@@ -10,6 +11,7 @@ interface CoffeePinProps {
 }
 
 export function CoffeePin({ coffee, brews, onChange }: CoffeePinProps) {
+  const colorOf = useCoffeeColor();
   const st = coffeeStatus(coffee, brews);
   return (
     <button onClick={onChange} style={{
@@ -17,7 +19,7 @@ export function CoffeePin({ coffee, brews, onChange }: CoffeePinProps) {
       background: "var(--surface)", border: "1px solid var(--line)",
       borderRadius: 16, padding: "12px 14px", cursor: "pointer", textAlign: "left",
     }}>
-      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={coffee.color} size={30} radius={9} process={coffee.process} />
+      <OriginTile code={coffee.cc} roaster={coffee.roaster} color={colorOf(coffee.notes)} size={30} radius={9} process={coffee.process} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="label" style={{ color: "var(--ink-faint)" }}>{coffee.roaster}</div>
         <CoffeeName coffee={coffee} style={{ fontSize: 15.5 }} />

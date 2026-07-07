@@ -29,7 +29,7 @@ function makeCoffee(overrides: Partial<Coffee> = {}): Coffee {
     roasted_at: daysAgoDate(0),
     rest_days: 28, peak_days: 56, grams: 250, frozen_grams: 0,
     frozen_at: null, thawed_at: null, archived: false,
-    notes: [], color: "#aaa", cc: "et",
+    notes: [], cc: "et",
     ...overrides,
   };
 }

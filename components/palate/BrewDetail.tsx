@@ -9,6 +9,7 @@ import { Segmented } from "@/components/ui/Segmented";
 import { Stepper } from "@/components/ui/Stepper";
 import { Field } from "@/components/shelf/Field";
 import { journalDateText, localISODate, parseLocalDate, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface EditForm {
@@ -36,6 +37,7 @@ interface BrewDetailProps {
 
 export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, onDelete, onRate }: BrewDetailProps) {
   const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
+  const colorOf = useCoffeeColor();
   // Captured when editing starts (avoids an impure Date.now() in render); caps
   // the date picker so brews can't be dated into the future.
   const [todayISO, setTodayISO] = useState("");
@@ -279,7 +281,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <div style={{
             width: 10, height: 56, borderRadius: 5, flexShrink: 0, marginTop: 3,
-            background: coffee ? coffee.color : "var(--accent)",
+            background: coffee ? colorOf(coffee.notes) : "var(--accent)",
           }} />
           <div style={{ flex: 1 }}>
             <div className="label">{brewer ? brewer.short : brew.brewer_id}</div>

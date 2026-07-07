@@ -38,6 +38,11 @@ interface AppState {
   llmEnabled: boolean;
   aiProvider?: string;
   ready: boolean;          // true once data has loaded (or seeded)
+  /** Bumped whenever the learned-notes map changes at runtime (LLM classifies a
+   *  new note). Colour consumers depend on it via useCoffeeColor so tiles/chips
+   *  repaint once learned families arrive — colours are computed at render time,
+   *  never baked into the Coffee row (which would freeze a stale/SSR colour). */
+  notesVersion: number;
   /** False in local-only demo mode (no session) — writes don't reach a DB. */
   authed: boolean;
   lastError: AppError | null; // last failed DB write, shown as a banner
@@ -105,6 +110,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const [llmEnabled, setLlmEnabled] = useState(!!initialData?.aiStatus?.set);
   const [aiProvider, setAiProvider] = useState<string | undefined>(initialData?.aiStatus?.provider);
   const [ready, setReady] = useState(!!initialData);
+  const [notesVersion, setNotesVersion] = useState(0);
   const [authed, setAuthed] = useState(!!initialData?.profile);
   const [lastError, setLastError] = useState<AppError | null>(null);
   const [undoState, setUndoState] = useState<{ message: string; undo: () => void } | null>(null);
@@ -144,7 +150,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
           setRecipes(rec);
           if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
           if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
-          if (notes) setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>);
+          if (notes) { setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>); setNotesVersion((v) => v + 1); }
         } catch { /* fall through to seed data */ }
         setReady(true);
       });
@@ -205,14 +211,15 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     };
   }, [authed, refresh]);
 
-  // Send lexicon-missed tasting notes to the LLM (once each — classify.ts dedupes),
-  // then recolour the coffees state so chips and tiles repaint with the learned
-  // families. `coffee.color` is materialised per object, hence the remap.
+  // Send lexicon-missed tasting notes to the LLM (once each — classify.ts dedupes).
+  // classifyUnknownNotes merges validated families into the module learned map;
+  // bumping notesVersion makes colour consumers (useCoffeeColor) repaint with the
+  // learned families. Colours are computed at render time, not stored per coffee.
   const learnNotes = useCallback(async (notes: string[]) => {
     if (!llmEnabled) return;
     const map = await classifyUnknownNotes(notes);
     if (!map) return;
-    setCoffees((prev) => prev.map((c) => ({ ...c, color: coffeeColor(c.notes) })));
+    setNotesVersion((v) => v + 1);
   }, [llmEnabled]);
 
   // One-time background sweep: classify unknown notes already on the shelf so
@@ -457,7 +464,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, authed, lastError, undoState,
+      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, notesVersion, authed, lastError, undoState,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError, importCoffees,
       addRecipe, updateRecipe, deleteRecipe,
     }}>
@@ -470,4 +477,20 @@ export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useApp must be inside AppProvider");
   return ctx;
+}
+
+/**
+ * Returns a `coffeeColor` mapper that repaints when learned notes arrive.
+ *
+ * Coffee colours are derived from tasting notes at render time — never stored on
+ * the Coffee row — so SSR can't bake a stale colour and there's no cross-request
+ * module-global hazard. Calling useApp() subscribes the consuming component to
+ * the context, so it re-renders (and recomputes colours at render) whenever app
+ * state changes — including the notesVersion bump the provider fires when the
+ * learned-notes map updates. coffeeColor is pure over notes + the module learned
+ * map; the version bump is purely the repaint trigger.
+ */
+export function useCoffeeColor(): (notes: string[]) => string {
+  useApp();
+  return coffeeColor;
 }

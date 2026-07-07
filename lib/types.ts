@@ -28,7 +28,8 @@ export interface Coffee {
   thawed_at: string | null;
   archived: boolean;
   notes: string[];
-  color: string;       // dominant-family hex
+  // No `color` field — a coffee's colour is derived from its notes at render time
+  // via useCoffeeColor(); storing it froze stale/SSR colours (see C2).
   cc: string | null;   // ISO-2 country code for silhouette
 }
 

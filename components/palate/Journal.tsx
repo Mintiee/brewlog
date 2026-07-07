@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { StarsMini } from "@/components/ui";
 import { daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
 import { processTexture } from "@/lib/flavour";
+import { useCoffeeColor } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface JournalProps {
@@ -71,6 +72,7 @@ function collapseSiblings(brews: Brew[]): DisplayCard[] {
 
 export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
   const [windowDays, setWindowDays] = useState(CHUNK_DAYS);
+  const colorOf = useCoffeeColor();
 
   const groups = useMemo<Group[]>(() => {
     const sorted = [...brews].sort((a, b) => {
@@ -163,7 +165,7 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
                       width: 10,
                       height: 38,
                       borderRadius: 4,
-                      background: c ? c.color : "var(--accent)",
+                      background: c ? colorOf(c.notes) : "var(--accent)",
                       flexShrink: 0,
                       ...tex,
                     }}
