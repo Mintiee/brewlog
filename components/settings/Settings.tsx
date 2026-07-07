@@ -191,7 +191,7 @@ export function Settings({
                 <button
                   onClick={() => removeBrewer(i)}
                   aria-label={`Remove ${b.name || "brewer"}`}
-                  style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", display: "flex", flexShrink: 0 }}
+                  style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", display: "flex", flexShrink: 0, padding: 13, margin: -13 }}
                 >
                   <Icon name="close" size={18} stroke={1.9} />
                 </button>

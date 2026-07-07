@@ -10,6 +10,10 @@ interface StarsProps {
 }
 
 export function Stars({ value, onChange, size = 30, gap = 8, readOnly = false }: StarsProps) {
+  // Half-star tap zones are only as wide as half a star (semantics require that),
+  // but nothing above/below constrains height — stretch the hit area vertically
+  // to at least 44px, extending equally above and below the visible icon.
+  const vExtra = Math.max(0, 44 - size) / 2;
   return (
     <div style={{ display: "flex", gap }}>
       {[1, 2, 3, 4, 5].map((n) => {
@@ -38,7 +42,7 @@ export function Stars({ value, onChange, size = 30, gap = 8, readOnly = false }:
                   className="starbtn"
                   onClick={() => onChange?.(value === n - 0.5 ? 0 : n - 0.5)}
                   style={{
-                    position: "absolute", left: 0, top: 0, width: "50%", height: "100%",
+                    position: "absolute", left: 0, top: -vExtra, width: "50%", height: `calc(100% + ${vExtra * 2}px)`,
                     background: "none", border: "none", padding: 0, cursor: "pointer",
                   }}
                 />
@@ -46,7 +50,7 @@ export function Stars({ value, onChange, size = 30, gap = 8, readOnly = false }:
                   className="starbtn"
                   onClick={() => onChange?.(value === n ? 0 : n)}
                   style={{
-                    position: "absolute", right: 0, top: 0, width: "50%", height: "100%",
+                    position: "absolute", right: 0, top: -vExtra, width: "50%", height: `calc(100% + ${vExtra * 2}px)`,
                     background: "none", border: "none", padding: 0, cursor: "pointer",
                   }}
                 />

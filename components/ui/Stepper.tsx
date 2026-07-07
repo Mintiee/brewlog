@@ -18,10 +18,17 @@ interface StepperProps {
 export function Stepper({ icon, label, value, unit, onChange, step = 1, min = 0, max = 999, format, dense }: StepperProps) {
   const dec = () => onChange(Math.max(min, +(value - step).toFixed(2)));
   const inc = () => onChange(Math.min(max, +(value + step).toFixed(2)));
-  const btnStyle: React.CSSProperties = {
+  // Hit target is 44x44 but a negative margin cancels the extra 14px out of the
+  // flex layout, so the row footprint is unchanged; the 30x30 visual circle
+  // lives on an inner span centered in that hit box, so nothing looks different.
+  const hitStyle: React.CSSProperties = {
+    width: 44, height: 44, margin: -7, background: "none", border: "none", padding: 0,
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0,
+  };
+  const circleStyle: React.CSSProperties = {
     width: 30, height: 30, borderRadius: "50%", background: "var(--surface-3)",
-    border: "1px solid var(--line)", color: "var(--ink)", cursor: "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    border: "1px solid var(--line)", color: "var(--ink)",
+    display: "flex", alignItems: "center", justifyContent: "center",
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, padding: dense ? "8px 0" : "12px 0", minWidth: 0 }}>
@@ -36,8 +43,8 @@ export function Stepper({ icon, label, value, unit, onChange, step = 1, min = 0,
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button style={btnStyle} onClick={dec}><Icon name="minus" size={15} stroke={2} /></button>
-        <button style={btnStyle} onClick={inc}><Icon name="plus" size={15} stroke={2} /></button>
+        <button style={hitStyle} onClick={dec} aria-label="Decrease"><span style={circleStyle}><Icon name="minus" size={15} stroke={2} /></span></button>
+        <button style={hitStyle} onClick={inc} aria-label="Increase"><span style={circleStyle}><Icon name="plus" size={15} stroke={2} /></span></button>
       </div>
     </div>
   );

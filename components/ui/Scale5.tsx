@@ -25,15 +25,25 @@ export function Scale5({ label, value, onChange, lowTag, highTag }: Scale5Props)
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {[1, 2, 3, 4, 5].map((n) => (
+          // Hit area is widened past the 22px pip with a matching negative margin so
+          // the row footprint is unchanged. Horizontal padding is capped at 3px (28px
+          // wide) so neighbouring hit areas meet at the midpoint of the 6px gap without
+          // overlapping and swallowing each other's taps; vertical padding goes further
+          // (44px tall) since nothing else constrains it there.
           <button
             key={n}
-            className="pip"
+            aria-label={`${n}`}
             onClick={() => onChange(n === value ? 0 : n)}
             style={{
-              width: 22, height: 22, borderRadius: 7, border: "none", cursor: "pointer", padding: 0,
-              background: n <= value ? "var(--accent)" : "var(--surface-3)",
+              width: 28, height: 44, margin: "-11px -3px", border: "none", cursor: "pointer",
+              padding: 0, background: "none", display: "flex", alignItems: "center", justifyContent: "center",
             }}
-          />
+          >
+            <span className="pip" style={{
+              width: 22, height: 22, borderRadius: 7,
+              background: n <= value ? "var(--accent)" : "var(--surface-3)",
+            }} />
+          </button>
         ))}
       </div>
     </div>
