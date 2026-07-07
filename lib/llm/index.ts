@@ -3,11 +3,10 @@
  * Auto-detects provider from key prefix: "sk-ant-" → Anthropic, else OpenAI.
  */
 
-export type Provider = "openai" | "anthropic";
+import type { Provider } from "./detect";
 
-export function detectProvider(key: string): Provider {
-  return key.startsWith("sk-ant-") ? "anthropic" : "openai";
-}
+export type { Provider } from "./detect";
+export { detectProvider } from "./detect";
 
 export interface LLMRequest {
   system: string;

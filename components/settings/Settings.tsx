@@ -4,6 +4,7 @@ import { Icon, IconButton, Stepper } from "@/components/ui";
 import { SSection, SText, SRow, SToggle } from "./controls";
 import { AddBrewerSheet } from "./AddBrewerSheet";
 import { ImportSheet } from "@/components/import/ImportSheet";
+import { detectProvider } from "@/lib/llm/detect";
 import type { Config, Profile } from "@/lib/types";
 
 interface SettingsProps {
@@ -18,13 +19,6 @@ interface SettingsProps {
   llmEnabled: boolean;
   onSetAiKey: (key: string, provider: string) => Promise<void>;
   onRemoveAiKey: () => Promise<void>;
-}
-
-function detectProvider(key: string): string {
-  const k = key.trim();
-  if (k.startsWith("sk-")) return "openai";
-  if (k.startsWith("sk-ant-")) return "anthropic";
-  return "openai";
 }
 
 export function Settings({
