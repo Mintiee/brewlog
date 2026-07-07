@@ -5,7 +5,7 @@ import { SSection, SText, SRow, SToggle } from "./controls";
 import { AddBrewerSheet } from "./AddBrewerSheet";
 import { ImportSheet } from "@/components/import/ImportSheet";
 import { detectProvider } from "@/lib/llm/detect";
-import type { Config, Profile } from "@/lib/types";
+import type { Config, Profile, SavedRecipe } from "@/lib/types";
 
 interface SettingsProps {
   config: Config;
@@ -16,6 +16,9 @@ interface SettingsProps {
   onSwitchUser: (id: string) => void;
   onAddUser: () => void;
   onRenameUser: (id: string, name: string) => void;
+  recipes: SavedRecipe[];
+  onUpdateRecipe: (r: SavedRecipe) => void;
+  onDeleteRecipe: (id: string) => void;
   llmEnabled: boolean;
   onSetAiKey: (key: string, provider: string) => Promise<void>;
   onRemoveAiKey: () => Promise<void>;
@@ -30,6 +33,9 @@ export function Settings({
   onSwitchUser,
   onAddUser,
   onRenameUser,
+  recipes,
+  onUpdateRecipe,
+  onDeleteRecipe,
   llmEnabled,
   onSetAiKey,
   onRemoveAiKey,
@@ -216,6 +222,42 @@ export function Settings({
             onClose={() => setAdding(false)}
             onAdd={(b) => onConfig({ ...config, brewers: [...config.brewers, b] })}
           />
+        </SSection>
+
+        {/* RECIPES */}
+        <SSection label="Recipes">
+          {recipes.length === 0 ? (
+            <div style={{ fontSize: 11.5, color: "var(--ink-faint)", lineHeight: 1.5 }}>
+              No saved recipes yet — save one from the brew screen.
+            </div>
+          ) : (
+            recipes.map((rec) => (
+              <div key={rec.id} className="card" style={{ padding: "12px 16px", marginBottom: 10 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ flex: 1 }}>
+                    <SText
+                      value={rec.name}
+                      onChange={(v) => onUpdateRecipe({ ...rec, name: v })}
+                      placeholder="Recipe name"
+                    />
+                  </div>
+                  <button
+                    onClick={() => onDeleteRecipe(rec.id)}
+                    aria-label={`Delete ${rec.name || "recipe"}`}
+                    style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", display: "flex", flexShrink: 0, padding: 13, margin: -13 }}
+                  >
+                    <Icon name="close" size={18} stroke={1.9} />
+                  </button>
+                </div>
+                <div className="mono" style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>
+                  {rec.dose}g · {rec.water + (rec.bypass || 0)}mL · {rec.temp}° · grind {rec.grind}
+                </div>
+              </div>
+            ))
+          )}
+          <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
+            Saved recipes appear as chips on the brew screen — tap one to load it.
+          </div>
         </SSection>
 
         {/* FRESHNESS */}

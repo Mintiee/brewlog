@@ -68,7 +68,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
 }
 
 function Shell() {
-  const { coffees, brews, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, lastError, clearError, undoState } = useApp();
+  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -172,6 +172,9 @@ function Shell() {
           onSwitchUser={() => {}}
           onAddUser={() => {}}
           onRenameUser={() => {}}
+          recipes={recipes}
+          onUpdateRecipe={updateRecipe}
+          onDeleteRecipe={deleteRecipe}
           llmEnabled={effectiveLlmEnabled}
           onSetAiKey={handleSetAiKey}
           onRemoveAiKey={handleRemoveAiKey}
