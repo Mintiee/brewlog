@@ -29,10 +29,10 @@ The three big cross-cutting gaps:
 
 | # | Finding | Files | Effort |
 |---|---|---|---|
-| S1 | **Rotate + relocate secrets.** Live Supabase service-role key and `APP_ENCRYPTION_KEY` sit in cleartext in `.env.local` inside a OneDrive-synced folder. Rotate both; keep prod values only in Vercel env; move local dev secrets out of the synced tree. | `.env.local` | S |
+| S1 | ~~Rotate + relocate secrets~~ **Owner-declined (2026-07-07): accepted risk, no rotation.** Do not re-raise without new exposure evidence. | `.env.local` | — |
 | S2 | **SSRF in `/api/extract`.** `fetch(url)` on user-controlled URL, no scheme/host/IP validation; page text returned via the LLM (non-blind exfiltration of internal endpoints). Require `https:`, block private/loopback/link-local/metadata ranges, `redirect: "manual"` + re-validate, cap response size. | `app/api/extract/route.ts:47` | S |
 | S3 | **Rate-limit uncached LLM routes.** `/api/import`, `/api/extract`, `/api/classify-notes` are unbounded per request and billed to the household key. Per-IP/per-household token bucket (Upstash ratelimit or in-memory). | `app/api/{import,extract,classify-notes}/route.ts` | M |
-| S4 | **Close the front door.** Anonymous sign-in + fixed `BREWMK` join = anyone becomes a household member (`app/login/page.tsx:24-28`, `app/api/household/route.ts:17-61`). Strategic fix: finish email auth + invite codes. Interim: shared secret gate or disable anonymous sign-ups. | login, household route, auth callback | M–L |
+| S4 | **Close the front door.** Anonymous sign-in + fixed `BREWMK` join = anyone becomes a household member (`app/login/page.tsx:24-28`, `app/api/household/route.ts:17-61`). Fix: **email + 6-digit OTP** (owner preference, 2026-07-07) + invite-code join; disable anonymous sign-ups after both accounts migrate. | login, household route, auth callback | M–L |
 | S5 | **Column-restrict `household_ai` select.** RLS lets members read `key_ciphertext`/`key_iv`; expose only `provider`/`set_at` via a view. Defense-in-depth against S1's key leaking. | `supabase/migrations/001_init.sql:202-203` | S |
 | S6 | **Harden global `learned_notes` writes.** Last-writer-wins upsert from arbitrary (cheap-model) classifications pollutes shared data across households. Pin classify-notes to a strong model, guard note-key length/charset, insert-if-absent instead of overwrite. | `app/api/classify-notes/route.ts:42,61-77`, `lib/llm/index.ts:76` | M |
 
