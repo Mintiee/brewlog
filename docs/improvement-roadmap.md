@@ -1,5 +1,7 @@
 # Brew — Multi-Perspective Review & Improvement Roadmap
 
+> **Status (2026-07-07):** all approved items below are IMPLEMENTED on the `ux-improvements` branch (36 commits, unmerged/unpushed) — security Tier 1 (minus owner-declined S1), auth milestone code (cutover pending, see `docs/auth-cutover.md`), UX fixes U1/U2/U5/U6, P5, P8, and the reliability/code-health backlog. Remaining: owner cutover steps, applying migrations 017/018, and the public-launch round (domain, custom SMTP, create-household flow).
+
 *Generated 2026-07-07 from six parallel perspective reviews of the codebase (UX, life impact, security, architecture, reliability/offline, AI quality). Each finding cites the files it touches; effort is S ≈ hours, M ≈ 1–2 days, L ≈ 3+ days.*
 
 ## Perspectives used
