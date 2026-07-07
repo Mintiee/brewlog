@@ -4,6 +4,7 @@ import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { coffeeStatus, activeGrams, frozenGramsOf, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface StepWhatProps {
   coffees: Coffee[];
@@ -104,6 +105,42 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
       </button>
     );
   };
+
+  // First-run: no coffees at all yet. The "resting/in the freezer" copy below is
+  // wrong here (there's nothing resting either) and every other section on this
+  // screen (pending, ready, past peak, frozen banner, recent strip) is derived
+  // from coffees/brews that don't exist yet — so show a single CTA into the
+  // shelf's own Add flow instead of a dead-end "0 ready" screen.
+  if (coffees.length === 0) {
+    return (
+      <div className="screen-pad">
+        <div className="rise rise-1" style={{ paddingTop: 8 }}>
+          <div className="h-greet">{intro.greet}{/[?!.]$/.test(intro.greet) ? "" : "."}</div>
+          <h1 className="h-ask" style={{ marginTop: 4 }}>{intro.q}</h1>
+        </div>
+        <div className="rise rise-2" style={{ marginTop: 24 }}>
+          <EmptyState
+            icon="shelf"
+            title="Your shelf is empty"
+            iconSize={48}
+            titleSize={17}
+            pad="60px 20px"
+          >
+            {onGotoShelf && (
+              <button
+                className="btn btn-accent"
+                style={{ marginTop: 20, width: "auto", padding: "0 22px", display: "inline-flex" }}
+                onClick={onGotoShelf}
+              >
+                <Icon name="plus" size={19} stroke={2} /> Add a coffee
+              </button>
+            )}
+          </EmptyState>
+        </div>
+        <div className="screen-bottom" />
+      </div>
+    );
+  }
 
   return (
     <div className="screen-pad">
