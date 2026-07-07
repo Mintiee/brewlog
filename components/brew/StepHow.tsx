@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import type { Coffee, Brew, Brewer, Config, Recipe } from "@/lib/types";
+import type { Coffee, Brew, Brewer, Config, Recipe, SavedRecipe } from "@/lib/types";
 import { defaultsFor, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
-import { Icon, Stepper } from "@/components/ui";
+import { Icon, Stepper, SheetHeader } from "@/components/ui";
 import { Sheet } from "@/components/ui/Sheet";
 import { CoffeePin } from "./CoffeePin";
 
@@ -12,6 +12,10 @@ interface StepHowProps {
   coffee: Coffee;
   brews: Brew[];
   config: Config;
+  /** Saved recipe library — rendered as apply-on-tap chips. */
+  recipes: SavedRecipe[];
+  /** Persist the current recipe under a name. */
+  addRecipe: (r: SavedRecipe) => Promise<boolean>;
   /** Show the partner options (Kris / Split) — only truthy when another household member exists. */
   canSplit?: boolean;
   /** Display name of the partner (e.g. "Kris"). */
@@ -50,7 +54,7 @@ function AudiencePill({ label, active, onClick }: { label: string; active: boole
   );
 }
 
-export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onChangeCoffee, onLog }: StepHowProps) {
+export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, splitPartnerName, onChangeCoffee, onLog }: StepHowProps) {
   const recipeFromBrew = (b: Brew): Recipe =>
     ({ dose: b.dose, ratio: b.ratio, water: b.water, bypass: b.bypass || 0, temp: b.temp, grind: b.grind, water_type: b.water_type });
 
@@ -89,6 +93,47 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
   const defaultAudience = (b: Brewer): Audience => (!!canSplit && brewerIcon(b) === "dripperOxo" ? "split" : "me");
   const [audience, setAudience] = useState<Audience>(() => defaultAudience(initialBrewer));
   const [waterPickerOpen, setWaterPickerOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [recipeName, setRecipeName] = useState("");
+
+  // Apply a saved recipe: load its parameters into the working recipe, and if it
+  // was saved on a still-configured brewer, select that brewer too.
+  function applyRecipe(rec: SavedRecipe) {
+    setR({
+      dose: rec.dose, water: rec.water, bypass: rec.bypass || 0,
+      temp: rec.temp, grind: rec.grind, ratio: rec.ratio, water_type: rec.water_type,
+    });
+    if (rec.brewer_id) {
+      const b = config.brewers.find((x) => x.id === rec.brewer_id);
+      if (b) setBrewer(b);
+    }
+  }
+
+  // A chip reads as "active" when the working recipe still matches it exactly —
+  // editing any stepper afterwards silently clears the highlight.
+  const recipeActive = (rec: SavedRecipe) =>
+    r.dose === rec.dose && r.water === rec.water && (r.bypass || 0) === (rec.bypass || 0) &&
+    r.temp === rec.temp && r.grind === rec.grind && r.water_type === rec.water_type &&
+    (!rec.brewer_id || rec.brewer_id === brewer.id);
+
+  function openSaveSheet() {
+    // Sensible default name — brewer short + coffee name; user can overwrite.
+    setRecipeName(`${brewer.short} ${coffee.name}`.trim());
+    setSaveOpen(true);
+  }
+
+  function commitRecipe() {
+    const name = recipeName.trim();
+    if (!name) return;
+    void addRecipe({
+      id: crypto.randomUUID(),
+      name,
+      dose: r.dose, water: r.water, bypass: r.bypass || 0, temp: r.temp,
+      grind: r.grind, ratio: (r.water + (r.bypass || 0)) / r.dose, water_type: r.water_type,
+      brewer_id: brewer.id,
+    });
+    setSaveOpen(false);
+  }
 
   function selectBrewer(b: Brewer) {
     setBrewer(b);
@@ -136,6 +181,23 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
         })}
       </div>
 
+      {/* Saved recipes — apply-on-tap chips, only when the library has entries */}
+      {recipes.length > 0 && (
+        <div className="rise rise-2" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+          {recipes.map((rec) => (
+            <span
+              key={rec.id}
+              className="chip"
+              data-on={recipeActive(rec)}
+              onClick={() => applyRecipe(rec)}
+              style={{ cursor: "pointer" }}
+            >
+              {rec.name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* recipe — grind-led, dense steppers to save vertical space */}
       <div className="card rise rise-3" style={{ marginTop: 10, padding: "2px 16px" }}>
         <Stepper
@@ -167,6 +229,21 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
             ? <span>{r.water}g brew + {r.bypass || 0}g after · {total}g · 1:{ratio.toFixed(1)}</span>
             : <span>{r.dose}g in <Icon name="chev" size={11} stroke={2} /> {total}g out · 1:{ratio.toFixed(1)}</span>}
         </div>
+      </div>
+
+      {/* Save the current recipe to the library — small ghost affordance */}
+      <div className="rise rise-3" style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+        <button
+          onClick={openSaveSheet}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--ink-faint)", fontFamily: "var(--font-ui)",
+            fontSize: 12.5, fontWeight: 600, padding: "4px 2px",
+          }}
+        >
+          <Icon name="plus" size={15} stroke={2} /> Save recipe
+        </button>
       </div>
 
       {/* Last brew of this coffee — passive reference, no advice */}
@@ -262,6 +339,39 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
               {r.water_type === w && <Icon name="check" size={18} stroke={2} style={{ color: "var(--accent)" }} />}
             </button>
           ))}
+        </div>
+      </Sheet>
+
+      {/* Save-recipe naming sheet */}
+      <Sheet open={saveOpen} onClose={() => setSaveOpen(false)}>
+        <div className="screen-pad" style={{ paddingTop: 6 }}>
+          <SheetHeader title="Save recipe" onClose={() => setSaveOpen(false)} />
+          <input
+            value={recipeName}
+            onChange={(e) => setRecipeName(e.target.value)}
+            placeholder="e.g. V60 bright"
+            autoFocus
+            style={{
+              width: "100%", padding: "12px 14px", borderRadius: 13,
+              background: "var(--surface)", border: "1px solid var(--line)",
+              color: "var(--ink)", outline: "none", fontFamily: "var(--font-ui)",
+              fontSize: 16, boxSizing: "border-box", marginBottom: 8,
+            }}
+          />
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-faint)", marginBottom: 16 }}>
+            {r.dose}g · {r.water + (r.bypass || 0)}g · {r.temp}° · grind {r.grind} · {brewer.short}
+          </div>
+          <button
+            className="btn"
+            onClick={commitRecipe}
+            disabled={!recipeName.trim()}
+            style={{
+              width: "100%", background: "var(--ink)", color: "var(--bg)",
+              height: 52, borderRadius: 13, opacity: recipeName.trim() ? 1 : 0.45,
+            }}
+          >
+            Save recipe
+          </button>
         </div>
       </Sheet>
     </div>

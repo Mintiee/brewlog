@@ -21,7 +21,7 @@ interface BrewFlowProps {
 }
 
 export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
-  const { coffees, brews, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession } = useApp();
+  const { coffees, brews, recipes, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession, addRecipe } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
   const otherMember = members.find((m) => m.name !== profile.name) ?? null;
@@ -283,6 +283,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           coffee={coffee}
           brews={brews}
           config={config}
+          recipes={recipes}
+          addRecipe={addRecipe}
           canSplit={!!otherMember}
           splitPartnerName={otherMember?.name}
           onChangeCoffee={() => setStep("what")}
