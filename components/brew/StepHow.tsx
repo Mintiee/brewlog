@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Coffee, Brew, Brewer, Config, Recipe } from "@/lib/types";
-import { defaultsFor } from "@/lib/domain";
+import { defaultsFor, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
 import { Icon, Stepper } from "@/components/ui";
 import { Sheet } from "@/components/ui/Sheet";
 import { CoffeePin } from "./CoffeePin";
@@ -97,6 +97,12 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
     setR(last ? recipeFromBrew(last) : fallbackRecipe(b));
   }
 
+  // Passive reference to the previous brew of this coffee — prefers this brewer,
+  // falls back to any brewer if this coffee hasn't been brewed on it before.
+  const prevBrew = previousBrewFor(coffee.id, brewer.id, brews) ?? previousBrewFor(coffee.id, null, brews);
+  const prevDelta = prevBrew ? recipeDelta(prevBrew, r) : null;
+  const prevRating = prevBrew && prevBrew.stars != null ? brewRating(prevBrew) : null;
+
   const total = r.water + (r.bypass || 0);
   const ratio = total / r.dose;
   const setDose = (v: number) => setR((s) => ({ ...s, dose: v }));
@@ -162,6 +168,41 @@ export function StepHow({ coffee, brews, config, canSplit, splitPartnerName, onC
             : <span>{r.dose}g in <Icon name="chev" size={11} stroke={2} /> {total}g out · 1:{ratio.toFixed(1)}</span>}
         </div>
       </div>
+
+      {/* Last brew of this coffee — passive reference, no advice */}
+      {prevBrew && prevDelta && (
+        <div
+          className="label rise rise-3"
+          style={{
+            marginTop: 8, display: "flex", alignItems: "center", gap: 6,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}
+        >
+          <span>Last time</span>
+          <span>·</span>
+          <span style={{ color: prevDelta.find((d) => d.key === "grind")?.changed ? "var(--ink)" : "var(--ink-faint)" }}>
+            {prevBrew.grind}{config.grinder.unit[0]} grind
+          </span>
+          <span>·</span>
+          <span style={{ color: prevDelta.find((d) => d.key === "temp")?.changed ? "var(--ink)" : "var(--ink-faint)" }}>
+            {prevBrew.temp}°
+          </span>
+          <span>·</span>
+          <span style={{ color: prevDelta.find((d) => d.key === "dose")?.changed ? "var(--ink)" : "var(--ink-faint)" }}>
+            {prevBrew.dose}g
+          </span>
+          <span>·</span>
+          <span style={{ color: prevDelta.find((d) => d.key === "water")?.changed ? "var(--ink)" : "var(--ink-faint)" }}>
+            {prevBrew.water}mL
+          </span>
+          {prevRating != null && (
+            <>
+              <span>·</span>
+              <span>★{prevRating}</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Water + Who's it for */}
       <div className="card rise rise-4" style={{ marginTop: 10, padding: "2px 16px" }}>
