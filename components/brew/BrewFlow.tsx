@@ -138,17 +138,12 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     return config.brewers.find((b) => b.id === id) ?? null;
   }
 
-  function logCoffee(c: Coffee, b: Brewer, r: Recipe, audience: Audience) {
-    setCoffee(c);
-    setBrewer(b);
-    setRecipe(r);
-    const startedAt = Date.now();
-    const isGuest = audience === "guest";
-    // Assign a shared session_id when splitting with the other household member.
-    const sessionId = audience === "split" && otherMember ? crypto.randomUUID() : null;
-    // "partner" mode: whole cup for the other member — hand off the single row for them to rate.
-    const rateFor = audience === "partner" && otherMember ? otherMember.id : null;
-    const newBrew: Brew = {
+  /** Build a pending Brew row for `c`/`b`/`r`, started at `startedAt`. Every
+   *  field that a split session's two rows share (coffee, brewer, recipe,
+   *  timing, rest snapshot, and the not-yet-rated shape) is defined once here;
+   *  callers pass only what makes a row different (rate_for, guest, session_id). */
+  function makeBrew(c: Coffee, b: Brewer, r: Recipe, startedAt: number, overrides: Partial<Brew> = {}): Brew {
+    return {
       id: crypto.randomUUID(),
       household_id: profile.household_id,
       coffee_id: c.id,
@@ -161,9 +156,9 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       bypass: r.bypass || 0,
       ratio: (r.water + (r.bypass || 0)) / r.dose,
       pending: true,
-      rate_for: rateFor,
-      session_id: sessionId,
-      guest: isGuest,
+      rate_for: null,
+      session_id: null,
+      guest: false,
       started_at: String(startedAt),
       // Snapshot the freeze-adjusted rest now, so it stays correct if the
       // coffee is later re-frozen or its dates edited.
@@ -179,43 +174,28 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       body: null,
       clarity: null,
       note: null,
+      ...overrides,
     };
+  }
+
+  function logCoffee(c: Coffee, b: Brewer, r: Recipe, audience: Audience) {
+    setCoffee(c);
+    setBrewer(b);
+    setRecipe(r);
+    const startedAt = Date.now();
+    const isGuest = audience === "guest";
+    // Assign a shared session_id when splitting with the other household member.
+    const sessionId = audience === "split" && otherMember ? crypto.randomUUID() : null;
+    // "partner" mode: whole cup for the other member — hand off the single row for them to rate.
+    const rateFor = audience === "partner" && otherMember ? otherMember.id : null;
+    const newBrew = makeBrew(c, b, r, startedAt, { rate_for: rateFor, session_id: sessionId, guest: isGuest });
     // For a split brew, also create a sibling row directed at the other member.
     // They see it as a normal pending brew on their device and rate it through
     // the unchanged StepRate flow. rate_for is cleared when they save their rating,
     // just like any other handoff. session_id links the two rows for the read layer
     // (TasterFaceoff pairing, Journal merge).
     if (sessionId && otherMember) {
-      const siblingBrew: Brew = {
-        id: crypto.randomUUID(),
-        household_id: profile.household_id,
-        coffee_id: c.id,
-        brewer_id: b.id,
-        dose: r.dose,
-        water: r.water,
-        temp: r.temp,
-        grind: r.grind,
-        water_type: r.water_type,
-        bypass: r.bypass || 0,
-        ratio: (r.water + (r.bypass || 0)) / r.dose,
-        pending: true,
-        rate_for: otherMember.id,
-        session_id: sessionId,
-        guest: false,
-        started_at: String(startedAt),
-        rest_days: restForBrew(c, brews, startedAt),
-        rated_at: null,
-        logged_by: profile.id,
-        stars: null,
-        stars2: null,
-        taster1: null,
-        taster2: null,
-        acidity: null,
-        sweetness: null,
-        body: null,
-        clarity: null,
-        note: null,
-      };
+      const siblingBrew = makeBrew(c, b, r, startedAt, { rate_for: otherMember.id, session_id: sessionId });
       lastLogged.current = [newBrew, siblingBrew];
     } else {
       lastLogged.current = [newBrew];
