@@ -1,5 +1,5 @@
 /**
- * Database schema types — hand-derived from supabase/migrations/001–015.
+ * Database schema types — hand-derived from supabase/migrations/001–018.
  *
  * Mirrors the shape `supabase gen types typescript` produces, so it can be
  * replaced by the generated file once CLI auth is set up:
@@ -199,6 +199,38 @@ export interface Database {
         Row: { household_id: string; tips: Json; generated_at: string };
         Insert: { household_id: string; tips: Json; generated_at?: string };
         Update: { household_id?: string; tips?: Json; generated_at?: string };
+        Relationships: [];
+      };
+      recipes: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          dose: number;
+          water: number;
+          bypass: number;
+          temp: number;
+          grind: number;
+          ratio: number;
+          water_type: string;
+          brewer_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id?: string;       // defaults to my_household_id() (migration 018)
+          name: string;
+          dose: number;
+          water: number;
+          bypass?: number;
+          temp: number;
+          grind: number;
+          ratio: number;
+          water_type?: string;
+          brewer_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["recipes"]["Insert"]>;
         Relationships: [];
       };
       learned_notes: {
