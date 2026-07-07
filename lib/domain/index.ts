@@ -32,6 +32,15 @@ function parseTs(ts: string | number): number {
   return typeof ts === "number" ? ts : parseInt(ts, 10);
 }
 
+// Local midnight of the day containing `ms`. Day counts are calendar-day diffs
+// (midnight to midnight): without this, a brew logged after noon rounds up to
+// one more rest day than the freshness display shows for the same coffee.
+function localMidnightMs(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 export function roastedDaysAgo(coffee: Coffee): number {
   const roastedAt = parseLocalDate(coffee.roasted_at);
   const today = new Date();
@@ -52,15 +61,17 @@ function frozenSpanMs(coffee: Coffee, toMs: number): number {
 
 // Freeze-adjusted days the beans had rested at a given moment.
 export function restDaysAt(coffee: Coffee, atMs: number): number {
+  const at = localMidnightMs(atMs);
   const roastedAt = parseLocalDate(coffee.roasted_at).getTime();
-  return Math.max(0, Math.round((atMs - roastedAt - frozenSpanMs(coffee, atMs)) / 86400000));
+  return Math.max(0, Math.round((at - roastedAt - frozenSpanMs(coffee, at)) / 86400000));
 }
 
 // Calendar days roast→atMs, ignoring any freeze — the out-of-freezer portion
-// never paused, so it ages by the wall clock.
+// never paused, so it ages by the calendar.
 function calendarDaysAt(coffee: Coffee, atMs: number): number {
+  const at = localMidnightMs(atMs);
   const roastedAt = parseLocalDate(coffee.roasted_at).getTime();
-  return Math.max(0, Math.round((atMs - roastedAt) / 86400000));
+  return Math.max(0, Math.round((at - roastedAt) / 86400000));
 }
 
 // Rest snapshot for a brew: you pull from the out-of-freezer portion when there
