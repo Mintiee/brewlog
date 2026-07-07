@@ -5,6 +5,7 @@ import { coffeeStatus, activeGrams, frozenGramsOf, cupsLeft, lastBrewOf, sinceTe
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useLongPress } from "@/lib/hooks/useLongPress";
 
 interface StepWhatProps {
   coffees: Coffee[];
@@ -17,9 +18,77 @@ interface StepWhatProps {
   onSend?: (b: Brew) => void;
   onOpenBrew?: (b: Brew) => void;
   onGotoShelf?: () => void;
+  /** Long-press shortcut on a ready/past-peak row: log it again with its last recipe. */
+  onBrewAgain?: (c: Coffee) => void;
 }
 
-export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf }: StepWhatProps) {
+interface CoffeeRowProps {
+  c: Coffee;
+  st: ReturnType<typeof coffeeStatus>;
+  brews: Brew[];
+  i: number;
+  dim?: boolean;
+  onPick: (c: Coffee) => void;
+  onBrewAgain?: (c: Coffee) => void;
+}
+
+// A single ready / past-peak row. Long-pressing it logs the coffee again with
+// its last recipe (see BrewFlow.brewAgain); a plain tap does the normal
+// onPick navigation into the "how are you brewing" step. Pulled out into its
+// own component (rather than a helper function called from a .map) so the
+// long-press hook has a stable per-row identity.
+function CoffeeRow({ c, st, brews, i, dim = false, onPick, onBrewAgain }: CoffeeRowProps) {
+  const lb = lastBrewOf(c.id, brews);
+  const daysAgo = lb ? daysAgoFromStartedAt(lb.started_at) : null;
+  const last = daysAgo !== null ? (daysAgo === 0 ? "today" : `${daysAgo}d`) : null;
+  const servesN = cupsLeft(activeGrams(c, brews));
+  const serves = servesN % 1 === 0 ? String(servesN) : servesN.toFixed(1);
+  const longPress = useLongPress({
+    onLongPress: () => onBrewAgain?.(c),
+    onClick: () => onPick(c),
+  });
+  return (
+    <button
+      key={c.id}
+      {...(onBrewAgain ? longPress : { onClick: () => onPick(c) })}
+      className={`rise rise-${Math.min(i + 2, 5)}`}
+      style={{
+        display: "flex", alignItems: "center", gap: 15, textAlign: "left", color: "var(--ink)",
+        background: "var(--surface)", borderRadius: "var(--r-tile)", padding: "16px 17px", cursor: "pointer",
+        border: "1px solid var(--line)", opacity: dim ? 0.72 : 1, touchAction: "manipulation",
+      }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 48 }}>
+        <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={48} radius={13} process={c.process} />
+        {c.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{c.origin}</span>}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px 10px", color: "var(--ink-faint)", fontSize: 10.5 }}>
+          <span className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="days since roast">
+            <Icon name="timer" size={12} stroke={1.8} /> {st.day}d
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="last brewed">
+            <Icon name="brew" size={13} stroke={1.8} /> {last ?? "new"}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="serves left">
+            <Icon name="bean" size={13} stroke={1.8} /> {serves} left
+          </span>
+        </div>
+        <CoffeeName coffee={c} style={{ fontSize: 18, letterSpacing: "-0.015em", color: "var(--ink)", marginTop: 2 }} />
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px 13px", marginTop: 8 }}>
+          {c.notes.map((n) => (
+            <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: noteColor(n) }}>
+              <Icon name={noteIcon(n)} size={14} stroke={1.7} />
+              <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{n}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf, onBrewAgain }: StepWhatProps) {
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
   const [, setTick] = useState(0);
 
@@ -62,49 +131,6 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   const rel = (d: number) => d === 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 
   const brewerById = (id: string) => config.brewers.find((b) => b.id === id);
-
-  const renderRow = ({ c, st }: typeof decorated[number], i: number, dim = false) => {
-    const lb = lastBrewOf(c.id, brews);
-    const daysAgo = lb ? daysAgoFromStartedAt(lb.started_at) : null;
-    const last = daysAgo !== null ? (daysAgo === 0 ? "today" : `${daysAgo}d`) : null;
-    const servesN = cupsLeft(activeGrams(c, brews));
-    const serves = servesN % 1 === 0 ? String(servesN) : servesN.toFixed(1);
-    return (
-      <button key={c.id} onClick={() => onPick(c)} className={`rise rise-${Math.min(i + 2, 5)}`} style={{
-        display: "flex", alignItems: "center", gap: 15, textAlign: "left", color: "var(--ink)",
-        background: "var(--surface)", borderRadius: "var(--r-tile)", padding: "16px 17px", cursor: "pointer",
-        border: "1px solid var(--line)", opacity: dim ? 0.72 : 1,
-      }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 48 }}>
-          <OriginTile code={c.cc} roaster={c.roaster} color={c.color} size={48} radius={13} process={c.process} />
-          {c.origin && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-faint)", textAlign: "center", lineHeight: 1.15 }}>{c.origin}</span>}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px 10px", color: "var(--ink-faint)", fontSize: 10.5 }}>
-            <span className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="days since roast">
-              <Icon name="timer" size={12} stroke={1.8} /> {st.day}d
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="last brewed">
-              <Icon name="brew" size={13} stroke={1.8} /> {last ?? "new"}
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="serves left">
-              <Icon name="bean" size={13} stroke={1.8} /> {serves} left
-            </span>
-          </div>
-          <CoffeeName coffee={c} style={{ fontSize: 18, letterSpacing: "-0.015em", color: "var(--ink)", marginTop: 2 }} />
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px 13px", marginTop: 8 }}>
-            {c.notes.map((n) => (
-              <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: noteColor(n) }}>
-                <Icon name={noteIcon(n)} size={14} stroke={1.7} />
-                <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{n}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </button>
-    );
-  };
 
   // First-run: no coffees at all yet. The "resting/in the freezer" copy below is
   // wrong here (there's nothing resting either) and every other section on this
@@ -217,14 +243,18 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {ready.map((d, i) => renderRow(d, i))}
+        {ready.map(({ c, st }, i) => (
+          <CoffeeRow key={c.id} c={c} st={st} brews={brews} i={i} onPick={onPick} onBrewAgain={onBrewAgain} />
+        ))}
       </div>
 
       {pastPeak.length > 0 && (
         <>
           <div className="label rise rise-2" style={{ margin: "26px 0 12px", color: "var(--fade)" }}>Past peak · {pastPeak.length}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {pastPeak.map((d, i) => renderRow(d, i, true))}
+            {pastPeak.map(({ c, st }, i) => (
+              <CoffeeRow key={c.id} c={c} st={st} brews={brews} i={i} dim onPick={onPick} onBrewAgain={onBrewAgain} />
+            ))}
           </div>
         </>
       )}

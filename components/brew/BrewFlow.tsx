@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { Brew, Brewer, Recipe } from "@/lib/types";
 import { useApp } from "@/lib/store/AppContext";
-import { restForBrew, activeGrams } from "@/lib/domain";
+import { restForBrew, activeGrams, defaultsFor } from "@/lib/domain";
 import { Icon } from "@/components/ui";
 import { StepWhat } from "./StepWhat";
 import { StepHow, type Audience } from "./StepHow";
@@ -68,7 +68,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     return config.brewers.find((b) => b.id === id) ?? null;
   }
 
-  function logCoffee(b: Brewer, r: Recipe, audience: Audience) {
+  function logCoffee(c: Coffee, b: Brewer, r: Recipe, audience: Audience) {
+    setCoffee(c);
     setBrewer(b);
     setRecipe(r);
     const startedAt = Date.now();
@@ -80,7 +81,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     const newBrew: Brew = {
       id: crypto.randomUUID(),
       household_id: profile.household_id,
-      coffee_id: coffee!.id,
+      coffee_id: c.id,
       brewer_id: b.id,
       dose: r.dose,
       water: r.water,
@@ -96,7 +97,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       started_at: String(startedAt),
       // Snapshot the freeze-adjusted rest now, so it stays correct if the
       // coffee is later re-frozen or its dates edited.
-      rest_days: coffee ? restForBrew(coffee, brews, startedAt) : null,
+      rest_days: restForBrew(c, brews, startedAt),
       rated_at: null,
       logged_by: profile.id,
       stars: null,
@@ -118,7 +119,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       const siblingBrew: Brew = {
         id: crypto.randomUUID(),
         household_id: profile.household_id,
-        coffee_id: coffee!.id,
+        coffee_id: c.id,
         brewer_id: b.id,
         dose: r.dose,
         water: r.water,
@@ -132,7 +133,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
         session_id: sessionId,
         guest: false,
         started_at: String(startedAt),
-        rest_days: coffee ? restForBrew(coffee, brews, startedAt) : null,
+        rest_days: restForBrew(c, brews, startedAt),
         rated_at: null,
         logged_by: profile.id,
         stars: null,
@@ -154,8 +155,8 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
     setRateTarget(newBrew);
     // Last-dose check: `brews` doesn't yet include the just-logged row(s), and a
     // split still draws one physical dose. Less than a serving left → probably done.
-    const lastDose = !!coffee && activeGrams(coffee, brews) - r.dose < config.serving_grams;
-    finishRef.current = lastDose ? coffee : null;
+    const lastDose = activeGrams(c, brews) - r.dose < config.serving_grams;
+    finishRef.current = lastDose ? c : null;
     setFinishCandidate(finishRef.current);
     setStep("logged");
     if (logTimer.current) clearTimeout(logTimer.current);
@@ -178,6 +179,21 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
       if (logTimer.current) clearTimeout(logTimer.current);
       logTimer.current = setTimeout(backHome, 4200);
     }
+  }
+
+  // Long-press shortcut from StepWhat: log this coffee again with its last
+  // recipe (same brewer, dose, ratio, etc.), or the brewer's seed defaults if
+  // it's never been brewed. Always logged as "me" — a long-press has no audience
+  // picker, so it can't express split/partner/guest.
+  function brewAgain(c: Coffee) {
+    const last = brews
+      .filter((x) => x.coffee_id === c.id)
+      .sort((a, b) => Number(b.started_at) - Number(a.started_at))[0] || null;
+    const b = (last && brewerById(last.brewer_id)) || config.brewers[0];
+    const r: Recipe = last
+      ? { dose: last.dose, ratio: last.ratio, water: last.water, bypass: last.bypass || 0, temp: last.temp, grind: last.grind, water_type: last.water_type }
+      : { ...defaultsFor(c, b), water_type: config.default_water };
+    logCoffee(c, b, r, "me");
   }
 
   function openRate(brew: Brew) {
@@ -259,6 +275,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           onSend={(b) => { if (otherMember) updateBrew(b.id, { rate_for: otherMember.id }); }}
           onOpenBrew={setDetailBrew}
           onGotoShelf={onGotoShelf}
+          onBrewAgain={brewAgain}
         />
       )}
       {step === "how" && coffee && (
@@ -269,7 +286,7 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
           canSplit={!!otherMember}
           splitPartnerName={otherMember?.name}
           onChangeCoffee={() => setStep("what")}
-          onLog={logCoffee}
+          onLog={(b, r, a) => logCoffee(coffee, b, r, a)}
         />
       )}
       {step === "rate" && coffee && brewer && recipe && rateTarget && (
