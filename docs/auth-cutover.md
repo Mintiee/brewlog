@@ -219,9 +219,28 @@ Run after step 5, on production:
    the code to the second member.
 2. **OTP expiry.** Confirm the dashboard OTP expiry is acceptable for a
    phone round-trip (default 1 hour; 10 minutes is also fine).
-3. **Email deliverability.** The default Supabase SMTP has low rate limits and
-   can land in spam. For two people this is usually fine, but if codes don't
-   arrive, configure a custom SMTP sender in the dashboard.
+3. **Email deliverability — SETTLED (2026-07-07).** The app is intended to go
+   **public**, so the default Supabase SMTP (a few emails/hour) is not viable.
+   Custom SMTP (Resend/Postmark/SES) is required, which needs a **verified
+   sending domain** — buy the domain and configure custom SMTP in the dashboard
+   *before* this cutover so OTP delivery is reliable from day one.
 4. **Name spelling.** If either member wants their historical rating labels
    (`taster1`/`taster2`) to match a re-spelled name, confirm the exact strings
    so the optional block in the re-key template can be filled in.
+
+---
+
+## Before public launch (separate from this cutover)
+
+This cutover gets the *household* onto real auth. Going **public** needs two more
+things on top:
+
+1. **Domain + custom SMTP** (question 3 above) — hard prerequisite.
+2. **A create-household flow.** The join step built here is deliberately
+   join-only: it validates an invite code against an existing household, and the
+   create-household branch was removed as a security fix. Public sign-ups need
+   "start a new household" on first sign-in (schema and RLS already support
+   multiple households; this is client + `/api/household` work).
+3. Re-review at public scale: per-instance in-memory rate limiting, and the
+   global `learned_notes` table (now insert-only, but shared across all
+   households).
