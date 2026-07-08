@@ -105,13 +105,27 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
     if (!ef) return;
     // Parse the picked "YYYY-MM-DD" as local midnight (not UTC) to avoid ±1-day drift.
     const newStartMs = parseLocalDate(ef.date).getTime();
-    const patch: Partial<Brew> = {
+    // Fields that describe the one physical brew — a split session's two rows
+    // share them, so they must move together. If only the opened row's date
+    // changed, the sibling would keep the old date, fall into a different journal
+    // day-group, and surface as a phantom "duplicate" card linked by session_id.
+    const shared: Partial<Brew> = {
       dose: ef.dose,
       water: ef.water,
       temp: ef.temp,
       grind: ef.grind,
       ratio: ef.ratio,
       water_type: ef.water_type,
+      started_at: String(newStartMs),
+    };
+    // Shift a rated row's rated_at by the same delta the start date moved, so its
+    // rating timestamp keeps its offset. Unrated rows (rated_at null) stay null.
+    const shiftRatedAt = (row: Brew) =>
+      row.rated_at != null
+        ? String(parseInt(row.rated_at, 10) + (newStartMs - startMs))
+        : null;
+    onUpdate(brew.id, {
+      ...shared,
       // Key the stars-write on the actual edited value (0 from the stepper means
       // "no rating"), not on wasRated alone: a brew resolved as "unrated"
       // (rated_at set, stars null) must NOT pick up a phantom stars:0 on edit, and
@@ -119,12 +133,16 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
       // the stepper above 0 re-rates it.
       stars: wasRated && ef.stars > 0 ? ef.stars : null,
       note: ef.note || null,
-      started_at: String(newStartMs),
-      rated_at: wasRated && brew.rated_at
-        ? String(parseInt(brew.rated_at, 10) + (newStartMs - startMs))
-        : null,
-    };
-    onUpdate(brew.id, patch);
+      rated_at: wasRated && brew.rated_at ? shiftRatedAt(brew) : null,
+    });
+    // Propagate the shared physical-brew fields (date + recipe) to the session
+    // sibling(s), keeping each sibling's own per-taster rating untouched.
+    if (group) {
+      for (const sib of group) {
+        if (sib.id === brew.id) continue;
+        onUpdate(sib.id, { ...shared, rated_at: shiftRatedAt(sib) });
+      }
+    }
     cancelEdit();
     onClose();
   };
