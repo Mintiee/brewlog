@@ -38,7 +38,8 @@ export interface Database {
           name: string;
           origin: string;
           region: string;
-          varietal: string;
+          varietal: string;            // legacy single string — dual-written from varietals (migration 019)
+          varietals: string[];         // migration 019
           process: string;
           roast: string;
           roasted_at: string;          // date
@@ -62,6 +63,7 @@ export interface Database {
           origin?: string;
           region?: string;
           varietal?: string;
+          varietals?: string[];
           process?: string;
           roast?: string;
           roasted_at: string;
@@ -240,6 +242,12 @@ export interface Database {
         Row: { note: string; family: string };
         Insert: { note: string; family: string };
         Update: { note?: string; family?: string };
+        Relationships: [];
+      };
+      learned_varietals: {
+        Row: { raw: string; canonical: string; is_blend_label: boolean };
+        Insert: { raw: string; canonical: string; is_blend_label?: boolean };
+        Update: { raw?: string; canonical?: string; is_blend_label?: boolean };
         Relationships: [];
       };
       gear_catalog: {

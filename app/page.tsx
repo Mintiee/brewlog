@@ -4,7 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import type { AppData } from "@/lib/store/AppContext";
 import {
   fetchCoffees, fetchBrews, fetchConfig, fetchProfile,
-  fetchAiKeyStatus, fetchLearnedNotes, fetchRecipes,
+  fetchAiKeyStatus, fetchLearnedNotes, fetchLearnedVarietals, fetchRecipes,
 } from "@/lib/db";
 
 export default async function Home() {
@@ -20,7 +20,7 @@ export default async function Home() {
   // Prefetch everything server-side (colocated with Supabase, RLS via the request
   // cookies) and seed the client. This removes the client-side getUser() + 6-query
   // waterfall that previously gated first paint.
-  const [profile, coffees, brews, recipes, config, aiStatus, notes] = await Promise.all([
+  const [profile, coffees, brews, recipes, config, aiStatus, notes, varietals] = await Promise.all([
     fetchProfile(user.id, supabase),
     fetchCoffees(supabase),
     fetchBrews(supabase),
@@ -30,8 +30,10 @@ export default async function Home() {
     fetchConfig(supabase),
     fetchAiKeyStatus(supabase),
     fetchLearnedNotes(supabase),
+    // Degrade gracefully if migration 019 hasn't been applied yet.
+    fetchLearnedVarietals(supabase).catch(() => ({})),
   ]);
 
-  const initialData: AppData = { profile, coffees, brews, recipes, config, aiStatus, notes };
+  const initialData: AppData = { profile, coffees, brews, recipes, config, aiStatus, notes, varietals };
   return <AppShell initialData={initialData} />;
 }

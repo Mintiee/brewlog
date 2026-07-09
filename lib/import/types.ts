@@ -9,6 +9,8 @@ export interface ImportedCoffee {
   name: string;
   origin?: string;
   region?: string;
+  /** Single cell as printed; multiple varietals separated by "/" or "," —
+   *  materialize.ts splits into Coffee.varietals. */
   varietal?: string;
   process?: string;
   /** Free text or our enum value — normalized to Roast in materialize.ts */

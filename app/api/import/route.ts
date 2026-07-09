@@ -27,6 +27,7 @@ Rules:
 - roasted_at must be YYYY-MM-DD format, or null if unknown
 - grams is the bag weight in grams (default 250 if not mentioned)
 - notes is an array of short tasting descriptor strings
+- varietal: list multiple varietals in one string separated by "/" (e.g. "SL28/SL34")
 - Leave unknown optional fields as empty string or null — do not guess
 - Output ONLY the JSON object {"coffees":[...]}, nothing else`;
 

@@ -6,11 +6,13 @@ import { createClient } from "@/lib/supabase/browser";
 import {
   fetchCoffees, fetchBrews, fetchConfig, fetchProfile, fetchHouseholdProfiles,
   insertBrew, updateBrew as dbUpdateBrew, deleteBrew, upsertCoffee, upsertConfig,
-  fetchAiKeyStatus, fetchLearnedNotes, insertCoffees,
+  fetchAiKeyStatus, fetchLearnedNotes, fetchLearnedVarietals, insertCoffees,
   fetchRecipes, upsertRecipe as dbUpsertRecipe, deleteRecipe as dbDeleteRecipe,
 } from "@/lib/db";
 import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
+import { setLearnedVarietals, type LearnedVarietal } from "@/lib/varietal";
+import { classifyUnknownVarietals } from "@/lib/varietal/classify";
 import { setRestWindow, setServingGrams, setPeakWindow, activeGrams, sessionDeleteIds, shouldUnarchiveAfterDelete } from "@/lib/domain";
 import { persist, writesIdle, writesInFlight } from "@/lib/store/persist";
 import { drainOutbox } from "@/lib/store/outbox";
@@ -45,6 +47,9 @@ interface AppState {
    *  repaint once learned families arrive — colours are computed at render time,
    *  never baked into the Coffee row (which would freeze a stale/SSR colour). */
   notesVersion: number;
+  /** Bumped whenever the learned-varietals map changes at runtime (LLM
+   *  canonicalises a new token) so stats groupings re-key. */
+  varietalsVersion: number;
   /** False in local-only demo mode (no session) — writes don't reach a DB. */
   authed: boolean;
   lastError: AppError | null; // last failed DB write, shown as a banner
@@ -100,6 +105,7 @@ export interface AppData {
   config: Config | null;
   aiStatus: { set: boolean; provider?: string } | null;
   notes: Record<string, string>;
+  varietals: Record<string, LearnedVarietal>;
 }
 
 export function AppProvider({ children, initialData }: { children: ReactNode; initialData?: AppData }) {
@@ -110,6 +116,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   useState(() => {
     if (initialData?.config) applyConfigToDomain(initialData.config);
     if (initialData?.notes) setLearnedNotes(initialData.notes as Record<string, import("@/lib/flavour").FlavourFamily>);
+    if (initialData?.varietals) setLearnedVarietals(initialData.varietals);
   });
 
   const [coffees, setCoffees] = useState<Coffee[]>(initialData?.coffees ?? []);
@@ -122,6 +129,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   const [aiProvider, setAiProvider] = useState<string | undefined>(initialData?.aiStatus?.provider);
   const [ready, setReady] = useState(!!initialData);
   const [notesVersion, setNotesVersion] = useState(0);
+  const [varietalsVersion, setVarietalsVersion] = useState(0);
   const [authed, setAuthed] = useState(!!initialData?.profile);
   const [lastError, setLastError] = useState<AppError | null>(null);
   const [undoState, setUndoState] = useState<{ message: string; undo: () => void } | null>(null);
@@ -140,7 +148,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
         if (!user) { setReady(true); return; }
         setAuthed(true);
         try {
-          const [p, c, b, rec, cfg, aiStatus, notes, mem] = await Promise.all([
+          const [p, c, b, rec, cfg, aiStatus, notes, varietals, mem] = await Promise.all([
             fetchProfile(user.id),
             fetchCoffees(),
             fetchBrews(),
@@ -151,6 +159,8 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
             fetchConfig(),
             fetchAiKeyStatus(),
             fetchLearnedNotes(),
+            // Degrade gracefully if migration 019 hasn't been applied yet.
+            fetchLearnedVarietals().catch(() => ({})),
             fetchHouseholdProfiles(),
           ]);
           if (p) setProfileState(p);
@@ -163,6 +173,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
           if (cfg) { setConfigState(cfg); applyConfigToDomain(cfg); }
           if (aiStatus?.set) { setLlmEnabled(true); setAiProvider(aiStatus.provider); }
           if (notes) { setLearnedNotes(notes as Record<string, import("@/lib/flavour").FlavourFamily>); setNotesVersion((v) => v + 1); }
+          if (varietals && Object.keys(varietals).length) { setLearnedVarietals(varietals); setVarietalsVersion((v) => v + 1); }
         } catch { /* fall through to seed data */ }
         setReady(true);
       });
@@ -270,6 +281,15 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     setNotesVersion((v) => v + 1);
   }, [llmEnabled]);
 
+  // Same flow for varietal tokens: alias-map misses go to the LLM once, and the
+  // version bump re-keys the Palate varietal groupings with learned canonicals.
+  const learnVarietals = useCallback(async (tokens: string[]) => {
+    if (!llmEnabled) return;
+    const map = await classifyUnknownVarietals(tokens);
+    if (!map) return;
+    setVarietalsVersion((v) => v + 1);
+  }, [llmEnabled]);
+
   // One-time background sweep: classify unknown notes already on the shelf so
   // existing grey chips heal without an edit. Runs once the data + AI key state
   // have settled (learned notes are loaded before `ready` flips on both paths).
@@ -278,8 +298,9 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     if (sweptRef.current || !ready || !authed || !llmEnabled) return;
     sweptRef.current = true;
     void learnNotes(coffees.flatMap((c) => c.notes ?? []));
+    void learnVarietals(coffees.flatMap((c) => c.varietals ?? []));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once-guarded; coffees read at sweep time only
-  }, [ready, authed, llmEnabled, learnNotes]);
+  }, [ready, authed, llmEnabled, learnNotes, learnVarietals]);
 
   // ---- Optimistic mutations ----
   // Pattern: `apply` updates local state immediately; `persist` runs the DB
@@ -314,6 +335,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // Ensure household_id is always set — upsertCoffee will forward it to coffeeToRow.
     const coffee = { ...c, household_id: profile.household_id };
     void learnNotes(coffee.notes ?? []);
+    void learnVarietals(coffee.varietals ?? []);
     return save(
       "Coffee save",
       () => upsertCoffee(coffee),
@@ -321,7 +343,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       () => setCoffees((prev) => prev.filter((x) => x.id !== coffee.id)),
       { kind: "upsertCoffee", payload: coffee },
     );
-  }, [save, profile.household_id, learnNotes]);
+  }, [save, profile.household_id, learnNotes, learnVarietals]);
 
   const updateCoffee = useCallback((c: Coffee) => {
     const coffee = { ...c, household_id: c.household_id || profile.household_id };
@@ -329,6 +351,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // on Retry and would otherwise capture the already-applied value (R9).
     const prev = coffees.find((x) => x.id === c.id);
     void learnNotes(coffee.notes ?? []);
+    void learnVarietals(coffee.varietals ?? []);
     return save(
       "Coffee save",
       () => upsertCoffee(coffee),
@@ -336,7 +359,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       () => { if (prev) setCoffees((cs) => cs.map((x) => x.id === c.id ? prev : x)); },
       { kind: "upsertCoffee", payload: coffee },
     );
-  }, [save, coffees, profile.household_id, learnNotes]);
+  }, [save, coffees, profile.household_id, learnNotes, learnVarietals]);
 
   const startBrew = useCallback((b: Brew) => {
     if (!authed) {
@@ -454,6 +477,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     // Inject household_id on every row (same pattern as addCoffee).
     const batch = incoming.map((c) => ({ ...c, household_id: profile.household_id }));
     void learnNotes(batch.flatMap((c) => c.notes ?? []));
+    void learnVarietals(batch.flatMap((c) => c.varietals ?? []));
     return save(
       "Import coffees",
       () => insertCoffees(batch),
@@ -463,7 +487,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
         return prev.filter((c) => !ids.has(c.id));
       }),
     );
-  }, [save, profile.household_id, learnNotes]);
+  }, [save, profile.household_id, learnNotes, learnVarietals]);
 
   // ---- Recipes ----
   // Optimistic add/update/delete on the saved-recipe library. As with every
@@ -535,7 +559,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
 
   return (
     <AppContext.Provider value={{
-      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, notesVersion, authed, lastError, undoState, queuedCount,
+      coffees, brews, recipes, config, profile, members, llmEnabled, aiProvider, ready, notesVersion, varietalsVersion, authed, lastError, undoState, queuedCount,
       addCoffee, updateCoffee, startBrew, rateBrew, updateBrew, dismissBrew, dismissBrewSession, setConfig, setProfile, clearError, importCoffees,
       addRecipe, updateRecipe, deleteRecipe, setAiKey, removeAiKey,
     }}>

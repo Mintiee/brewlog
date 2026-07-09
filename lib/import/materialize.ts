@@ -5,6 +5,7 @@
  */
 import type { Coffee, Roast } from "@/lib/types";
 import { canonicalRoaster, originCode, todayISO } from "@/lib/domain";
+import { parseVarietals } from "@/lib/varietal";
 import type { ImportedCoffee } from "./types";
 
 const ROAST_ENUM: Roast[] = ["light", "medium-light", "medium", "medium-dark", "dark"];
@@ -44,7 +45,9 @@ export function toCoffee(imported: ImportedCoffee, existing: Coffee[]): Coffee {
     name: imported.name?.trim() || "Untitled",
     origin,
     region: imported.region?.trim() || origin,
-    varietal: imported.varietal?.trim() || "—",
+    // The import DTO carries one varietal cell (CSV/BC/LLM all emit a string);
+    // split it into tags here, same separators as manual entry.
+    varietals: parseVarietals(imported.varietal ?? ""),
     process: imported.process?.trim() || "Washed",
     roast: normalizeRoast(imported.roast),
     roasted_at,

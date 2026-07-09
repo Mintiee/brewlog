@@ -4,6 +4,7 @@
 import type { Brew, Coffee, Config } from "@/lib/types";
 import { brewRating } from "@/lib/domain";
 import { noteIcon, familyColor, familyLabel } from "@/lib/flavour";
+import { varietalGroup } from "@/lib/varietal";
 
 export interface StatRow {
   key: string;
@@ -209,7 +210,8 @@ export function buildPalateStats(rated: Brew[], allBrews: Brew[], coffees: Coffe
       return o ? { key: o, label: o } : null;
     }),
     ratingCard("varietal", "Varietals you're enjoying", rated, (b) => {
-      const v = cm.get(b.coffee_id)?.varietal?.trim();
+      const coffee = cm.get(b.coffee_id);
+      const v = coffee ? varietalGroup(coffee) : null;
       return v ? { key: v, label: v } : null;
     }),
     ratingCard("process", "Processes you're enjoying", rated, (b) => {

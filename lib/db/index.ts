@@ -174,6 +174,20 @@ export async function fetchLearnedNotes(client?: DB): Promise<Record<string, str
   return map;
 }
 
+// ---- Learned varietals ----
+
+export async function fetchLearnedVarietals(
+  client?: DB,
+): Promise<Record<string, { canonical: string; is_blend_label: boolean }>> {
+  const sb = client ?? createClient();
+  const { data } = await sb.from("learned_varietals").select("raw,canonical,is_blend_label");
+  const map: Record<string, { canonical: string; is_blend_label: boolean }> = {};
+  (data ?? []).forEach((r: { raw: string; canonical: string; is_blend_label: boolean }) => {
+    map[r.raw] = { canonical: r.canonical, is_blend_label: r.is_blend_label };
+  });
+  return map;
+}
+
 // ---- AI key status (read-only from client — never returns the key itself) ----
 
 export async function fetchAiKeyStatus(client?: DB): Promise<{ set: boolean; provider?: string } | null> {

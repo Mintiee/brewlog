@@ -5,6 +5,7 @@
 import type { Coffee, Brew, Config, SavedRecipe } from "@/lib/types";
 import type { Tables, TablesInsert } from "./database.types";
 import { SEED_BREWERS } from "@/lib/domain/seed";
+import { parseVarietals } from "@/lib/varietal";
 
 export function rowToCoffee(r: Tables<"coffees">): Coffee {
   return {
@@ -14,7 +15,9 @@ export function rowToCoffee(r: Tables<"coffees">): Coffee {
     name: r.name,
     origin: r.origin,
     region: r.region,
-    varietal: r.varietal,
+    // Gap rows written by pre-019 code have varietals='{}' but a legacy string —
+    // parse it so nothing disappears between the migration and the deploy.
+    varietals: r.varietals?.length ? r.varietals : parseVarietals(r.varietal ?? ""),
     process: r.process,
     roast: r.roast as Coffee["roast"],
     roasted_at: r.roasted_at,
@@ -37,7 +40,10 @@ export function coffeeToRow(c: Omit<Coffee, "id"> & { id?: string }): TablesInse
     ...(c.id ? { id: c.id } : {}),
     ...(c.household_id ? { household_id: c.household_id } : {}),
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
-    varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
+    // Dual-write: varietals is the source of truth; the legacy varietal string is
+    // kept in sync so a code rollback (pre-array build) still shows varietals.
+    varietals: c.varietals, varietal: c.varietals.join(" · "),
+    process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
     frozen_grams: c.frozen_grams, frozen_at: c.frozen_at ?? null, thawed_at: c.thawed_at ?? null,
     archived: c.archived, notes: c.notes,

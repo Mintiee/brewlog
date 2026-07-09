@@ -8,6 +8,7 @@ import { ProcessPicker } from "./ProcessPicker";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Field } from "./Field";
 import { SuggestField } from "@/components/ui/SuggestField";
+import { parseVarietals } from "@/lib/varietal";
 import type { Coffee } from "@/lib/types";
 
 type Phase = "capture" | "scanning" | "review";
@@ -164,7 +165,9 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
           name: (data as any).name || "",
           origin: (data as any).origin || "",
           region: (data as any).region || "",
-          varietal: (data as any).varietal || "",
+          varietal: Array.isArray((data as any).varietals)
+            ? (data as any).varietals.filter(Boolean).join(", ")
+            : ((data as any).varietal || ""),
           process: (data as any).process || "Washed",
           roast: ROAST_LEVELS.includes((data as any).roast) ? (data as any).roast : "light",
           // A link rarely carries the roast date → default to today and flag for the user.
@@ -195,7 +198,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
       name: form.name || "Untitled",
       origin: form.origin || "—",
       region: form.region || form.origin || "—",
-      varietal: form.varietal || "—",
+      varietals: parseVarietals(form.varietal),
       process: form.process || "Washed",
       roast: "light",
       roasted_at,

@@ -13,7 +13,9 @@ export interface Coffee {
   name: string;
   origin: string;
   region: string;
-  varietal: string;
+  /** Varietals as printed on the bag, one tag each ("SL28", "Heirloom"). Proportions
+   *  are unknown, so stats group mixes via varietalGroup() rather than splitting. */
+  varietals: string[];
   process: Process;
   roast: Roast;
   /** ISO date string e.g. "2025-05-01" — roastedDaysAgo is derived */

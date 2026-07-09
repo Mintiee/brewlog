@@ -1,7 +1,7 @@
 /**
  * POST /api/extract — extract coffee details from a bag photo or product URL.
  * Body: { image?: string (base64 data-URL), url?: string }
- * Returns: { roaster, name, origin, region, varietal, process, roast, roastDaysAgo, notes[] }
+ * Returns: { roaster, name, origin, region, varietals[], process, roast, roastDaysAgo, notes[] }
  */
 import { NextRequest, NextResponse } from "next/server";
 import { completeJSON } from "@/lib/llm";
@@ -15,13 +15,13 @@ import { sanitizeExtractOutput } from "@/lib/api/extractOutput";
 const EXTRACT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["roaster", "name", "origin", "region", "varietal", "process", "roast", "roastDaysAgo", "notes"],
+  required: ["roaster", "name", "origin", "region", "varietals", "process", "roast", "roastDaysAgo", "notes"],
   properties: {
     roaster: { type: "string" },
     name: { type: "string" },
     origin: { type: "string" },
     region: { type: "string" },
-    varietal: { type: "string" },
+    varietals: { type: "array", items: { type: "string" } },
     process: { type: "string" },
     roast: { type: ["string", "null"] },
     roastDaysAgo: { type: ["integer", "null"] },
@@ -31,13 +31,15 @@ const EXTRACT_SCHEMA = {
 
 const SYSTEM_PHOTO = `You are reading a specialty-coffee bag label to extract structured data.
 Return ONLY minified JSON (no prose, no markdown, no backticks):
-{"roaster":"","name":"","origin":"","region":"","varietal":"","process":"","roast":"light|medium|dark","roastDaysAgo":<int or null>,"notes":["","",""]}
+{"roaster":"","name":"","origin":"","region":"","varietals":["",""],"process":"","roast":"light|medium|dark","roastDaysAgo":<int or null>,"notes":["","",""]}
+varietals: list each varietal separately, exactly as printed on the bag (e.g. ["SL28","SL34"] or ["Heirloom"]); use [] if not visible.
 Use real-sounding specialty coffee details from what you see. If a field is not visible, use null or empty string.`;
 
 const SYSTEM_URL = `You are reading a roaster's online product page to extract coffee details.
 Web pages rarely list a roast date (leave roastDaysAgo as null).
 Return ONLY minified JSON (no prose, no markdown, no backticks):
-{"roaster":"","name":"","origin":"","region":"","varietal":"","process":"","roast":"light|medium|dark","roastDaysAgo":null,"notes":["","",""]}`;
+{"roaster":"","name":"","origin":"","region":"","varietals":["",""],"process":"","roast":"light|medium|dark","roastDaysAgo":null,"notes":["","",""]}
+varietals: list each varietal separately, exactly as printed on the page (e.g. ["SL28","SL34"] or ["Heirloom"]); use [] if not stated.`;
 
 export async function POST(req: NextRequest) {
   const hkGuard = await requireHouseholdKey();

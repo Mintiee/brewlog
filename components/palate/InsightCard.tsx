@@ -26,7 +26,7 @@ function buildDigest(brews: Brew[], coffees: Coffee[], config: Config): string[]
     const br = config.brewers.find((x) => x.id === b.brewer_id);
     const place = c ? [c.origin, c.region].filter(Boolean).join(" ") : "";
     const coffeeLabel = c
-      ? `${c.roaster} ${c.name} (${place || "?"}${c.varietal ? `, ${c.varietal}` : ""}, ${c.process}, ${c.roast})`
+      ? `${c.roaster} ${c.name} (${place || "?"}${c.varietals.length ? `, ${c.varietals.join("/")}` : ""}, ${c.process}, ${c.roast})`
       : b.coffee_id;
     const brewer = br?.short ?? b.brewer_id;
     const ratio = b.ratio ? `1:${b.ratio.toFixed(1)}` : "";

@@ -26,7 +26,7 @@ function daysAgoDate(n: number): string {
 function makeCoffee(overrides: Partial<Coffee> = {}): Coffee {
   return {
     id: "c1", household_id: "h1", roaster: "Test", name: "Test", origin: "Ethiopia",
-    region: "Sidama", varietal: "Heirloom", process: "Washed", roast: "light",
+    region: "Sidama", varietals: ["Heirloom"], process: "Washed", roast: "light",
     roasted_at: daysAgoDate(0),
     rest_days: 28, peak_days: 56, grams: 250, frozen_grams: 0,
     frozen_at: null, thawed_at: null, archived: false,

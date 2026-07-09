@@ -8,7 +8,7 @@ describe("sanitizeExtractOutput", () => {
       name: "Ethiopia Chelbesa",
       origin: "Ethiopia",
       region: "Yirgacheffe",
-      varietal: "Heirloom",
+      varietals: ["Heirloom"],
       process: "Washed",
       roast: "light",
       roastDaysAgo: 12,
@@ -19,7 +19,7 @@ describe("sanitizeExtractOutput", () => {
       name: "Ethiopia Chelbesa",
       origin: "Ethiopia",
       region: "Yirgacheffe",
-      varietal: "Heirloom",
+      varietals: ["Heirloom"],
       process: "Washed",
       roast: "light",
       roastDaysAgo: 12,
@@ -42,6 +42,16 @@ describe("sanitizeExtractOutput", () => {
 
   it("strips non-string entries out of notes", () => {
     expect(sanitizeExtractOutput({ notes: ["ok", 5, null, "also ok"] }).notes).toEqual(["ok", "also ok"]);
+  });
+
+  it("cleans the varietals array", () => {
+    expect(sanitizeExtractOutput({ varietals: ["SL28", " SL34 ", "", 7, null] }).varietals)
+      .toEqual(["SL28", "SL34"]);
+  });
+
+  it("coerces a legacy single varietal string by splitting it", () => {
+    expect(sanitizeExtractOutput({ varietal: "SL28, SL34" }).varietals).toEqual(["SL28", "SL34"]);
+    expect(sanitizeExtractOutput({}).varietals).toEqual([]);
   });
 
   it("coerces missing/non-string text fields to empty strings", () => {

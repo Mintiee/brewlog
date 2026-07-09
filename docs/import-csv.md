@@ -14,7 +14,7 @@ column schema. Code: `lib/import/csv.ts`, `lib/import/prompt.ts`.
 | `name` | yes | Coffee name (e.g. `Ethiopia Kochere`) |
 | `origin` | — | Country of origin (e.g. `Ethiopia`) |
 | `region` | — | Growing region (e.g. `Yirgacheffe`) |
-| `varietal` | — | Coffee variety (e.g. `Heirloom`, `Bourbon`) |
+| `varietal` | — | Coffee variety (e.g. `Heirloom`, `Bourbon`); multiple separated by `/` (e.g. `SL28/SL34`) |
 | `process` | — | Processing method (e.g. `Washed`, `Natural`, `Honey`) |
 | `roast` | — | One of: `light`, `medium-light`, `medium`, `medium-dark`, `dark` |
 | `roasted_at` | — | ISO date `YYYY-MM-DD` (e.g. `2025-10-01`). Defaults to today if absent. |
@@ -60,7 +60,7 @@ Rules:
 - grams is the bag weight in grams (e.g. 250). Use 250 if unknown.
 - notes is a semicolon-separated list of tasting descriptors (e.g. cherry;chocolate;caramel). Leave blank if none.
 - region is the growing region within the country (e.g. Yirgacheffe). Leave blank if not known.
-- varietal is the coffee variety (e.g. Bourbon, Heirloom). Leave blank if not known.
+- varietal is the coffee variety (e.g. Bourbon, Heirloom). List multiple varietals separated by "/" (e.g. SL28/SL34). Leave blank if not known.
 - process is the processing method (e.g. Washed, Natural, Honey). Leave blank if not known.
 - Leave any unknown field blank — do not make things up.
 - Do not add extra columns or quotes around fields unless the field contains a comma.

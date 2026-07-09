@@ -5,6 +5,7 @@ import {
   todayISO, frozenDays, canonicalRoaster, roasterSuggestions, bagAvgRating,
 } from "@/lib/domain";
 import { noteColor, noteIcon } from "@/lib/flavour";
+import { parseVarietals } from "@/lib/varietal";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
@@ -94,7 +95,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
       name: coffee.name,
       origin: coffee.origin,
       region: coffee.region,
-      varietal: coffee.varietal,
+      varietal: coffee.varietals.join(", "),
       process: coffee.process,
       notes: (coffee.notes || []).join(", "),
       remaining,
@@ -119,7 +120,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
       name: ef.name || "Untitled",
       origin: ef.origin,
       region: ef.region || ef.origin,
-      varietal: ef.varietal,
+      varietals: parseVarietals(ef.varietal),
       process: ef.process || "Washed",
       notes,
       grams,
@@ -210,7 +211,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginTop: 20, background: "var(--line)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
-          {([["Varietal", coffee.varietal], ["Process", coffee.process], ["Roasted", `${st.day}d ago`], ["Status", statusLabel]] as [string, string][]).map(([k, v]) => (
+          {([["Varietal", coffee.varietals.join(" · ") || "—"], ["Process", coffee.process], ["Roasted", `${st.day}d ago`], ["Status", statusLabel]] as [string, string][]).map(([k, v]) => (
             <div key={k} style={{ background: "var(--surface)", padding: "13px 15px" }}>
               <div className="label">{k}</div>
               <div style={{ fontSize: 15, fontWeight: 600, marginTop: 3, color: k === "Status" ? freshColor(st.state) : "var(--ink)" }}>{v}</div>

@@ -6,6 +6,7 @@ import { RatingTrend } from "./RatingTrend";
 import { TasterFaceoff } from "./TasterFaceoff";
 import { BarCard } from "./BarCard";
 import { buildPalateStats, inferSharedSessions } from "@/lib/palate/stats";
+import { useApp } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config } from "@/lib/types";
 
 interface StatsViewProps {
@@ -29,7 +30,10 @@ export function StatsView({ rated, allBrews, coffees, config, llmEnabled }: Stat
     return next;
   });
 
-  const stats = useMemo(() => buildPalateStats(rated, allBrews, coffees, config), [rated, allBrews, coffees, config]);
+  // varietalsVersion: learned canonicals arrive async — re-key groupings when they land.
+  const { varietalsVersion } = useApp();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- varietalsVersion is a repaint trigger, not an input
+  const stats = useMemo(() => buildPalateStats(rated, allBrews, coffees, config), [rated, allBrews, coffees, config, varietalsVersion]);
   const inferredRated = useMemo(() => inferSharedSessions(rated), [rated]);
 
   // Bespoke-card visibility (so empty section headers never show).

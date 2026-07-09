@@ -15,7 +15,8 @@ export async function seedHousehold(service: SupabaseClient, householdId: string
   const coffeeRows = SEED_COFFEES.map((c) => ({
     household_id: householdId,
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
-    varietal: c.varietal, process: c.process, roast: c.roast, roasted_at: c.roasted_at,
+    varietals: c.varietals, varietal: c.varietals.join(" · "),  // dual-write (migration 019)
+    process: c.process, roast: c.roast, roasted_at: c.roasted_at,
     rest_days: c.rest_days, peak_days: c.peak_days, grams: c.grams,
     frozen_grams: c.frozen_grams, frozen_at: c.frozen_at, thawed_at: c.thawed_at,
     archived: c.archived, notes: c.notes, cc: c.cc,  // color column left to its DB default (render-derived now)
