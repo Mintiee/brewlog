@@ -6,7 +6,7 @@ import {
   roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
   effectiveDaysAgo, restDaysAt, restForBrew,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
-  sessionDeleteIds, shouldUnarchiveAfterDelete,
+  sessionDeleteIds, shouldUnarchiveAfterDelete, shouldUnarchiveAfterEdit,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -511,5 +511,32 @@ describe("shouldUnarchiveAfterDelete — auto-restore an archived bag (Bug 1c)",
 
   it("returns false when there's no coffee (anchor brew's coffee not found)", () => {
     expect(shouldUnarchiveAfterDelete(undefined, [])).toBe(false);
+  });
+});
+
+describe("shouldUnarchiveAfterEdit — auto-restore a finished bag when weight is edited up", () => {
+  it("restores when the coffee was archived and the edit leaves active grams", () => {
+    const coffee = makeCoffee({ archived: true, grams: 200, frozen_grams: 0 });
+    expect(shouldUnarchiveAfterEdit(coffee, 25)).toBe(true);
+  });
+
+  it("does not restore when the edited remaining is 0", () => {
+    const coffee = makeCoffee({ archived: true, grams: 200, frozen_grams: 0 });
+    expect(shouldUnarchiveAfterEdit(coffee, 0)).toBe(false);
+  });
+
+  it("does not touch an unarchived coffee", () => {
+    const coffee = makeCoffee({ archived: false, grams: 200, frozen_grams: 0 });
+    expect(shouldUnarchiveAfterEdit(coffee, 25)).toBe(false);
+  });
+
+  it("does not restore when the new remaining is entirely frozen (no active grams)", () => {
+    const coffee = makeCoffee({ archived: true, grams: 200, frozen_grams: 25 });
+    expect(shouldUnarchiveAfterEdit(coffee, 25)).toBe(false);
+  });
+
+  it("restores when the new remaining exceeds the frozen portion", () => {
+    const coffee = makeCoffee({ archived: true, grams: 200, frozen_grams: 25 });
+    expect(shouldUnarchiveAfterEdit(coffee, 40)).toBe(true);
   });
 });

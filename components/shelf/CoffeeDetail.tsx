@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
-  todayISO, frozenDays, canonicalRoaster, roasterSuggestions, bagAvgRating,
+  todayISO, frozenDays, canonicalRoaster, roasterSuggestions, bagAvgRating, shouldUnarchiveAfterEdit,
 } from "@/lib/domain";
 import { noteColor, noteIcon } from "@/lib/flavour";
 import { parseVarietals } from "@/lib/varietal";
@@ -126,6 +126,9 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
       grams,
       roasted_at,
       cc: originCode(ef.origin),
+      // Correcting the weight upward on a finished bag brings it back to the
+      // shelf — the finished/ready split keys off archived alone.
+      archived: shouldUnarchiveAfterEdit(coffee, newRemaining) ? false : coffee.archived,
     });
     cancelEdit();
     // Empty bag → almost certainly finished; offer to archive right away

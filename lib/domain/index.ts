@@ -332,6 +332,18 @@ export function shouldUnarchiveAfterDelete(coffee: Coffee | undefined, nextBrews
   return !!coffee?.archived && activeGrams(coffee, nextBrews) > 0;
 }
 
+/** After editing a bag's remaining weight, should an archived bag be
+ *  auto-restored? True only if the bag was archived and the edit leaves it
+ *  with active (non-frozen) grams again — correcting the weight upward
+ *  un-finishes it, mirroring shouldUnarchiveAfterDelete. `newRemaining` is
+ *  the edited total remaining (frozen included); post-edit frozen clamps to
+ *  the new remaining, so active > 0 reduces to remaining > frozen. Compared
+ *  against stored frozen_grams directly (not frozenGramsOf) because that
+ *  helper clamps against the stale pre-edit remaining. */
+export function shouldUnarchiveAfterEdit(coffee: Coffee, newRemaining: number): boolean {
+  return coffee.archived && newRemaining > (coffee.frozen_grams || 0);
+}
+
 /** Whose "waiting to rate" list a brew belongs in: the person it was handed off
  *  to (rate_for) if set, otherwise the person who logged it. A logged brew is
  *  the logger's to rate until they send it to someone else. */
