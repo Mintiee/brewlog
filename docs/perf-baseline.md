@@ -1,0 +1,135 @@
+# Performance baseline
+
+Captured before the performance/responsiveness pass (branch `perf/responsiveness-pass`).
+Reproduce with the commands in [Method](#method); compare after each phase.
+
+Next.js 16.2.7 (Turbopack) · React 19.2.4 · Node v24.14.0
+
+---
+
+## Client bundle — before
+
+| Metric | Value |
+|---|---|
+| Total client JS | **1348.0 KB** across 15 files |
+| Total client JS (gzipped) | **379.2 KB** |
+| Font files | **10 woff2, 128.3 KB** |
+
+### Largest chunks
+
+| Size | Chunk | Contains |
+|---|---|---|
+| 272.4 KB | `2h9g7h02nrizg.js` | Supabase client |
+| 272.4 KB | `01yho1zgahh3i.js` | Supabase client (duplicate fingerprint) |
+| 227.3 KB | `3w8d8k_dca5rp.js` | |
+| 198.0 KB | `3eh39a9dskcug.js` | |
+| 186.4 KB | `2ilx-quq1xw35.js` | **papaparse** (confirmed via `ParserHandle`/`__parsed_extra` markers) |
+| 110.0 KB | `0cz1d0mv5g_q7.js` | |
+| 56.6 KB | `158myu8e_yme3.js` | |
+
+Turbopack builds don't print a First Load JS table, so chunk bytes on disk are the
+tracked metric. Route table for reference: `/` and all `/api/*` are dynamic (`ƒ`),
+`/login` and `/_not-found` are static (`○`).
+
+**Known waste in this baseline:**
+- papaparse (~45 KB min) is in the eager bundle for a feature behind Settings → Import.
+- 10 font files: `app/layout.tsx` passes explicit `weight` arrays to two *variable*
+  Google fonts, forcing static per-weight cuts instead of 2 variable files.
+- Zero `next/dynamic` / `React.lazy` / `Suspense` in the repo — 48 `'use client'`
+  files in one monolithic tree.
+
+---
+
+## Launch timeline — before
+
+Measured qualitatively from source; re-measure in DevTools before/after.
+
+```
+navigation
+  └─ TTFB          app/page.tsx: await createClient()
+                   → await supabase.auth.getUser()      ← full auth RTT, blocking
+                   → await Promise.all([8 queries])     ← only 1 needs getUser's result
+  └─ hydration     entire app is one client chunk
+  └─ +1200 ms      AppShell.tsx:15 SPLASH_FLOOR_MS      ← artificial floor
+  └─ tabs mount    first <img src="cdn.jsdelivr.net/..."> enters the DOM here
+  └─ +DNS/TLS/RTT  country outline finally paints
+```
+
+Outline requests cannot begin until ~1.2 s after first client paint, because the
+`mounted` gate (`AppShell.tsx:87,112`) means the server emits only `<Splash />` —
+the preload scanner never sees the image URLs.
+
+---
+
+## Render cost — before
+
+Hot paths, all unmemoised at baseline:
+
+| Location | Cost |
+|---|---|
+| `components/ui/Icon.tsx:21` | Rebuilds a 44-entry JSX table **inside the component body** on every icon render. `StarsMini` = 5 icons/card; a ~270-card Journal ⇒ ~1,350 icons × 44 discarded entries. |
+| `components/shelf/Shelf.tsx:31-53` | Zero `useMemo`. `coffeeStatus()` (3 full scans of `brews`) called **inside a sort comparator** at `:44-45`, twice per comparison. |
+| `components/shelf/ShelfRow.tsx:18-21` | Each row recomputes `activeGrams` + `coffeeStatus` — 5 more full brew scans per row. |
+| `components/brew/StepWhat.tsx:115-132` | `decorated` / `sortByDay` / `hasFrozen` / 14-day `byDay` loop, all per render; 30 s `setInterval` at `:109` forces re-render while anything is pending. |
+| `lib/store/AppContext.tsx:561` | Context value is a fresh object literal every render; 15 state slots, no selectors. |
+| whole repo | **Zero `React.memo`.** Every shelf row and journal card is a full-context subscriber (via `useCoffeeColor`, `:588`). |
+
+Domain primitives nest and each rescans all brews (`lib/domain/index.ts:148-173`):
+`coffeeStatus` → `frozenGramsOf` + `activeGrams` → `remainingGrams` ×3 → `gramsUsed` ×3.
+Net shape is **O(coffees × brews)** per render, against a `limit(2000)` brew fetch
+(`lib/db/index.ts:63`).
+
+---
+
+## Caching — before
+
+| Layer | State |
+|---|---|
+| Country outlines | `cdn.jsdelivr.net/gh/djaiss/mapsicon`, unversioned (tracks default branch), cross-origin. `public/sw.js:90` refuses to cache cross-origin ⇒ never precached, never offline. |
+| App data | Not cached client-side at all. Every cold boot refetches coffees + brews + recipes + config from Supabase. |
+| Offline | Shell renders with **zero data**. |
+| IndexedDB | Offline write outbox only (`lib/store/outbox.ts`), and it opens/closes the DB once per operation. |
+| Learned notes/varietals | Unbounded `select` on a **globally shared cross-household table**, on every boot (`lib/db/index.ts:171,183`). |
+
+`public/maps/` and `lib/assets/` exist but are empty and untracked — localisation was
+scaffolded and abandoned.
+
+---
+
+## Method
+
+```bash
+npm run build
+
+# total client JS + file count
+find .next/static -name "*.js" -type f -printf "%s\n" \
+  | awk '{s+=$1} END {printf "%.1f KB across %d files\n", s/1024, NR}'
+
+# gzipped total
+find .next/static -name "*.js" -type f -exec gzip -c {} \; | wc -c \
+  | awk '{printf "%.1f KB\n", $1/1024}'
+
+# largest chunks
+find .next/static -name "*.js" -type f -printf "%s\t%p\n" | sort -rn | head -15 \
+  | awk -F'\t' '{printf "%8.1f KB  %s\n", $1/1024, $2}'
+
+# fonts
+find .next/static -name "*.woff2" -printf "%s\n" \
+  | awk '{s+=$1} END {printf "%d files, %.1f KB\n", NR, s/1024}'
+
+# is papaparse in the client bundle?
+grep -l "ParserHandle\|__parsed_extra" .next/static/chunks/*.js
+```
+
+Runtime checks (DevTools, throttled to Fast 3G):
+1. Cold load — time from navigation to first country silhouette painted.
+2. Reload with SW warm — confirm no network request for outlines.
+3. Offline reload of the installed PWA — does the shell render with data?
+4. React Profiler — commit count and duration for a tab switch to Shelf, and for a
+   full Journal scroll. Check whether rows re-render on unrelated state changes.
+
+---
+
+## After
+
+_Filled in at the end of the pass._
