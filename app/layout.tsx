@@ -42,9 +42,28 @@ export const viewport: Viewport = {
   themeColor: "#0c0b0a",
 };
 
+/** Origin of the Supabase project, for the preconnect hint below. */
+const supabaseOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin;
+  } catch {
+    return null; // unset in demo mode — skip the hint rather than emit a broken one
+  }
+})();
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${hanken.variable} ${jetbrains.variable}`} style={{ colorScheme: "dark" }}>
+      <head>
+        {/* The first client-side Supabase call (auth refresh, any mutation, the
+            foreground refresh) otherwise pays DNS + TLS before it can even start.
+            Warming the connection during HTML parse takes that off the critical path.
+            Country outlines no longer need a hint — they're same-origin now, vendored
+            into public/maps by scripts/fetch-outlines.mjs. */}
+        {supabaseOrigin && (
+          <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
+        )}
+      </head>
       <body>{children}<ServiceWorker /></body>
     </html>
   );
