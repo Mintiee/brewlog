@@ -152,6 +152,10 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
     }
     clearInterval(tick);
     setScanPct(100);
+    // Just long enough for the scan line to finish travelling to 100% — its transition
+    // is `top .14s linear` (see the scanPct style below), so this matches the animation
+    // rather than padding it. It used to be 420ms, i.e. 3x the animation, which was
+    // dead time bolted onto the end of a request the user had already waited on.
     setTimeout(() => {
       if (!data || !data.roaster) {
         // fall through to manual entry
@@ -177,7 +181,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
         });
       }
       setPhase("review");
-    }, 420);
+    }, 140);
   }
 
   function startManual() {

@@ -180,14 +180,34 @@ button { color: inherit; font-family: inherit; }
 .tabicon { transition: transform .22s cubic-bezier(.34,1.6,.5,1); }
 
 @keyframes doneRing { from { transform: scale(0.4); opacity: 0.7; } to { transform: scale(1.5); opacity: 0; } }
+
+/* Staggered entrance for screen content. `rise` fades a block up; `rise-1`..`rise-5`
+   offset the start so a screen's elements arrive in reading order rather than all at
+   once. Applied at 33 sites across BrewFlow/StepHow/StepWhat, which had been carrying
+   these classnames with no rule behind them — the stagger simply never happened.
+
+   Deliberately quick (240ms, 5px) and compositor-only (opacity + transform): this runs
+   on every screen entry, so anything slower would read as lag rather than polish.
+   Steps are 45ms, so the longest tier finishes ~60ms after the first. */
+@keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
 @media (prefers-reduced-motion: no-preference) {
   .popv { animation: popv .2s cubic-bezier(.34,1.6,.5,1); }
   .done-ring { animation: doneRing .7s ease-out forwards; }
+  .rise { animation: rise .24s cubic-bezier(.22,.7,.3,1) both; }
+  .rise-1 { animation-delay: .045s; }
+  .rise-2 { animation-delay: .09s; }
+  .rise-3 { animation-delay: .135s; }
+  .rise-4 { animation-delay: .18s; }
+  .rise-5 { animation-delay: .225s; }
 }
 @media (prefers-reduced-motion: reduce) {
   .brew-root button { transition: none; }
   .popv { animation: none; }
   .done-ring { animation: none; }
+  /* No animation, but the element must still be visible — `both` above would
+     otherwise leave it holding the from-state at opacity 0. */
+  .rise { animation: none; opacity: 1; transform: none; }
 }
 
 /* shimmer for loading placeholders */

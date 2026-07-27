@@ -11,8 +11,18 @@ import type { Coffee } from "@/lib/types";
 
 type Tab = "brew" | "shelf" | "palate" | "settings";
 
-/** Minimum time the splash stays on screen once mounted (ms) — tune to taste. */
-const SPLASH_FLOOR_MS = 1200;
+/**
+ * Minimum time the splash stays on screen once mounted (ms).
+ *
+ * This is an anti-flash floor, not a brand moment. Data is normally already seeded
+ * from the server, so without any floor the splash would vanish within a frame and
+ * read as a flicker. It used to be 1200ms, which sat on top of server TTFB on every
+ * single launch and was the app's largest single source of perceived slowness — it
+ * also delayed every below-the-fold image request by the same amount, since the
+ * `mounted` gate below keeps tab content (and therefore its <img> tags) out of the
+ * DOM until the floor lifts.
+ */
+const SPLASH_FLOOR_MS = 300;
 
 const TABS = [
   { id: "brew" as Tab,   icon: "brew",  label: "Brew" },
@@ -85,10 +95,8 @@ function Shell() {
   // in StepWhat uses `new Date()`), so SSR-ing them would risk hydration
   // mismatches. Server output is the Splash — identical to loading.tsx.
   const [mounted, setMounted] = useState(false);
-  // Minimum splash display so it reads as a deliberate splash, not a flash.
-  // Data is usually already seeded, so without this the splash vanishes in ~1
-  // frame. The clock starts at first client paint; total on-screen time is
-  // server TTFB + this floor.
+  // See SPLASH_FLOOR_MS. The clock starts at first client paint, so total on-screen
+  // splash time is server TTFB + this floor.
   const [floorDone, setFloorDone] = useState(false);
   useEffect(() => {
     setMounted(true);
