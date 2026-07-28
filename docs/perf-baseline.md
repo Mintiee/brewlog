@@ -156,4 +156,36 @@ across hand-written edge cases and 40 pseudo-random shelves) proving `buildCoffe
 agrees with the primitives it replaces, and a deterministic complexity test that counts
 property reads to prove the brew list is scanned exactly once regardless of coffee count.
 
+### Phase 5 — code splitting (measured)
+
+Before this pass the repo contained **zero** `next/dynamic` / `React.lazy` / `Suspense`
+(verified by grep), so every module was in the eager client entry for `/`.
+
+Eager set is now **427.7 KB across 8 chunks**, measured from
+`.next/server/app/page_client-reference-manifest.js` (Turbopack doesn't emit
+`app-build-manifest.json`, so that manifest is the source of truth for which chunks the
+route actually pulls). Provably moved *off* it:
+
+| Module | Chunk | Size |
+|---|---|---|
+| Settings tab + ImportSheet + `lib/import/*` + **papaparse** | `38vwk7by_yl46.js` | 51.8 KB |
+| Stats stack (StatsView, BrewingTips, InsightCard, …) | `2cy6y70c_r12p.js` | 22.8 KB |
+| CoffeeDetail + AddCoffee + BrewDetail | (out of the Shelf/BrewFlow chunk, which fell 92.6 → 59.9 KB) | 32.7 KB |
+
+The three primary tabs stay statically imported deliberately — tab switching must not
+flicker. Settings is warmed on `requestIdleCallback`, so the split costs nothing on
+first open in practice.
+
+Total client JS rose slightly (1348.0 → ~1356 KB) because splitting adds module
+wrappers. That's the right trade: total bytes across all chunks is not what a user
+waits for on launch — the eager set is.
+
+Reproduce with `scripts/`-free one-liner:
+
+```bash
+node -e "const fs=require('fs');const m=fs.readFileSync('.next/server/app/page_client-reference-manifest.js','utf8');
+const e=[...new Set(m.match(/static\/chunks\/[A-Za-z0-9_-]+\.js/g))];
+console.log(e.length+' chunks, '+(e.reduce((s,c)=>s+fs.statSync('.next/'+c).size,0)/1024).toFixed(1)+' KB')"
+```
+
 _Remaining phases filled in as they land._

@@ -1,15 +1,32 @@
 "use client";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { AppProvider, useApp, type AppData } from "@/lib/store/AppContext";
 import { rateBelongsTo } from "@/lib/domain";
 import { Icon, Splash } from "@/components/ui";
 import { BrewFlow } from "@/components/brew/BrewFlow";
 import { Shelf } from "@/components/shelf/Shelf";
 import { History } from "@/components/palate/History";
-import { Settings } from "@/components/settings/Settings";
+import dynamic from "next/dynamic";
 import type { Coffee } from "@/lib/types";
 
+/**
+ * Settings is a tab the user opens deliberately, and it transitively pulls in
+ * ImportSheet -> lib/import/* -> papaparse (~45 KB) for a feature behind
+ * Settings -> Import. Splitting it keeps all of that out of the initial download.
+ * It's warmed on idle below, so the first open is still instant in practice.
+ *
+ * The three primary tabs stay statically imported on purpose — see the comment on
+ * the mounted gate; switching between them must not flicker.
+ */
+const Settings = dynamic(() => import("@/components/settings/Settings").then((m) => m.Settings), {
+  ssr: false,
+  loading: () => <div className="screen" />,
+});
+
 type Tab = "brew" | "shelf" | "palate" | "settings";
+
+/** No-op subscribe for the hydration probe below — the value can never change. */
+const subscribeNever = () => () => {};
 
 /**
  * Minimum time the splash stays on screen once mounted (ms).
@@ -93,18 +110,33 @@ function Shell() {
     [brews, profile, members],
   );
 
-  // Tabs are statically imported (instant, flicker-free switching). Render them
-  // on the client only via this mounted gate: the data is seeded from server
-  // props, but the tab UIs do date-relative rendering (e.g. the "Recently" strip
-  // in StepWhat uses `new Date()`), so SSR-ing them would risk hydration
-  // mismatches. Server output is the Splash — identical to loading.tsx.
-  const [mounted, setMounted] = useState(false);
+  // The three primary tabs are statically imported (instant, flicker-free switching)
+  // but rendered on the client only, via this gate: the data is seeded from server
+  // props, yet the tab UIs do date-relative rendering (e.g. the "Recently" strip in
+  // StepWhat uses `new Date()`), so SSR-ing them would risk hydration mismatches.
+  // Server output is the Splash — identical to loading.tsx.
+  //
+  // This is the canonical useSyncExternalStore hydration probe: it never subscribes,
+  // and simply reports false on the server and true on the client. It replaced a
+  // useState flipped by setMounted(true) inside an effect — a cascading-render
+  // anti-pattern that cost an extra render pass on every launch.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+
   // See SPLASH_FLOOR_MS. The clock starts at first client paint, so total on-screen
   // splash time is server TTFB + this floor.
   const [floorDone, setFloorDone] = useState(false);
   useEffect(() => {
-    setMounted(true);
     const t = setTimeout(() => setFloorDone(true), SPLASH_FLOOR_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Warm the split chunks once the app is idle, so opening Settings doesn't wait on
+  // a network round-trip. This only primes the module cache; it renders nothing.
+  useEffect(() => {
+    const warm = () => { void import("@/components/settings/Settings"); };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (typeof w.requestIdleCallback === "function") { w.requestIdleCallback(warm); return; }
+    const t = setTimeout(warm, 2000);
     return () => clearTimeout(t);
   }, []);
 

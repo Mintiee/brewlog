@@ -10,10 +10,15 @@ import { FreshDot } from "@/components/ui/FreshDot";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { ShelfRow } from "./ShelfRow";
 import { FrozenRow } from "./FrozenRow";
-import { CoffeeDetail } from "./CoffeeDetail";
-import { AddCoffee } from "./AddCoffee";
+import dynamic from "next/dynamic";
 import { EMPTY_STAT } from "@/lib/domain/derive";
 import type { Coffee, Brew, FreshStatus } from "@/lib/types";
+
+// Secondary sheets: several hundred lines each, and neither renders anything until the
+// user opens it. Splitting keeps them out of the initial download; they load when the
+// Shelf tab first mounts, well before anyone can tap into them.
+const CoffeeDetail = dynamic(() => import("./CoffeeDetail").then((m) => m.CoffeeDetail), { ssr: false });
+const AddCoffee = dynamic(() => import("./AddCoffee").then((m) => m.AddCoffee), { ssr: false });
 
 interface ShelfProps {
   coffees: Coffee[];

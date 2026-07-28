@@ -1,13 +1,24 @@
 "use client";
 import { useState, useMemo } from "react";
 import { Icon, Segmented, EmptyState } from "@/components/ui";
-import { StatsView } from "./StatsView";
+import dynamic from "next/dynamic";
 import { Journal } from "./Journal";
-import { BrewDetail } from "./BrewDetail";
 import { StepRate } from "@/components/brew/StepRate";
 import { Sheet } from "@/components/ui/Sheet";
 import { useAppActions, useAppSelector } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config, Recipe } from "@/lib/types";
+
+/**
+ * The stats stack (StatsView -> BarCard, RatingTrend, TasterFaceoff, BrewingTips,
+ * InsightCard, lib/palate/stats) is only reachable behind the Journal/Stats toggle,
+ * so it has no business being in the initial bundle. BrewDetail is a sheet that
+ * renders nothing until a card is tapped.
+ */
+const StatsView = dynamic(() => import("./StatsView").then((m) => m.StatsView), {
+  ssr: false,
+  loading: () => <div style={{ minHeight: 240 }} />,
+});
+const BrewDetail = dynamic(() => import("./BrewDetail").then((m) => m.BrewDetail), { ssr: false });
 
 interface HistoryProps {
   brews: Brew[];
