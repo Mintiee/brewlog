@@ -103,27 +103,43 @@ export function frozenDays(coffee: Coffee): number {
   return Math.round(frozenSpanMs(coffee, today.getTime()) / 86400000);
 }
 
-export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
-  const frozen = frozenGramsOf(coffee, brews);
-  const active = activeGrams(coffee, brews);
-  // Global windows (one knob for all coffees) — see setRestWindow.
-  const rest = restWindow;
-  const peak = Math.max(peakWindow, rest + 1);
+/** Local midnight of today, in ms. Day counts are calendar-day diffs. */
+export function todayMidnightMs(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * Pure core of `coffeeStatus`: takes the already-computed bean weights, the clock,
+ * and the freshness windows, so it scans nothing and reads no globals.
+ *
+ * Split out so lib/domain/derive.ts can compute a whole shelf's statuses from one
+ * pass over `brews` without duplicating this logic. Both callers share this
+ * function, so they cannot drift — `coffeeStatus` below is now a thin wrapper.
+ */
+export function statusFrom(
+  coffee: Coffee,
+  frozen: number,
+  active: number,
+  todayMs: number,
+  rest: number = restWindow,
+  peakDays: number = peakWindow,
+): FreshStatus {
+  const peak = Math.max(peakDays, rest + 1);
 
   if (active <= 0 && frozen > 0) {
     // Only frozen beans left — show their paused age.
-    const fd = effectiveDaysAgo(coffee);
+    const fd = restDaysAt(coffee, todayMs);
     const restLeft = Math.max(0, rest - fd);
     return { state: "frozen", label: restLeft > 0 ? `Ready in ${restLeft}d` : "Ready", day: fd, ready: false, pct: 1, restLeft };
   }
 
   // The drinkable (out-of-freezer) portion drives the resting/peak/past clock.
   // While any beans are still frozen, that portion was never paused → calendar age.
-  // Once nothing is frozen (never-frozen or fully thawed), effectiveDaysAgo carries
-  // the right pause.
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = frozen > 0 ? calendarDaysAt(coffee, today.getTime()) : effectiveDaysAgo(coffee);
+  // Once nothing is frozen (never-frozen or fully thawed), restDaysAt carries the
+  // right pause.
+  const d = frozen > 0 ? calendarDaysAt(coffee, todayMs) : restDaysAt(coffee, todayMs);
   if (d < rest) {
     return { state: "resting", label: `Ready in ${rest - d}d`, day: d, ready: false, pct: d / rest };
   }
@@ -132,6 +148,20 @@ export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
     return { state: "peak", label: `${peak - d}d left`, day: d, ready: active > 0, pct: intoPeak };
   }
   return { state: "past", label: `${d - peak}d past`, day: d, ready: active > 0, pct: 1 };
+}
+
+/**
+ * Freshness for one coffee. Each call scans `brews` three times (via frozenGramsOf +
+ * activeGrams), so prefer buildCoffeeStats in lib/domain/derive.ts when you need this
+ * for a whole list — and never call it inside a sort comparator.
+ */
+export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
+  return statusFrom(
+    coffee,
+    frozenGramsOf(coffee, brews),
+    activeGrams(coffee, brews),
+    todayMidnightMs(),
+  );
 }
 
 export function freshColor(state: string): string {
@@ -380,16 +410,18 @@ export function sinceText(ts: string | number): string {
   return `${d} ${d === 1 ? "day" : "days"} ago`;
 }
 
-export function daysAgoFromStartedAt(startedAt: string | number): number {
+export function daysAgoFromStartedAt(startedAt: string | number, todayMs: number = todayMidnightMs()): number {
   // Compare calendar days in local time (not a rolling 24h window), so a brew
   // logged late last night reads as "yesterday", not "today". Math.round (not
   // floor) keeps it correct across DST boundaries, where two local midnights
   // can be 23h apart. Mirrors roastedDaysAgo.
+  //
+  // `todayMs` is optional purely so hot loops can hoist it: this is called once per
+  // brew when building the "Recently" strip, and re-deriving local midnight inside
+  // the loop doubled the Date allocations for no reason.
   const d = new Date(parseTs(startedAt));
   d.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.round((today.getTime() - d.getTime()) / 86400000));
+  return Math.max(0, Math.round((todayMs - d.getTime()) / 86400000));
 }
 
 export function roastDateText(iso: string): string {

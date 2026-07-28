@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { StarsMini } from "@/components/ui";
-import { daysAgoFromStartedAt, journalDateText } from "@/lib/domain";
+import { daysAgoFromStartedAt, journalDateText, todayMidnightMs } from "@/lib/domain";
 import { processTexture } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config } from "@/lib/types";
@@ -75,27 +75,34 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
   const colorOf = useCoffeeColor();
 
   const groups = useMemo<Group[]>(() => {
-    const sorted = [...brews].sort((a, b) => {
-      const da = daysAgoFromStartedAt(a.started_at);
-      const db = daysAgoFromStartedAt(b.started_at);
-      return da - db;
-    });
+    // Decorate-sort-undecorate. The comparator used to call daysAgoFromStartedAt on
+    // both operands, so the day number was recomputed O(n log n) times — two Date
+    // allocations each — for information that is O(n). Local midnight is hoisted out
+    // of the loop for the same reason.
+    const today = todayMidnightMs();
+    const sorted = brews
+      .map((b) => ({ b, d: daysAgoFromStartedAt(b.started_at, today) }))
+      .sort((x, y) => x.d - y.d);
 
     // First pass: build day groups from raw brews
     const rawGroups: { d: number; ts: number; brews: Brew[] }[] = [];
     let cur: { d: number; ts: number; brews: Brew[] } | null = null;
-    sorted.forEach((b) => {
-      const d = daysAgoFromStartedAt(b.started_at);
+    for (const { b, d } of sorted) {
       if (!cur || cur.d !== d) {
         cur = { d, ts: parseInt(b.started_at, 10), brews: [] };
         rawGroups.push(cur);
       }
       cur.brews.push(b);
-    });
+    }
 
     // Second pass: collapse session siblings within each day into DisplayCards
     return rawGroups.map((g) => ({ d: g.d, ts: g.ts, items: collapseSiblings(g.brews) }));
   }, [brews]);
+
+  // Lookup maps for the card loop below, which did a linear .find() over all coffees
+  // and all brewers per card — on a journal that renders a few hundred cards.
+  const coffeeById = useMemo(() => new Map(coffees.map((c) => [c.id, c])), [coffees]);
+  const brewerById = useMemo(() => new Map(config.brewers.map((b) => [b.id, b])), [config.brewers]);
 
   // Day-groups within the current window (daysAgo < windowDays), and whether
   // any older groups remain. Same comparison on both sides so a group never
@@ -124,8 +131,8 @@ export function Journal({ brews, coffees, config, onOpen }: JournalProps) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {g.items.map(({ primary: b, partner }) => {
-              const c = coffees.find((x) => x.id === b.coffee_id);
-              const br = config.brewers.find((x) => x.id === b.brewer_id);
+              const c = coffeeById.get(b.coffee_id);
+              const br = brewerById.get(b.brewer_id);
               const tex = c ? processTexture(c.process) : {};
 
               // Rating footer — one StarsMini row per taster, exact half-star

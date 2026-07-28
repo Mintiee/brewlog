@@ -1,24 +1,26 @@
 "use client";
 import { Fragment } from "react";
-import { coffeeStatus, cupsLeft, frozenGramsOf } from "@/lib/domain";
+import { cupsLeft } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { Icon } from "@/components/ui/Icon";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { CoffeeName } from "@/components/ui/CoffeeName";
-import type { Coffee, Brew } from "@/lib/types";
+import type { Coffee, FreshStatus } from "@/lib/types";
 
 interface FrozenRowProps {
   coffee: Coffee;
-  brews: Brew[];
+  /** Grams in the freezer. Precomputed by the parent — see lib/domain/derive.ts. */
+  frozen: number;
+  /** Freshness, precomputed by the parent alongside `frozen`. */
+  status: FreshStatus;
   onOpen: (c: Coffee) => void;
 }
 
-export function FrozenRow({ coffee, brews, onOpen }: FrozenRowProps) {
+/** As with ShelfRow, the weights arrive as props instead of being rescanned per row. */
+export function FrozenRow({ coffee, frozen, status: st, onOpen }: FrozenRowProps) {
   const colorOf = useCoffeeColor();
-  const frozen = frozenGramsOf(coffee, brews);
   const serves = cupsLeft(frozen);
-  const st = coffeeStatus(coffee, brews);
   return (
     <button onClick={() => onOpen(coffee)} className="card" style={{
       width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "flex-start",

@@ -1,24 +1,30 @@
 "use client";
 import { Fragment } from "react";
-import { activeGrams, coffeeStatus, cupsLeft, freshColor } from "@/lib/domain";
+import { cupsLeft, freshColor } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { CoffeeName } from "@/components/ui/CoffeeName";
-import type { Coffee, Brew } from "@/lib/types";
+import type { Coffee, FreshStatus } from "@/lib/types";
 
 interface ShelfRowProps {
   coffee: Coffee;
-  brews: Brew[];
+  /** Drinkable grams left. Precomputed by the parent — see lib/domain/derive.ts. */
+  active: number;
+  /** Freshness, precomputed by the parent alongside `active`. */
+  status: FreshStatus;
   onOpen: (c: Coffee) => void;
 }
 
-export function ShelfRow({ coffee, brews, onOpen }: ShelfRowProps) {
+/**
+ * Takes `active` and `status` as props rather than deriving them from `brews`.
+ * Each row used to call activeGrams + coffeeStatus itself — five more full scans of
+ * every brew per row, duplicating work the parent had already done.
+ */
+export function ShelfRow({ coffee, active, status: st, onOpen }: ShelfRowProps) {
   const colorOf = useCoffeeColor();
-  const active = activeGrams(coffee, brews);
   const serves = cupsLeft(active);
   const low = serves <= 2;
-  const st = coffeeStatus(coffee, brews);
   return (
     <button onClick={() => onOpen(coffee)} className="card" style={{
       width: "100%", textAlign: "left", cursor: "pointer", padding: 16, marginBottom: 10, display: "flex", gap: 13, alignItems: "flex-start",

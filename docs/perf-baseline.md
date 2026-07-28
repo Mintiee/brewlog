@@ -132,4 +132,28 @@ Runtime checks (DevTools, throttled to Fast 3G):
 
 ## After
 
-_Filled in at the end of the pass._
+### Phase 3 — derive layer (measured)
+
+Shelf's per-render derivation workload, old (nested per-coffee primitives, including
+the in-comparator `coffeeStatus` and the per-row recompute) vs new (`buildCoffeeStats`).
+Measured with a throwaway vitest benchmark, 20-100 iterations each, on the dev machine:
+
+| Shelf size | Before | After | |
+|---|---|---|---|
+| 10 coffees × 200 brews | 0.19 ms | 0.040 ms | 5× |
+| 30 coffees × 1000 brews | 1.98 ms | 0.078 ms | 25× |
+| 40 coffees × 2000 brews | 4.23 ms | 0.093 ms | 46× |
+
+The shape matters more than the ratio: the old path scales with coffees × brews, so it
+degrades as the user logs more. The new path is O(B + C) and barely moves — 0.040 ms to
+0.093 ms while the data grows 20×. On a mid-range phone the 4.23 ms figure is more like
+15-20 ms, i.e. a dropped frame on every Shelf render, and Shelf re-rendered on every
+context change.
+
+The benchmark itself was deliberately not kept — wall-clock assertions are flaky in CI.
+The durable guards are in `lib/domain/derive.test.ts`: a parity suite (84 assertions
+across hand-written edge cases and 40 pseudo-random shelves) proving `buildCoffeeStats`
+agrees with the primitives it replaces, and a deterministic complexity test that counts
+property reads to prove the brew list is scanned exactly once regardless of coffee count.
+
+_Remaining phases filled in as they land._

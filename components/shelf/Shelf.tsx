@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { activeGrams, coffeeStatus, frozenGramsOf, remainingGrams, avgDailyGrams, formatWeight, formatDaysWorth, bagAvgRating } from "@/lib/domain";
+import { useMemo, useState } from "react";
+import { avgDailyGrams, formatWeight, formatDaysWorth, bagAvgRating } from "@/lib/domain";
+import { useCoffeeStats } from "@/lib/hooks/useCoffeeStats";
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
@@ -11,7 +12,8 @@ import { ShelfRow } from "./ShelfRow";
 import { FrozenRow } from "./FrozenRow";
 import { CoffeeDetail } from "./CoffeeDetail";
 import { AddCoffee } from "./AddCoffee";
-import type { Coffee, Brew } from "@/lib/types";
+import { EMPTY_STAT } from "@/lib/domain/derive";
+import type { Coffee, Brew, FreshStatus } from "@/lib/types";
 
 interface ShelfProps {
   coffees: Coffee[];
@@ -28,29 +30,45 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
   const [showArchive, setShowArchive] = useState(false);
   const colorOf = useCoffeeColor();
 
-  const live = coffees.filter((c) => !c.archived);
-  const archived = coffees.filter((c) => c.archived);
-  const totalGrams = live.reduce((s, c) => s + remainingGrams(c, brews), 0);
-  const perDay = avgDailyGrams(brews);
+  // One pass over brews for the whole shelf, instead of ~15 per coffee. See
+  // lib/domain/derive.ts — the per-coffee primitives each rescan every brew and nest,
+  // so calling them per row (and, previously, twice per sort comparison) made a tab
+  // switch scale with coffees x brews.
+  const stats = useCoffeeStats(coffees, brews);
+
+  const { live, archived, totalGrams, groups, frozenList, emptyList } = useMemo(() => {
+    const live = coffees.filter((c) => !c.archived);
+    const archived = coffees.filter((c) => c.archived);
+
+    const activeList: { c: Coffee; st: FreshStatus }[] = [];
+    const frozenList: Coffee[] = [];
+    const emptyList: Coffee[] = [];
+    let totalGrams = 0;
+
+    for (const c of live) {
+      const s = stats.get(c.id) ?? EMPTY_STAT;
+      totalGrams += s.remaining;
+      if (s.active > 0) activeList.push({ c, st: s.status });
+      if (s.frozen > 0) frozenList.push(c);
+      if (s.active <= 0 && s.frozen <= 0) emptyList.push(c);
+    }
+
+    // `day` is read from the already-computed status rather than recomputed inside the
+    // comparator, which is what made this O(C log C) x O(B).
+    const sortRested = (arr: typeof activeList) =>
+      [...arr].sort((a, b) => b.st.day - a.st.day);
+
+    const groups = [
+      { key: "peak", title: "In peak", items: sortRested(activeList.filter((d) => d.st.state === "peak")) },
+      { key: "past", title: "Past peak", items: sortRested(activeList.filter((d) => d.st.state === "past")) },
+      { key: "resting", title: "Resting", items: sortRested(activeList.filter((d) => d.st.state === "resting")) },
+    ].filter((g) => g.items.length);
+
+    return { live, archived, totalGrams, groups, frozenList, emptyList };
+  }, [coffees, stats]);
+
+  const perDay = useMemo(() => avgDailyGrams(brews), [brews]);
   const worth = perDay > 0 ? formatDaysWorth(totalGrams / perDay) : null;
-  const activeList = live
-    .filter((c) => activeGrams(c, brews) > 0)
-    .map((c) => ({ c, st: coffeeStatus(c, brews) }));
-  const frozenList = live.filter((c) => frozenGramsOf(c, brews) > 0);
-  const emptyList = live.filter((c) => activeGrams(c, brews) <= 0 && frozenGramsOf(c, brews) <= 0);
-
-  const sortRested = (arr: typeof activeList) =>
-    [...arr].sort((a, b) => {
-      const da = coffeeStatus(a.c, brews).day;
-      const db = coffeeStatus(b.c, brews).day;
-      return db - da;
-    });
-
-  const groups = [
-    { key: "peak", title: "In peak", items: sortRested(activeList.filter((d) => d.st.state === "peak")) },
-    { key: "past", title: "Past peak", items: sortRested(activeList.filter((d) => d.st.state === "past")) },
-    { key: "resting", title: "Resting", items: sortRested(activeList.filter((d) => d.st.state === "resting")) },
-  ].filter((g) => g.items.length);
 
   // keep detail in sync with latest coffee data after an update
   const liveDetail = detail ? coffees.find((c) => c.id === detail.id) || detail : null;
@@ -92,8 +110,8 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
             <div className="label" style={{ marginBottom: 11, display: "flex", alignItems: "center", gap: 8 }}>
               <FreshDot state={g.key} /> {g.title} · {g.items.length}
             </div>
-            {g.items.map(({ c }) => (
-              <ShelfRow key={c.id} coffee={c} brews={brews} onOpen={setDetail} />
+            {g.items.map(({ c, st }) => (
+              <ShelfRow key={c.id} coffee={c} active={(stats.get(c.id) ?? EMPTY_STAT).active} status={st} onOpen={setDetail} />
             ))}
           </div>
         ))}
@@ -103,9 +121,10 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
             <div className="label" style={{ marginBottom: 11, display: "flex", alignItems: "center", gap: 8 }}>
               <Icon name="snow" size={13} stroke={1.8} style={{ color: "var(--frozen)" }} /> In the freezer · {frozenList.length}
             </div>
-            {frozenList.map((c) => (
-              <FrozenRow key={c.id} coffee={c} brews={brews} onOpen={setDetail} />
-            ))}
+            {frozenList.map((c) => {
+              const s = stats.get(c.id) ?? EMPTY_STAT;
+              return <FrozenRow key={c.id} coffee={c} frozen={s.frozen} status={s.status} onOpen={setDetail} />;
+            })}
           </div>
         )}
 

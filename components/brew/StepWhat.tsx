@@ -1,12 +1,15 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
-import { coffeeStatus, activeGrams, frozenGramsOf, cupsLeft, lastBrewOf, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo } from "@/lib/domain";
+import { cupsLeft, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo, todayMidnightMs } from "@/lib/domain";
+import { EMPTY_STAT, lastBrewByCoffee } from "@/lib/domain/derive";
+import { useCoffeeStats } from "@/lib/hooks/useCoffeeStats";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useLongPress } from "@/lib/hooks/useLongPress";
+import type { FreshStatus } from "@/lib/types";
 
 interface StepWhatProps {
   coffees: Coffee[];
@@ -25,8 +28,11 @@ interface StepWhatProps {
 
 interface CoffeeRowProps {
   c: Coffee;
-  st: ReturnType<typeof coffeeStatus>;
-  brews: Brew[];
+  st: FreshStatus;
+  /** Drinkable grams left, precomputed by the parent — see lib/domain/derive.ts. */
+  active: number;
+  /** "today" / "3d" / null, precomputed by the parent from one pass over brews. */
+  last: string | null;
   i: number;
   dim?: boolean;
   onPick: (c: Coffee) => void;
@@ -38,12 +44,9 @@ interface CoffeeRowProps {
 // onPick navigation into the "how are you brewing" step. Pulled out into its
 // own component (rather than a helper function called from a .map) so the
 // long-press hook has a stable per-row identity.
-function CoffeeRow({ c, st, brews, i, dim = false, onPick, onBrewAgain }: CoffeeRowProps) {
+function CoffeeRow({ c, st, active, last, i, dim = false, onPick, onBrewAgain }: CoffeeRowProps) {
   const colorOf = useCoffeeColor();
-  const lb = lastBrewOf(c.id, brews);
-  const daysAgo = lb ? daysAgoFromStartedAt(lb.started_at) : null;
-  const last = daysAgo !== null ? (daysAgo === 0 ? "today" : `${daysAgo}d`) : null;
-  const servesN = cupsLeft(activeGrams(c, brews));
+  const servesN = cupsLeft(active);
   const serves = servesN % 1 === 0 ? String(servesN) : servesN.toFixed(1);
   const longPress = useLongPress({
     onLongPress: () => onBrewAgain?.(c),
@@ -102,9 +105,12 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
 
   // Only brews that are mine to rate: ones I logged and haven't sent away, or
   // ones handed to me. A sent brew leaves the sender's list and joins the target's.
-  const pending = brews
-    .filter((b) => b.pending && !b.guest && rateBelongsTo(b, profile, members))
-    .sort((a, b) => Number(b.started_at) - Number(a.started_at));
+  const pending = useMemo(
+    () => brews
+      .filter((b) => b.pending && !b.guest && rateBelongsTo(b, profile, members))
+      .sort((a, b) => Number(b.started_at) - Number(a.started_at)),
+    [brews, profile, members],
+  );
 
   useEffect(() => {
     if (!pending.length) return;
@@ -112,27 +118,63 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
     return () => clearInterval(id);
   }, [pending.length]);
 
-  const decorated = coffees.filter((c) => !c.archived).map((c) => ({ c, st: coffeeStatus(c, brews) }));
-  const sortByDay = (arr: typeof decorated) => [...arr].sort((a, b) => b.st.day - a.st.day);
-  const ready = sortByDay(decorated.filter((d) => d.st.ready && d.st.state !== "past"));
-  const pastPeak = sortByDay(decorated.filter((d) => d.st.ready && d.st.state === "past"));
-  const hasFrozen = coffees.some((c) => !c.archived && frozenGramsOf(c, brews) > 0);
+  // One pass over brews for every coffee's weights and freshness — see
+  // lib/domain/derive.ts. Previously each of `decorated`, `hasFrozen` and every row
+  // rescanned the whole brew list independently, on every render, including the 30s
+  // tick above.
+  const stats = useCoffeeStats(coffees, brews);
+  const lastBrews = useMemo(() => lastBrewByCoffee(brews), [brews]);
+
+  const { ready, pastPeak, hasFrozen } = useMemo(() => {
+    const decorated: { c: Coffee; st: FreshStatus }[] = [];
+    let hasFrozen = false;
+    for (const c of coffees) {
+      if (c.archived) continue;
+      const s = stats.get(c.id) ?? EMPTY_STAT;
+      decorated.push({ c, st: s.status });
+      if (s.frozen > 0) hasFrozen = true;
+    }
+    const sortByDay = (arr: typeof decorated) => [...arr].sort((a, b) => b.st.day - a.st.day);
+    return {
+      ready: sortByDay(decorated.filter((d) => d.st.ready && d.st.state !== "past")),
+      pastPeak: sortByDay(decorated.filter((d) => d.st.ready && d.st.state === "past")),
+      hasFrozen,
+    };
+  }, [coffees, stats]);
+
+  // "3d" / "today" per coffee, resolved once from lastBrews rather than per row.
+  const lastLabel = (coffeeId: string) => {
+    const lb = lastBrews.get(coffeeId);
+    if (!lb) return null;
+    const d = daysAgoFromStartedAt(lb.started_at);
+    return d === 0 ? "today" : `${d}d`;
+  };
 
   // Recent strip: last 14 days — only render from the oldest day with a brew to today
-  const byDay: Record<number, Brew[]> = {};
-  brews.forEach((b) => {
-    const d = daysAgoFromStartedAt(b.started_at);
-    if (d <= 13) (byDay[d] = byDay[d] || []).push(b);
-  });
-  const hasRecent = Object.keys(byDay).length > 0;
-  // Today fixed on the left; render back from today → the oldest day with a brew,
-  // so the strip grows rightward (newest-first) as history accumulates.
-  const oldestFilledDay = hasRecent ? Math.max(...Object.keys(byDay).map(Number)) : 0;
-  const days = [];
-  for (let d = 0; d <= oldestFilledDay; d++) days.push({ d, brews: (byDay[d] || []).slice(0, 4) });
+  const { days, hasRecent } = useMemo(() => {
+    // Local midnight hoisted out of the loop: daysAgoFromStartedAt would otherwise
+    // re-derive it for every one of up to 2000 brews.
+    const today = todayMidnightMs();
+    const byDay: Record<number, Brew[]> = {};
+    for (const b of brews) {
+      const d = daysAgoFromStartedAt(b.started_at, today);
+      if (d <= 13) (byDay[d] = byDay[d] || []).push(b);
+    }
+    const filled = Object.keys(byDay);
+    const hasRecent = filled.length > 0;
+    // Today fixed on the left; render back from today → the oldest day with a brew,
+    // so the strip grows rightward (newest-first) as history accumulates.
+    const oldestFilledDay = hasRecent ? Math.max(...filled.map(Number)) : 0;
+    const days: { d: number; brews: Brew[] }[] = [];
+    for (let d = 0; d <= oldestFilledDay; d++) days.push({ d, brews: (byDay[d] || []).slice(0, 4) });
+    return { days, hasRecent };
+  }, [brews]);
 
   const rel = (d: number) => d === 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 
+  // Lookup maps for the render loops below, which previously did a linear .find()
+  // per pending row and per recent-strip cell.
+  const coffeeById = useMemo(() => new Map(coffees.map((c) => [c.id, c])), [coffees]);
   const brewerById = (id: string) => config.brewers.find((b) => b.id === id);
 
   // First-run: no coffees at all yet. The "resting/in the freezer" copy below is
@@ -185,7 +227,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {pending.map((b) => {
-              const c = coffees.find((x) => x.id === b.coffee_id);
+              const c = coffeeById.get(b.coffee_id);
               const br = brewerById(b.brewer_id);
               if (!c) return null;
               const loggerName = members.find((m) => m.id === b.logged_by)?.name ?? null;
@@ -247,7 +289,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {ready.map(({ c, st }, i) => (
-          <CoffeeRow key={c.id} c={c} st={st} brews={brews} i={i} onPick={onPick} onBrewAgain={onBrewAgain} />
+          <CoffeeRow key={c.id} c={c} st={st} active={(stats.get(c.id) ?? EMPTY_STAT).active} last={lastLabel(c.id)} i={i} onPick={onPick} onBrewAgain={onBrewAgain} />
         ))}
       </div>
 
@@ -256,7 +298,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
           <div className="label rise rise-2" style={{ margin: "26px 0 12px", color: "var(--fade)" }}>Past peak · {pastPeak.length}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {pastPeak.map(({ c, st }, i) => (
-              <CoffeeRow key={c.id} c={c} st={st} brews={brews} i={i} dim onPick={onPick} onBrewAgain={onBrewAgain} />
+              <CoffeeRow key={c.id} c={c} st={st} active={(stats.get(c.id) ?? EMPTY_STAT).active} last={lastLabel(c.id)} i={i} dim onPick={onPick} onBrewAgain={onBrewAgain} />
             ))}
           </div>
         </>
@@ -308,7 +350,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
                   }}
                 >
                   {day.brews.map((b, j) => {
-                    const c = coffees.find((x) => x.id === b.coffee_id);
+                    const c = coffeeById.get(b.coffee_id);
                     const tex = c ? processTexture(c.process) : {};
                     return <span key={j} style={{ backgroundColor: c ? colorOf(c.notes) : "var(--ink-ghost)", ...tex }} />;
                   })}
