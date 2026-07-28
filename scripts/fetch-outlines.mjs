@@ -150,7 +150,8 @@ function renderOutlinesArray(codes) {
 }
 
 async function syncServiceWorker(codes, { write }) {
-  const src = await readFile(SW_JS, "utf8");
+  // Normalised for the same core.autocrlf reason as the SVG comparison above.
+  const src = (await readFile(SW_JS, "utf8")).replace(/\r\n/g, "\n");
   const re = /const OUTLINES = \[[\s\S]*?\]\.map\(\(cc\) => `\/maps\/\$\{cc\}\.svg`\);/;
   if (!re.test(src)) {
     throw new Error(
@@ -173,10 +174,14 @@ async function main() {
 
   if (CHECK_ONLY) {
     let drift = 0;
+    // Compare content, not bytes: this repo runs with core.autocrlf=true, so Git
+    // rewrites the checked-out files' line endings and a raw byte comparison would
+    // report all 24 as drifted on Windows.
+    const normalise = (s) => s.replace(/\r\n/g, "\n");
     for (const { cc, out } of files) {
       const path = join(OUT_DIR, `${cc}.svg`);
-      const have = existsSync(path) ? await readFile(path, "utf8") : null;
-      if (have !== out) {
+      const have = existsSync(path) ? normalise(await readFile(path, "utf8")) : null;
+      if (have !== normalise(out)) {
         console.error(`DRIFT  ${cc}.svg  ${have === null ? "missing" : "differs from source"}`);
         drift++;
       }

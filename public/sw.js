@@ -3,7 +3,8 @@
 //
 // Strategy:
 //  - Cross-origin requests (Supabase, etc.) are never intercepted — they pass straight through.
-//  - Navigations: network-first, falling back to the cached app shell when offline.
+//  - Navigations: network-first with a timeout, falling back to the cached app shell
+//    when offline *or* when the network is merely slow — see networkFirstNavigation.
 //  - Same-origin static assets (hashed /_next/static/ chunks, /maps/ outlines, icons,
 //    manifest): cache-first with a background revalidate (stale-while-revalidate), since
 //    hashed assets are immutable and non-hashed ones are cheap to refresh silently.
@@ -14,7 +15,7 @@
 // Bump CACHE_VERSION whenever the caching strategy or precache list changes; old versioned
 // caches are pruned on activate.
 
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE = `brewlog-shell-${CACHE_VERSION}`;
 
 // Country outline silhouettes for every code in ORIGIN_CODES (lib/domain/index.ts),
@@ -76,16 +77,45 @@ function cacheFirstWithRevalidate(req) {
   );
 }
 
+/** How long a navigation waits for the network before falling back to cache (ms). */
+const NAV_TIMEOUT_MS = 1500;
+
+/**
+ * Navigations: network-first, but only for NAV_TIMEOUT_MS.
+ *
+ * Plain network-first means a flaky connection blocks launch indefinitely — the
+ * request neither succeeds nor fails, so the user stares at nothing while the app
+ * shell sits in the cache, already usable. Racing against a timeout bounds that: a
+ * healthy network still wins (it's well under 1.5s), and a bad one degrades to the
+ * cached shell instead of hanging.
+ *
+ * The cached shell is genuinely useful rather than empty, because app/page.tsx
+ * serialises its prefetched data into the HTML — so the fallback carries the last
+ * known coffees/brews/config with it, and the client revalidates in the background
+ * on the next foreground refresh.
+ *
+ * The network response is still cached when it eventually arrives, even if the
+ * timeout already won the race, so the next launch starts from fresher data.
+ */
 function networkFirstNavigation(req) {
-  return fetch(req)
+  const network = fetch(req)
     .then((res) => {
       if (res.ok) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
       }
       return res;
-    })
-    .catch(() => caches.match(req).then((hit) => hit || caches.match("/")));
+    });
+
+  const cached = () => caches.match(req).then((hit) => hit || caches.match("/"));
+
+  // Resolves to undefined on timeout, so the race below can tell "slow" from "done".
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(undefined), NAV_TIMEOUT_MS));
+
+  return Promise.race([network.catch(() => undefined), timeout])
+    .then((res) => res || cached().then((hit) => hit || network))
+    // Offline with nothing cached: surface the real network error.
+    .catch(() => cached().then((hit) => hit || network));
 }
 
 function runtimeCacheGet(req) {

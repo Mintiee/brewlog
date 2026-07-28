@@ -188,4 +188,30 @@ const e=[...new Set(m.match(/static\/chunks\/[A-Za-z0-9_-]+\.js/g))];
 console.log(e.length+' chunks, '+(e.reduce((s,c)=>s+fs.statSync('.next/'+c).size,0)/1024).toFixed(1)+' KB')"
 ```
 
+### Phase 6 — caching (scope changed after a finding)
+
+The plan called for an IndexedDB read-cache so offline wouldn't show an empty shell.
+**That premise turned out to be wrong.** `public/sw.js` precaches `"/"` with
+`cache.add()` (which sends cookies) and re-caches it on every successful navigation —
+and `app/page.tsx` serialises `initialData` into that HTML. So the service worker cache
+already holds a complete data snapshot: coffees, brews, recipes, config.
+
+An IndexedDB cache would therefore have duplicated the SW cache while introducing a
+real coherency problem: two snapshots on boot (the one baked into the served HTML and
+the IDB one) with no clock-safe way to decide which is newer, since server and client
+clocks differ. Dropped by agreement; the two changes that were actually worth making:
+
+1. **Navigations are network-first with a 1500 ms timeout.** Plain network-first meant
+   a flaky connection blocked launch indefinitely — neither succeeding nor failing —
+   while a usable shell sat in the cache. A healthy network still wins the race; a bad
+   one now degrades to the cached shell (with its embedded data) instead of hanging.
+   The network response is still cached when it eventually lands.
+
+2. **One shared IndexedDB connection** (`lib/store/idb.ts`). The outbox opened *and
+   closed* the database for every operation, so draining N queued writes cost 2 + 2N
+   open/close cycles — precisely when the device has just come back online and is
+   trying to flush work. Nine tests cover the reuse contract, including concurrent
+   callers sharing one open, not caching a failed open, and reopening when another tab
+   triggers a version change.
+
 _Remaining phases filled in as they land._
