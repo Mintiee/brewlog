@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { Icon } from "./Icon";
+import { downscaleImage } from "@/lib/image/downscale";
 
 interface ImagePickerProps {
   onFile: (file: File, dataUrl: string) => void;
@@ -14,16 +15,23 @@ export function ImagePicker({ onFile, preview, height = 200 }: ImagePickerProps)
   const inputRef = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function ingest(file: File) {
     setErr("");
     if (!ACCEPT.includes(file.type)) { setErr("Drop a PNG, JPEG, WebP, or AVIF image."); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const url = e.target?.result as string;
-      onFile(file, url);
-    };
-    reader.readAsDataURL(file);
+    setBusy(true);
+    try {
+      // Downscale before the image touches React state: the raw file goes straight into
+      // the /api/extract request body, and a phone photo is several megabytes before
+      // base64 inflates it further. See lib/image/downscale.ts.
+      const { dataUrl } = await downscaleImage(file);
+      onFile(file, dataUrl);
+    } catch {
+      setErr("Couldn't read that image — try another photo.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -53,7 +61,9 @@ export function ImagePicker({ onFile, preview, height = 200 }: ImagePickerProps)
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <span style={{ color: "var(--ink-ghost)" }}><Icon name="camera" size={36} stroke={1.4} /></span>
           <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--ink-dim)" }}>Drop a bag photo</span>
-          <span style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>or <u style={{ textUnderlineOffset: 2 }}>browse files</u></span>
+          <span style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>
+            {busy ? "Preparing…" : <>or <u style={{ textUnderlineOffset: 2 }}>browse files</u></>}
+          </span>
         </div>
       )}
       {err && (

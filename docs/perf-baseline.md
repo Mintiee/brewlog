@@ -214,4 +214,58 @@ clocks differ. Dropped by agreement; the two changes that were actually worth ma
    callers sharing one open, not caching a failed open, and reopening when another tab
    triggers a version change.
 
-_Remaining phases filled in as they land._
+### Phase 7 — server & API latency
+
+- `app/page.tsx` awaited `getUser()` (a real auth round-trip that revalidates the JWT)
+  *before* starting its eight queries. Now `getSession()` — a local cookie read, no
+  network — supplies the user id so the queries start immediately, while `getUser()`
+  runs concurrently and still gates rendering. Safe because RLS is enforced by Postgres
+  against the JWT, not by this code. Saves roughly one auth RTT on every page load.
+- `createServiceClient()` rebuilt a client (via a CJS `require` of supabase-js) on every
+  call; `/api/insight` did that three times per request. Memoised at module scope.
+- `fetchLearnedNotes` / `fetchLearnedVarietals` read a globally shared cross-household
+  table with no limit, on every boot. Bounded.
+- The boot classification sweep moved to `requestIdleCallback`. Its chunks stay serial
+  deliberately: `/api/classify-notes` is rate-limited per household with a token
+  bucket, so parallelising would burn the burst allowance on work nobody awaits.
+- `setConfig` upserts the whole config row and fires per change event — a slider drag
+  was one full-row write per tick. Debounced to 400 ms, with rollback targeting the
+  pre-burst value and a `pagehide`/`visibilitychange`/unmount flush.
+
+### Phase 8 — input & media
+
+- **`ImagePicker` downscales before the image enters React state.** It previously read
+  the raw file to a base64 data URL: a 3-8 MB phone photo becomes 4-11 MB of string,
+  held in state, re-rendered as an `<img src>`, and `JSON.stringify`'d whole into the
+  `/api/extract` body. Now resized to fit 1024px and re-encoded as WebP —
+  typically a 20-50× reduction — with a fallback to the original whenever the canvas
+  path isn't available or wouldn't help (`lib/image/downscale.ts`, 4 tests).
+- `AddCoffee` wrote its draft to `sessionStorage` (`JSON.stringify` + a synchronous
+  storage write) on **every keystroke in every field**. Debounced to 300 ms, flushed on
+  unmount so nothing is lost.
+- `roasterSuggestions` — which rebuilds a nested `Map` over every coffee from scratch —
+  sat inline in the JSX, so it ran on every render of the form, not just when the
+  roaster field changed. Memoised.
+- `StepHow` recomputed `previousBrewFor` (four chained filters plus a sort over all
+  brews, called **twice**) and `lastForCoffee` on every render, including the 50-120 ms
+  tick of a held-down stepper. Both memoised on inputs that exclude the recipe.
+- `BrewingTips` ran `buildTips` (~10 passes over all brews) on every mutation even once
+  LLM tips had superseded it. Now skipped when unused.
+
+**Not changed, deliberately:** the tab bar's `backdropFilter: blur(18px) saturate(160%)`
+is a plausible scroll-jank source on mobile Safari, but confirming that needs a real
+device profile. Changing a visible design element on suspicion isn't warranted — flagged
+rather than guessed at.
+
+---
+
+## Verification status
+
+Automated, run at every phase boundary: `npm run lint`, `npm test` (290 tests, up from
+261 — the 29 new ones cover the derive layer, the store primitive, the shared IDB
+connection and image downscaling), `npm run build`, plus a production-server smoke test.
+
+**Not verified by this pass:** an authenticated end-to-end run in a browser. The SSR
+path for a signed-in user can't be exercised without a real session, so the seeded boot
+path, offline behaviour, and React Profiler numbers are reasoned about rather than
+measured. Worth a manual pass before deploying.

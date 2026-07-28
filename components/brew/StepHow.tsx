@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Coffee, Brew, Brewer, Config, Recipe, SavedRecipe } from "@/lib/types";
 import { defaultsFor, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
 import { Icon, Stepper, SheetHeader } from "@/components/ui";
@@ -79,9 +79,15 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
   };
 
   // Default to the single most recent brew of this coffee — brewer and recipe from the same brew.
-  const lastForCoffee = brews
-    .filter((x) => x.coffee_id === coffee.id)
-    .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null;
+  // Memoised: this filters and sorts the entire brew list, and only the useState
+  // initialisers below consume it, yet it re-ran on every render — including the
+  // 50-120ms tick of a held-down stepper.
+  const lastForCoffee = useMemo(
+    () => brews
+      .filter((x) => x.coffee_id === coffee.id)
+      .sort((a, c) => Number(c.started_at) - Number(a.started_at))[0] || null,
+    [brews, coffee.id],
+  );
   const initialBrewer = (lastForCoffee && config.brewers.find((b) => b.id === lastForCoffee.brewer_id)) || config.brewers[0];
 
   const [brewer, setBrewer] = useState<Brewer>(initialBrewer);
@@ -144,7 +150,14 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
 
   // Passive reference to the previous brew of this coffee — prefers this brewer,
   // falls back to any brewer if this coffee hasn't been brewed on it before.
-  const prevBrew = previousBrewFor(coffee.id, brewer.id, brews) ?? previousBrewFor(coffee.id, null, brews);
+  //
+  // Memoised: previousBrewFor does four chained filters plus a sort over every brew,
+  // and this line called it twice. It depends on the coffee and brewer, never on the
+  // recipe being edited, so a stepper tick has no business recomputing it.
+  const prevBrew = useMemo(
+    () => previousBrewFor(coffee.id, brewer.id, brews) ?? previousBrewFor(coffee.id, null, brews),
+    [coffee.id, brewer.id, brews],
+  );
   const prevDelta = prevBrew ? recipeDelta(prevBrew, r) : null;
   const prevRating = prevBrew && prevBrew.stars != null ? brewRating(prevBrew) : null;
 

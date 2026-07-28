@@ -183,9 +183,15 @@ const TIPS_LS_KEY = "brew_tips_v4";  // bumped: tighter copy + full-history inpu
 const TIPS_MIN_BREWS = 5;
 
 export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsProps) {
-  // Heuristic tips render immediately — they're the fallback and the placeholder.
-  const heuristic = useMemo(() => buildTips(brews, coffees, config), [brews, coffees, config]);
   const [llmTips, setLlmTips] = useState<Tip[] | null>(null);
+  // Heuristic tips render immediately — they're the fallback and the placeholder.
+  // Skipped entirely once LLM tips have landed: `tips` below prefers those, so
+  // buildTips' ~10 passes over the whole brew list were being run and discarded on
+  // every mutation while the Stats tab was open.
+  const heuristic = useMemo(
+    () => (llmTips ? [] : buildTips(brews, coffees, config)),
+    [llmTips, brews, coffees, config],
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   // Shared fetch path for both the mount-time load and a manual force-refresh.

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { originCode, todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
@@ -43,6 +43,9 @@ const ROAST_LEVELS = ["light", "medium-light", "medium", "medium-dark", "dark"];
 // review-phase draft (and its source) to sessionStorage so it survives that —
 // cleared on a successful save or an explicit "Clear" from the restored banner.
 const DRAFT_KEY = "addcoffee:draft:v1";
+
+/** Coalesce per-keystroke draft writes. */
+const DRAFT_DEBOUNCE_MS = 300;
 
 interface AddCoffeeDraft {
   form: ReviewForm;
@@ -112,9 +115,25 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
   }, [open, llmEnabled]);
 
   // Persist the review-phase draft as it's edited.
+  //
+  // Debounced: saveDraft is JSON.stringify + a synchronous sessionStorage write, and
+  // this effect runs on every keystroke in every field. Storage writes block the main
+  // thread, so typing a roaster name used to pay one per character. The cleanup also
+  // flushes on unmount/close, so nothing is lost by waiting.
   useEffect(() => {
-    if (phase === "review" && form) saveDraft({ form, source });
+    if (phase !== "review" || !form) return;
+    const draft = { form, source };
+    const t = setTimeout(() => saveDraft(draft), DRAFT_DEBOUNCE_MS);
+    return () => { clearTimeout(t); saveDraft(draft); };
   }, [phase, form, source]);
+
+  // roasterSuggestions -> distinctRoasters builds a nested Map over every coffee from
+  // scratch on each call, and this sat inline in the JSX — so it re-ran on every
+  // render of the form, i.e. every keystroke in every field, not just the roaster one.
+  const roasterOptions = useMemo(
+    () => (form ? roasterSuggestions(form.roaster, coffees) : []),
+    [form, coffees],
+  );
 
   function clearDraft() {
     clearDraftStorage();
@@ -347,7 +366,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
                 onChange={set("roaster")}
                 placeholder="Roaster"
                 highlight={source !== "manual"}
-                suggestions={roasterSuggestions(form.roaster, coffees)}
+                suggestions={roasterOptions}
               />
               <Field label="Coffee" value={form.name} onChange={set("name")} placeholder="Name / lot" highlight={source !== "manual"} />
               <div style={{ display: "flex", gap: 12 }}>
