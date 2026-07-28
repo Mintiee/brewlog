@@ -14,26 +14,71 @@ export default async function Home() {
   if (!supabaseConfigured) return <AppShell />;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
 
-  // Prefetch everything server-side (colocated with Supabase, RLS via the request
-  // cookies) and seed the client. This removes the client-side getUser() + 6-query
-  // waterfall that previously gated first paint.
-  const [profile, coffees, brews, recipes, config, aiStatus, notes, varietals] = await Promise.all([
-    fetchProfile(user.id, supabase),
-    fetchCoffees(supabase),
-    fetchBrews(supabase),
-    // Degrade gracefully if the recipes table isn't migrated yet — a rejection
-    // here must not sink the whole SSR prefetch (Promise.all short-circuits).
-    fetchRecipes(supabase).catch((e) => { console.warn("fetchRecipes failed — recipes unavailable", e); return []; }),
-    fetchConfig(supabase),
-    fetchAiKeyStatus(supabase),
-    fetchLearnedNotes(supabase),
+  // getUser() is a real network round-trip to Supabase Auth — it revalidates the JWT
+  // rather than trusting the cookie. It used to sit *in front* of the query batch, so
+  // every single page load paid an auth RTT before the first query even started.
+  //
+  // getSession() reads the same cookie locally with no network, which is enough to
+  // learn the user id and start the queries. The authoritative check still happens:
+  // we await getUser() below and redirect before rendering anything. Firing the
+  // queries early is safe because RLS — enforced by Postgres against the JWT, not by
+  // this code — is what actually scopes them; a stale or forged cookie reads nothing.
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
+  const authCheck = supabase.auth.getUser();
+
+  // Prefetch everything server-side (colocated with Supabase) and seed the client.
+  // allSettled rather than all: if the auth check below redirects, an outstanding
+  // rejection here would otherwise be unhandled.
+  const prefetch = userId
+    ? Promise.allSettled([
+        fetchProfile(userId, supabase),
+        fetchCoffees(supabase),
+        fetchBrews(supabase),
+        fetchRecipes(supabase),
+        fetchConfig(supabase),
+        fetchAiKeyStatus(supabase),
+        fetchLearnedNotes(supabase),
+        fetchLearnedVarietals(supabase),
+      ])
+    : null;
+
+  const { data: { user } } = await authCheck;
+  if (!user) {
+    await prefetch; // settle before unwinding, so nothing is left dangling
+    redirect("/login");
+  }
+
+  const results = await prefetch!;
+  const [profileR, coffeesR, brewsR, recipesR, configR, aiStatusR, notesR, varietalsR] = results;
+
+  // Anything the app genuinely can't render without still fails the request.
+  const required = <T,>(r: PromiseSettledResult<T>): T => {
+    if (r.status === "rejected") throw r.reason;
+    return r.value;
+  };
+  // ...and the two that predate their migrations degrade instead, as before.
+  const optional = <T,>(r: PromiseSettledResult<T>, fallback: T, label?: string): T => {
+    if (r.status === "rejected") {
+      if (label) console.warn(`${label} failed — feature unavailable`, r.reason);
+      return fallback;
+    }
+    return r.value;
+  };
+
+  const initialData: AppData = {
+    profile: required(profileR),
+    coffees: required(coffeesR),
+    brews: required(brewsR),
+    // Degrade gracefully if the recipes table isn't migrated yet.
+    recipes: optional(recipesR, [], "fetchRecipes"),
+    config: required(configR),
+    aiStatus: required(aiStatusR),
+    notes: required(notesR),
     // Degrade gracefully if migration 019 hasn't been applied yet.
-    fetchLearnedVarietals(supabase).catch(() => ({})),
-  ]);
-
-  const initialData: AppData = { profile, coffees, brews, recipes, config, aiStatus, notes, varietals };
+    varietals: optional(varietalsR, {}),
+  };
   return <AppShell initialData={initialData} />;
 }

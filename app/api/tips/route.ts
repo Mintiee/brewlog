@@ -10,6 +10,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { completeJSON, BEST_MODEL } from "@/lib/llm";
 import { requireHouseholdKey, parseJsonBody, checkRateLimit } from "@/lib/api/guards";
 import { localDayIndexAtOffset } from "@/lib/domain";
+import type { Json } from "@/lib/db/database.types";
 
 // Icons the UI can render (see components/ui/Icon.tsx). The model must pick from this set.
 const ALLOWED_ICONS = ["brew", "grind", "thermo", "timer", "drop", "scale", "citrus", "sugar", "bean", "spark"] as const;
@@ -52,6 +53,15 @@ interface Tip {
   icon: string;
   text: string;
 }
+
+/**
+ * `household_tips.tips` is a jsonb column, typed as `Json` in the generated schema.
+ * Tip is JSON-shaped but a plain interface has no index signature, so TypeScript
+ * won't structurally match it. Narrowed here rather than polluting Tip with one.
+ * (This surfaced when createServiceClient started returning a typed client — the
+ * previous CJS require returned `any`, so the mismatch was simply invisible.)
+ */
+const tipsAsJson = (tips: Tip[]): Json => tips as unknown as Json;
 
 /**
  * Validate the parsed reply into tips. Accepts the structured object
@@ -144,7 +154,7 @@ export async function POST(req: NextRequest) {
 
     await service
       .from("household_tips")
-      .upsert({ household_id: hk.householdId, tips, generated_at: new Date().toISOString() });
+      .upsert({ household_id: hk.householdId, tips: tipsAsJson(tips), generated_at: new Date().toISOString() });
 
     return NextResponse.json({ tips });
   } catch (err) {

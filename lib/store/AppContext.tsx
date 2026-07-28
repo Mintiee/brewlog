@@ -110,6 +110,10 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 const SEED_PROFILE: Profile = { id: "me", household_id: "seed", name: "You" };
 
+/** How long settings writes are coalesced for. Short enough that a lost flush is
+ *  near-impossible, long enough to collapse a slider drag into one upsert. */
+const CONFIG_DEBOUNCE_MS = 400;
+
 /** Server-prefetched payload (built in app/page.tsx) used to seed initial state. */
 export interface AppData {
   profile: Profile | null;
@@ -150,6 +154,14 @@ function useAuthed(store: Store<AppState>): boolean {
 
 export function AppProvider({ children, initialData }: { children: ReactNode; initialData?: AppData }) {
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** In-flight settings burst — see setConfig. */
+  const configBurst = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    before: Config | null;
+    latest: Config | null;
+    waiters: ((ok: boolean) => void)[];
+  }>({ timer: null, before: null, latest: null, waiters: [] });
 
   // Created once, via useState's lazy initialiser (the sanctioned way to do run-once
   // work during the first render — a ref would have to be read during render, which
@@ -427,14 +439,49 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       );
     };
 
-    const setConfig = (c: Config) => {
-      const prev = store.get().config;
-      return save(
+    // ---- Settings ----
+    // upsertConfig writes the *entire* config row (grinder, brewers JSON, waters, …),
+    // and setConfig is called on every change event — so dragging a slider used to fire
+    // one full-row upsert per tick. The optimistic state is still applied immediately
+    // (the UI must stay live under the finger); only the write is coalesced.
+    //
+    // The burst lives in a ref rather than closure variables: this closure is created
+    // during render, and reassigning captured `let`s afterwards is the pattern React's
+    // lint rules reject (it breaks under re-render).
+    const cfg = configBurst.current;
+
+    const flushConfig = () => {
+      if (!cfg.timer) return;
+      clearTimeout(cfg.timer);
+      cfg.timer = null;
+
+      const target = cfg.latest!;
+      // Roll back to the value from before the whole burst, not the previous tick —
+      // otherwise a failed write would strand the user mid-drag.
+      const before = cfg.before!;
+      const waiters = cfg.waiters;
+      cfg.before = null; cfg.latest = null; cfg.waiters = [];
+
+      void save(
         "Settings save",
-        () => upsertConfig(c, store.get().profile.household_id),
-        () => { patch({ config: c }); applyConfigToDomain(c); },
-        () => { patch({ config: prev }); applyConfigToDomain(prev); },
-      );
+        () => upsertConfig(target, store.get().profile.household_id),
+        () => { patch({ config: target }); applyConfigToDomain(target); },
+        () => { patch({ config: before }); applyConfigToDomain(before); },
+      ).then((ok) => waiters.forEach((w) => w(ok)));
+    };
+
+    const setConfig = (c: Config): Promise<boolean> => {
+      if (cfg.before === null) cfg.before = store.get().config;
+      cfg.latest = c;
+      // Apply now; persist shortly.
+      patch({ config: c });
+      applyConfigToDomain(c);
+
+      if (cfg.timer) clearTimeout(cfg.timer);
+      return new Promise<boolean>((resolve) => {
+        cfg.waiters.push(resolve);
+        cfg.timer = setTimeout(flushConfig, CONFIG_DEBOUNCE_MS);
+      });
     };
 
     // Single owner of AI-key state: llmEnabled/aiProvider are updated here so no
@@ -502,8 +549,8 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       importCoffees, addRecipe, updateRecipe, deleteRecipe, setAiKey, removeAiKey,
     };
 
-    return { actions, internals: { refresh, syncOutbox, learnNotes, learnVarietals } };
-  }, [store]);
+    return { actions, internals: { refresh, syncOutbox, learnNotes, learnVarietals, flushConfig } };
+  }, [store, configBurst]);
 
   // `authed` flips asynchronously on the unseeded boot path (demo/unauthed -> session
   // resolves), and the effects below must re-run when it does. Subscribing to just
@@ -600,6 +647,20 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     };
   }, [authed, store, internals]);
 
+  // A debounced settings write must not be lost if the app is backgrounded or closed
+  // mid-burst. pagehide is the reliable signal on iOS, where unload never fires.
+  useEffect(() => {
+    const flush = () => internals.flushConfig();
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onHide);
+      flush(); // provider unmounting — don't strand the write either
+    };
+  }, [internals]);
+
   // One-time background sweep: classify unknown notes already on the shelf so
   // existing grey chips heal without an edit. Runs once the data + AI key state
   // have settled (learned notes are loaded before `ready` flips on both paths).
@@ -609,9 +670,21 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
   useEffect(() => {
     if (sweptRef.current || !ready || !authed || !llmEnabled) return;
     sweptRef.current = true;
-    const { coffees } = store.get();
-    void internals.learnNotes(coffees.flatMap((c) => c.notes ?? []));
-    void internals.learnVarietals(coffees.flatMap((c) => c.varietals ?? []));
+
+    // Deferred to idle: this fires unprompted on every boot when an AI key is set, and
+    // classify.ts walks its chunks serially (deliberately — /api/classify-notes is
+    // rate-limited per household with a token bucket, so firing the chunks in parallel
+    // would burn the burst allowance on work nobody is waiting for). Nothing on screen
+    // depends on the result, so it has no business competing with launch.
+    const sweep = () => {
+      const { coffees } = store.get();
+      void internals.learnNotes(coffees.flatMap((c) => c.notes ?? []));
+      void internals.learnVarietals(coffees.flatMap((c) => c.varietals ?? []));
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    if (typeof w.requestIdleCallback === "function") { w.requestIdleCallback(sweep, { timeout: 5000 }); return; }
+    const t = setTimeout(sweep, 2000);
+    return () => clearTimeout(t);
   }, [ready, authed, llmEnabled, store, internals]);
 
   // Drain the outbox on app start, whenever the browser comes back online, and

@@ -150,7 +150,7 @@ export async function fetchProfile(userId: string, client?: DB): Promise<Profile
   // userId is passed in (from the caller's already-resolved session) so this no
   // longer makes its own getUser() round-trip.
   const sb = client ?? createClient();
-  const { data, error } = await sb.from("profiles").select("*").eq("id", userId).single();
+  const { data, error } = await sb.from("profiles").select("id,household_id,name").eq("id", userId).single();
   if (error) return null;
   return { id: data.id, household_id: data.household_id, name: data.name };
 }
@@ -160,7 +160,7 @@ export async function fetchProfile(userId: string, client?: DB): Promise<Profile
  *  who a handed-off brew came from. */
 export async function fetchHouseholdProfiles(client?: DB): Promise<Profile[]> {
   const sb = client ?? createClient();
-  const { data, error } = await sb.from("profiles").select("*");
+  const { data, error } = await sb.from("profiles").select("id,household_id,name");
   if (error) return [];
   return (data ?? []).map((r: { id: string; household_id: string; name: string }) => ({
     id: r.id, household_id: r.household_id, name: r.name,
@@ -173,11 +173,19 @@ export async function updateProfileName(id: string, name: string): Promise<void>
   if (error) throw error;
 }
 
+/** Cap on the globally shared learned-* lexicon tables. Generous versus the real
+ *  vocabulary of tasting notes and varietals, but bounded. */
+const LEARNED_LIMIT = 2000;
+
 // ---- Learned notes ----
 
 export async function fetchLearnedNotes(client?: DB): Promise<Record<string, string>> {
   const sb = client ?? createClient();
-  const { data } = await sb.from("learned_notes").select("note,family");
+  // learned_notes is a globally shared table (see app/api/classify-notes), so it grows
+  // with every household's classifications and was previously read in full on every
+  // boot. The lexicon of distinct tasting notes is small in practice; the cap is a
+  // backstop against one household's bad data becoming everyone's payload.
+  const { data } = await sb.from("learned_notes").select("note,family").limit(LEARNED_LIMIT);
   const map: Record<string, string> = {};
   (data ?? []).forEach((r: { note: string; family: string }) => { map[r.note] = r.family; });
   return map;
@@ -189,7 +197,8 @@ export async function fetchLearnedVarietals(
   client?: DB,
 ): Promise<Record<string, { canonical: string; is_blend_label: boolean }>> {
   const sb = client ?? createClient();
-  const { data } = await sb.from("learned_varietals").select("raw,canonical,is_blend_label");
+  // Globally shared, same reasoning as fetchLearnedNotes.
+  const { data } = await sb.from("learned_varietals").select("raw,canonical,is_blend_label").limit(LEARNED_LIMIT);
   const map: Record<string, { canonical: string; is_blend_label: boolean }> = {};
   (data ?? []).forEach((r: { raw: string; canonical: string; is_blend_label: boolean }) => {
     map[r.raw] = { canonical: r.canonical, is_blend_label: r.is_blend_label };
