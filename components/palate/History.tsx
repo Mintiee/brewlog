@@ -6,7 +6,7 @@ import { Journal } from "./Journal";
 import { BrewDetail } from "./BrewDetail";
 import { StepRate } from "@/components/brew/StepRate";
 import { Sheet } from "@/components/ui/Sheet";
-import { useApp } from "@/lib/store/AppContext";
+import { useAppActions, useAppSelector } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config, Recipe } from "@/lib/types";
 
 interface HistoryProps {
@@ -17,7 +17,8 @@ interface HistoryProps {
 }
 
 export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
-  const { updateBrew, dismissBrew, dismissBrewSession, rateBrew, profile } = useApp();
+  const { updateBrew, dismissBrew, dismissBrewSession, rateBrew } = useAppActions();
+  const profile = useAppSelector((s) => s.profile);
   const [selected, setSelected] = useState<Brew | null>(null);
   const [rating, setRating] = useState<Brew | null>(null);
   const [view, setView] = useState<"journal" | "stats">("journal");

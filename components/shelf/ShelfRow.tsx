@@ -1,5 +1,5 @@
 "use client";
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 import { cupsLeft, freshColor } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
@@ -20,8 +20,12 @@ interface ShelfRowProps {
  * Takes `active` and `status` as props rather than deriving them from `brews`.
  * Each row used to call activeGrams + coffeeStatus itself — five more full scans of
  * every brew per row, duplicating work the parent had already done.
+ *
+ * Memoised: props now change only when this row's own coffee does, so an unrelated
+ * state change (a queued-write counter, an error banner) no longer re-renders the
+ * whole shelf.
  */
-export function ShelfRow({ coffee, active, status: st, onOpen }: ShelfRowProps) {
+export const ShelfRow = memo(function ShelfRow({ coffee, active, status: st, onOpen }: ShelfRowProps) {
   const colorOf = useCoffeeColor();
   const serves = cupsLeft(active);
   const low = serves <= 2;
@@ -59,4 +63,4 @@ export function ShelfRow({ coffee, active, status: st, onOpen }: ShelfRowProps) 
       </div>
     </button>
   );
-}
+});

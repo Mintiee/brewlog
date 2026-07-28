@@ -78,9 +78,18 @@ export async function updateBrew(id: string, patch: Partial<Brew>): Promise<void
   if (error) throw error;
 }
 
-export async function deleteBrew(id: string): Promise<void> {
+/**
+ * Delete one brew or a whole set in a single round-trip.
+ *
+ * Session deletes remove both split-brew rows; issuing one DELETE per id meant a
+ * round-trip per row for what the server can do in one statement.
+ */
+export async function deleteBrew(id: string | string[]): Promise<void> {
   const sb = createClient();
-  const { error } = await sb.from("brews").delete().eq("id", id);
+  const ids = Array.isArray(id) ? id : [id];
+  if (!ids.length) return;
+  const q = sb.from("brews").delete();
+  const { error } = ids.length === 1 ? await q.eq("id", ids[0]) : await q.in("id", ids);
   if (error) throw error;
 }
 

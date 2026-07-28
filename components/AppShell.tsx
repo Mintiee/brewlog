@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { AppProvider, useApp, type AppData } from "@/lib/store/AppContext";
 import { rateBelongsTo } from "@/lib/domain";
 import { Icon, Splash } from "@/components/ui";
@@ -87,7 +87,11 @@ function Shell() {
 
   // Only brews that are mine to rate — ones I logged (and haven't sent away) or
   // that were handed to me. Brews I sent to someone else drop off my badge.
-  const pendingCount = brews.filter((b) => b.pending && !b.guest && rateBelongsTo(b, profile, members)).length;
+  // Memoised: this scans every brew, and Shell re-renders on any state change.
+  const pendingCount = useMemo(
+    () => brews.filter((b) => b.pending && !b.guest && rateBelongsTo(b, profile, members)).length,
+    [brews, profile, members],
+  );
 
   // Tabs are statically imported (instant, flicker-free switching). Render them
   // on the client only via this mounted gate: the data is seeded from server

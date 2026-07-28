@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
 import { cupsLeft, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo, todayMidnightMs } from "@/lib/domain";
 import { EMPTY_STAT, lastBrewByCoffee } from "@/lib/domain/derive";
@@ -44,7 +44,7 @@ interface CoffeeRowProps {
 // onPick navigation into the "how are you brewing" step. Pulled out into its
 // own component (rather than a helper function called from a .map) so the
 // long-press hook has a stable per-row identity.
-function CoffeeRow({ c, st, active, last, i, dim = false, onPick, onBrewAgain }: CoffeeRowProps) {
+const CoffeeRow = memo(function CoffeeRow({ c, st, active, last, i, dim = false, onPick, onBrewAgain }: CoffeeRowProps) {
   const colorOf = useCoffeeColor();
   const servesN = cupsLeft(active);
   const serves = servesN % 1 === 0 ? String(servesN) : servesN.toFixed(1);
@@ -91,7 +91,7 @@ function CoffeeRow({ c, st, active, last, i, dim = false, onPick, onBrewAgain }:
       </div>
     </button>
   );
-}
+});
 
 export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf, onBrewAgain }: StepWhatProps) {
   const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);

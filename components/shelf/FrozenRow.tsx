@@ -1,5 +1,5 @@
 "use client";
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 import { cupsLeft } from "@/lib/domain";
 import { noteColor } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
@@ -17,8 +17,9 @@ interface FrozenRowProps {
   onOpen: (c: Coffee) => void;
 }
 
-/** As with ShelfRow, the weights arrive as props instead of being rescanned per row. */
-export function FrozenRow({ coffee, frozen, status: st, onOpen }: FrozenRowProps) {
+/** As with ShelfRow: weights arrive as props instead of being rescanned per row, and
+ *  the component is memoised so unrelated state changes don't re-render it. */
+export const FrozenRow = memo(function FrozenRow({ coffee, frozen, status: st, onOpen }: FrozenRowProps) {
   const colorOf = useCoffeeColor();
   const serves = cupsLeft(frozen);
   return (
@@ -55,4 +56,4 @@ export function FrozenRow({ coffee, frozen, status: st, onOpen }: FrozenRowProps
       </div>
     </button>
   );
-}
+});
