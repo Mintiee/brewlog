@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, gramsUsed,
   setRestWindow, setPeakWindow, getRestWindow, getPeakWindow, todayMidnightMs,
+  setRoasterWindows,
 } from "@/lib/domain";
 import { buildCoffeeStats } from "@/lib/domain/derive";
 import type { Coffee, Brew } from "@/lib/types";
@@ -179,6 +180,29 @@ describe("buildCoffeeStats — parity with the per-coffee primitives", () => {
     } finally {
       setRestWindow(rest);
       setPeakWindow(peak);
+    }
+  });
+
+  it("applies per-roaster windows within a single pass", () => {
+    const coffees = [
+      makeCoffee({ id: "fast", roaster: "Five Senses Coffee", roasted_at: daysAgoDate(16) }),
+      makeCoffee({ id: "slow", roaster: "Some Other Roasters", roasted_at: daysAgoDate(16) }),
+    ];
+    const byRoaster = { "five senses": { name: "Five Senses", rest_days: 14, peak_days: 42 } };
+    const stats = buildCoffeeStats(coffees, [], todayMidnightMs(), 28, 56, byRoaster);
+
+    // Same roast date, different verdicts — the override only touches its own roaster.
+    expect(stats.get("fast")!.status.state).toBe("peak");
+    expect(stats.get("fast")!.status.label).toBe("26d left");
+    expect(stats.get("slow")!.status.state).toBe("resting");
+    expect(stats.get("slow")!.status.label).toBe("Ready in 12d");
+
+    // And it stays in step with coffeeStatus, which reads the module-level map.
+    try {
+      setRoasterWindows(byRoaster);
+      expectParity(coffees, [], "per-roaster");
+    } finally {
+      setRoasterWindows({});
     }
   });
 

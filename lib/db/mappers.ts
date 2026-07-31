@@ -2,7 +2,7 @@
  * Row mappers — domain types ↔ Supabase rows. Pure functions, no client import,
  * so they're unit-testable without Supabase.
  */
-import type { Coffee, Brew, Config, SavedRecipe } from "@/lib/types";
+import type { Coffee, Brew, Config, SavedRecipe, RoasterWindow } from "@/lib/types";
 import type { Tables, TablesInsert } from "./database.types";
 import { SEED_BREWERS } from "@/lib/domain/seed";
 import { parseVarietals } from "@/lib/varietal";
@@ -161,6 +161,36 @@ export function savedRecipeToRow(rec: Omit<SavedRecipe, "id"> & { id?: string })
   };
 }
 
+/**
+ * Coerce the roaster_rest jsonb blob (migration 020) into the domain shape,
+ * dropping anything malformed rather than letting it reach the freshness maths —
+ * a NaN window would silently turn every coffee from that roaster into "Ready in
+ * NaNd". Same defensive spirit as the grinder coercion below.
+ *
+ * Entries are kept only with a non-empty key and finite positive day counts;
+ * peak is floored at rest + 1 to preserve statusFrom's invariant. `name` falls
+ * back to the key so a hand-edited row still renders in Settings.
+ */
+function parseRoasterRest(raw: Tables<"config">["roaster_rest"]): Record<string, RoasterWindow> {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const out: Record<string, RoasterWindow> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!key.trim()) continue;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+    const v = value as Record<string, unknown>;
+    const rest = Number(v.rest_days);
+    const peak = Number(v.peak_days);
+    if (!Number.isFinite(rest) || rest <= 0) continue;
+    if (!Number.isFinite(peak) || peak <= 0) continue;
+    out[key] = {
+      name: typeof v.name === "string" && v.name.trim() ? v.name : key,
+      rest_days: Math.round(rest),
+      peak_days: Math.max(Math.round(peak), Math.round(rest) + 1),
+    };
+  }
+  return out;
+}
+
 export function rowToConfig(r: Tables<"config">): Config {
   const rawBrewers = Array.isArray(r.brewers) && r.brewers.length ? r.brewers : SEED_BREWERS;
   // Backfill `water` (default water out, mL) for brewers stored before this field existed.
@@ -184,5 +214,6 @@ export function rowToConfig(r: Tables<"config">): Config {
     rest_days: r.rest_days ?? 28,
     peak_days: r.peak_days ?? 56,
     serving_grams: r.serving_grams != null ? Number(r.serving_grams) : 12.5,
+    roaster_rest: parseRoasterRest(r.roaster_rest),
   };
 }

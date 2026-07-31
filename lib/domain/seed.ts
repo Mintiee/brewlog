@@ -151,4 +151,5 @@ export const SEED_CONFIG: Config = {
   rest_days: 28,
   peak_days: 56,
   serving_grams: 12.5,
+  roaster_rest: {},
 };

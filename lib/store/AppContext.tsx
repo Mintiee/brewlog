@@ -13,7 +13,7 @@ import { setLearnedNotes, coffeeColor } from "@/lib/flavour";
 import { classifyUnknownNotes } from "@/lib/flavour/classify";
 import { setLearnedVarietals, type LearnedVarietal } from "@/lib/varietal";
 import { classifyUnknownVarietals } from "@/lib/varietal/classify";
-import { setRestWindow, setServingGrams, setPeakWindow, sessionDeleteIds, shouldUnarchiveAfterDelete } from "@/lib/domain";
+import { setRestWindow, setServingGrams, setPeakWindow, setRoasterWindows, sessionDeleteIds, shouldUnarchiveAfterDelete } from "@/lib/domain";
 import { persist, writesIdle, writesInFlight } from "@/lib/store/persist";
 import { drainOutbox } from "@/lib/store/outbox";
 import { createStore, type Store } from "@/lib/store/createStore";
@@ -24,6 +24,7 @@ function applyConfigToDomain(c: Config) {
   setRestWindow(c.rest_days);
   if (c.peak_days) setPeakWindow(c.peak_days);
   setServingGrams(c.serving_grams);
+  setRoasterWindows(c.roaster_rest);
 }
 
 /** A failed write surfaced to the UI. `retry` re-applies the optimistic

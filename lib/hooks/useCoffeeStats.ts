@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { buildCoffeeStats, type CoffeeStat } from "@/lib/domain/derive";
-import { todayMidnightMs, getRestWindow, getPeakWindow } from "@/lib/domain";
+import { todayMidnightMs, getRestWindow, getPeakWindow, getRoasterWindows } from "@/lib/domain";
 import type { Coffee, Brew } from "@/lib/types";
 
 /**
@@ -16,13 +16,16 @@ import type { Coffee, Brew } from "@/lib/types";
  * The freshness windows are read explicitly instead of being left to buildCoffeeStats'
  * defaults: they live in module-level state in lib/domain (set from config on load),
  * so reading them here is what makes a Settings change actually invalidate the memo.
+ * That includes the per-roaster overrides, which are compared by object identity —
+ * which is why setRoasterWindows replaces the map rather than mutating it.
  */
 export function useCoffeeStats(coffees: Coffee[], brews: Brew[]): Map<string, CoffeeStat> {
   const today = todayMidnightMs();
   const rest = getRestWindow();
   const peak = getPeakWindow();
+  const byRoaster = getRoasterWindows();
   return useMemo(
-    () => buildCoffeeStats(coffees, brews, today, rest, peak),
-    [coffees, brews, today, rest, peak],
+    () => buildCoffeeStats(coffees, brews, today, rest, peak, byRoaster),
+    [coffees, brews, today, rest, peak, byRoaster],
   );
 }

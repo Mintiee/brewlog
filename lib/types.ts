@@ -98,6 +98,15 @@ export interface Grinder {
   grind_step: number;  // increment per tap (e.g. 0.1)
 }
 
+/** A roaster's own freshness window, overriding the household defaults for every
+ *  coffee from that roaster. Stored in Config.roaster_rest keyed by
+ *  roasterKey(name) (lib/domain), so spelling variants share one entry. */
+export interface RoasterWindow {
+  name: string;        // display spelling captured when the override was set
+  rest_days: number;   // this roaster's "ready from" day
+  peak_days: number;   // this roaster's "best until" day
+}
+
 export interface Config {
   grinder: Grinder;
   brewers: Brewer[];
@@ -105,9 +114,12 @@ export interface Config {
   default_water: string;
   taster2: string;
   random_greeting: boolean;
-  rest_days: number;       // global "ready from" day (resting ends, drink window opens)
-  peak_days: number;       // global "best until" day (drink window closes)
+  rest_days: number;       // default "ready from" day (resting ends, drink window opens)
+  peak_days: number;       // default "best until" day (drink window closes)
   serving_grams: number;   // grams of coffee per cup/serve (for "serves left")
+  /** Per-roaster overrides of the two windows above, keyed by roasterKey(name).
+   *  A coffee whose roaster has no entry uses rest_days/peak_days. */
+  roaster_rest: Record<string, RoasterWindow>;
 }
 
 export interface Profile {

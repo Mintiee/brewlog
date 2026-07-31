@@ -139,6 +139,9 @@ export async function upsertConfig(config: Config, householdId: string): Promise
     rest_days: config.rest_days,
     peak_days: config.peak_days,
     serving_grams: config.serving_grams,
+    // Same cast rationale as grinder/brewers: RoasterWindow lacks Json's index
+    // signature but is structurally a plain JSON object.
+    roaster_rest: config.roaster_rest as unknown as import("./database.types").Json,
   };
   const { error } = await sb.from("config").upsert(row);
   if (error) throw error;

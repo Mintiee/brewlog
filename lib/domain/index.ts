@@ -1,12 +1,16 @@
-import type { Coffee, Brew, Brewer, FreshStatus, Recipe } from "@/lib/types";
+import type { Coffee, Brew, Brewer, FreshStatus, Recipe, RoasterWindow } from "@/lib/types";
 
 // ---------- Household-wide settings (set from config on load) ----------
 // Mirrors the lib/flavour setLearnedNotes pattern: a module-level value the
 // pure domain helpers read, so we don't thread config through every call site.
 
-let restWindow = 28;        // days before a coffee is "ready" (global, all coffees)
-let peakWindow = 56;        // days until past-peak (end of drink window)
+let restWindow = 28;        // default days before a coffee is "ready"
+let peakWindow = 56;        // default days until past-peak (end of drink window)
 let servingGrams = 12.5;
+
+// Per-roaster overrides of the two windows above, keyed by roasterKey(). A coffee
+// whose roaster has no entry uses the defaults — see resolveWindows.
+let roasterWindows: Record<string, RoasterWindow> = {};
 
 export function setRestWindow(days: number) {
   if (Number.isFinite(days) && days > 0) restWindow = days;
@@ -17,8 +21,48 @@ export function setPeakWindow(days: number) {
 export function setServingGrams(grams: number) {
   if (Number.isFinite(grams) && grams > 0) servingGrams = grams;
 }
+
+/**
+ * Replace the per-roaster window overrides.
+ *
+ * Re-keys through roasterKey so an entry stored under a raw spelling still matches,
+ * and always assigns a *fresh* object: useCoffeeStats uses the identity returned by
+ * getRoasterWindows as a memo dependency, so mutating in place would leave the shelf
+ * showing stale freshness after a Settings edit.
+ */
+export function setRoasterWindows(map: Record<string, RoasterWindow> | null | undefined) {
+  const next: Record<string, RoasterWindow> = {};
+  for (const [key, w] of Object.entries(map ?? {})) {
+    const k = roasterKey(key);
+    if (!k || !w) continue;
+    if (!Number.isFinite(w.rest_days) || w.rest_days <= 0) continue;
+    if (!Number.isFinite(w.peak_days) || w.peak_days <= 0) continue;
+    next[k] = w;
+  }
+  roasterWindows = next;
+}
+
 export function getRestWindow() { return restWindow; }
 export function getPeakWindow() { return peakWindow; }
+export function getRoasterWindows() { return roasterWindows; }
+
+/**
+ * The freshness windows that apply to one coffee: its roaster's override when there
+ * is one, else the household defaults. Two tiers only — the coffees.rest_days /
+ * peak_days columns are legacy and deliberately unread.
+ *
+ * The fallbacks and the override map are parameters so callers that already hold
+ * them (buildCoffeeStats) stay pure and memoisable.
+ */
+export function resolveWindows(
+  coffee: Coffee,
+  rest: number = restWindow,
+  peak: number = peakWindow,
+  byRoaster: Record<string, RoasterWindow> = roasterWindows,
+): { rest: number; peak: number } {
+  const w = byRoaster[roasterKey(coffee.roaster || "")];
+  return w ? { rest: w.rest_days, peak: w.peak_days } : { rest, peak };
+}
 
 // ---------- Freshness ----------
 
@@ -114,6 +158,9 @@ export function todayMidnightMs(): number {
  * Pure core of `coffeeStatus`: takes the already-computed bean weights, the clock,
  * and the freshness windows, so it scans nothing and reads no globals.
  *
+ * The windows are per-coffee — callers resolve them with `resolveWindows` first, so
+ * the roaster override lands here as plain numbers and this stays pure.
+ *
  * Split out so lib/domain/derive.ts can compute a whole shelf's statuses from one
  * pass over `brews` without duplicating this logic. Both callers share this
  * function, so they cannot drift — `coffeeStatus` below is now a thin wrapper.
@@ -156,11 +203,14 @@ export function statusFrom(
  * for a whole list — and never call it inside a sort comparator.
  */
 export function coffeeStatus(coffee: Coffee, brews: Brew[] = []): FreshStatus {
+  const w = resolveWindows(coffee);
   return statusFrom(
     coffee,
     frozenGramsOf(coffee, brews),
     activeGrams(coffee, brews),
     todayMidnightMs(),
+    w.rest,
+    w.peak,
   );
 }
 

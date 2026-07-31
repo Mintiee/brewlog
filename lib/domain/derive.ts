@@ -1,5 +1,8 @@
-import type { Coffee, Brew, FreshStatus } from "@/lib/types";
-import { statusFrom, todayMidnightMs, getRestWindow, getPeakWindow } from "@/lib/domain";
+import type { Coffee, Brew, FreshStatus, RoasterWindow } from "@/lib/types";
+import {
+  statusFrom, todayMidnightMs, resolveWindows,
+  getRestWindow, getPeakWindow, getRoasterWindows,
+} from "@/lib/domain";
 
 /**
  * Per-coffee bean weights and freshness, computed once for a whole list.
@@ -97,6 +100,10 @@ export function lastBrewByCoffee(brews: Brew[]): Map<string, Brew> {
  * function of its inputs and therefore safely memoisable — callers should use
  * useCoffeeStats (lib/hooks/useCoffeeStats.ts), which re-derives only when the data
  * changes or the local day rolls over.
+ *
+ * `rest`/`peak` are the household defaults; `byRoaster` overrides them per roaster
+ * (config.roaster_rest). Resolution is one map lookup per coffee, so the per-roaster
+ * feature costs nothing on top of the single pass.
  */
 export function buildCoffeeStats(
   coffees: Coffee[],
@@ -104,6 +111,7 @@ export function buildCoffeeStats(
   todayMs: number = todayMidnightMs(),
   rest: number = getRestWindow(),
   peak: number = getPeakWindow(),
+  byRoaster: Record<string, RoasterWindow> = getRoasterWindows(),
 ): Map<string, CoffeeStat> {
   const used = gramsUsedByCoffee(brews);
   const stats = new Map<string, CoffeeStat>();
@@ -114,12 +122,13 @@ export function buildCoffeeStats(
     const remaining = Math.max(0, (c.grams || 250) - u);
     const frozen = Math.max(0, Math.min(c.frozen_grams || 0, remaining));
     const active = Math.max(0, remaining - frozen);
+    const w = resolveWindows(c, rest, peak, byRoaster);
     stats.set(c.id, {
       used: u,
       remaining,
       frozen,
       active,
-      status: statusFrom(c, frozen, active, todayMs, rest, peak),
+      status: statusFrom(c, frozen, active, todayMs, w.rest, w.peak),
     });
   }
   return stats;

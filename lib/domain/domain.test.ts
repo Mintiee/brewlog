@@ -6,6 +6,7 @@ import {
   roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
   effectiveDaysAgo, restDaysAt, restForBrew,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
+  setRoasterWindows, getRoasterWindows, resolveWindows,
   sessionDeleteIds, shouldUnarchiveAfterDelete, shouldUnarchiveAfterEdit,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
@@ -332,6 +333,91 @@ describe("global settings (setRestWindow / setServingGrams)", () => {
     expect(cupsLeft(100)).toBeCloseTo(5);
     setServingGrams(12.5); // restore
     expect(cupsLeft(125)).toBeCloseTo(10);
+  });
+});
+
+describe("per-roaster rest windows (setRoasterWindows / resolveWindows)", () => {
+  // Every test restores the empty map so the rest of the suite keeps the defaults.
+  const clear = () => setRoasterWindows({});
+
+  it("falls back to the household windows when the roaster has no entry", () => {
+    clear();
+    const c = makeCoffee({ roaster: "Five Senses" });
+    expect(resolveWindows(c)).toEqual({ rest: 28, peak: 56 });
+  });
+
+  it("returns the roaster's own window when there is one", () => {
+    setRoasterWindows({ "five senses": { name: "Five Senses", rest_days: 14, peak_days: 42 } });
+    expect(resolveWindows(makeCoffee({ roaster: "Five Senses" }))).toEqual({ rest: 14, peak: 42 });
+    // A different roaster is untouched.
+    expect(resolveWindows(makeCoffee({ roaster: "ONA" }))).toEqual({ rest: 28, peak: 56 });
+    clear();
+  });
+
+  it("matches through roasterKey — case, whitespace and trailing suffixes", () => {
+    setRoasterWindows({ "Five  Senses Coffee": { name: "Five Senses", rest_days: 14, peak_days: 42 } });
+    for (const roaster of ["five senses", "FIVE SENSES", "Five Senses Roasters", "Five  Senses"]) {
+      expect(resolveWindows(makeCoffee({ roaster })), roaster).toEqual({ rest: 14, peak: 42 });
+    }
+    clear();
+  });
+
+  it("drops malformed entries rather than letting NaN reach the maths", () => {
+    setRoasterWindows({
+      "": { name: "blank key", rest_days: 14, peak_days: 42 },
+      nan: { name: "NaN", rest_days: NaN, peak_days: 42 },
+      zero: { name: "Zero", rest_days: 0, peak_days: 42 },
+      nopeak: { name: "No peak", rest_days: 14, peak_days: -1 },
+      good: { name: "Good", rest_days: 14, peak_days: 42 },
+    });
+    expect(Object.keys(getRoasterWindows())).toEqual(["good"]);
+    expect(resolveWindows(makeCoffee({ roaster: "NaN" })).rest).toBe(28);
+    clear();
+  });
+
+  it("replaces the map by identity, so memo consumers invalidate", () => {
+    const before = getRoasterWindows();
+    setRoasterWindows({ ona: { name: "ONA", rest_days: 21, peak_days: 49 } });
+    expect(getRoasterWindows()).not.toBe(before);
+    clear();
+  });
+
+  it("treats null/undefined as no overrides", () => {
+    setRoasterWindows({ ona: { name: "ONA", rest_days: 21, peak_days: 49 } });
+    setRoasterWindows(null);
+    expect(getRoasterWindows()).toEqual({});
+  });
+
+  it("coffeeStatus uses the roaster's window: same age, different verdicts", () => {
+    setRoasterWindows({ "five senses": { name: "Five Senses", rest_days: 14, peak_days: 42 } });
+    const overridden = makeCoffee({ roaster: "Five Senses Coffee", roasted_at: daysAgoDate(16) });
+    const plain = makeCoffee({ roaster: "Some Other Roasters", roasted_at: daysAgoDate(16) });
+
+    const a = coffeeStatus(overridden, []);
+    expect(a.state).toBe("peak");
+    expect(a.ready).toBe(true);
+    expect(a.label).toBe("26d left");    // 42 - 16
+
+    const b = coffeeStatus(plain, []);
+    expect(b.state).toBe("resting");
+    expect(b.label).toBe("Ready in 12d"); // 28 - 16
+    clear();
+  });
+
+  it("the frozen branch counts down the roaster's rest", () => {
+    setRoasterWindows({ "five senses": { name: "Five Senses", rest_days: 14, peak_days: 42 } });
+    // Roasted 20d ago, frozen at day 10 and still in the freezer → paused at day 10,
+    // so 4d short of this roaster's 14d rest (12d short of the 28d default).
+    const c = makeCoffee({
+      roaster: "Five Senses", roasted_at: daysAgoDate(20), frozen_at: daysAgoDate(10),
+      grams: 100, frozen_grams: 100,
+    });
+    const st = coffeeStatus(c, []);
+    expect(st.state).toBe("frozen");
+    expect(st.day).toBe(10);
+    expect(st.restLeft).toBe(4);
+    expect(st.label).toBe("Ready in 4d");
+    clear();
   });
 });
 

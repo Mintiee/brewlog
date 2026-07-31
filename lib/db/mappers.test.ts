@@ -249,4 +249,44 @@ describe("rowToConfig — backfill defaults for rows stored before newer fields 
     expect(rowToConfig(asConfigRow({ random_greeting: false })).random_greeting).toBe(false);
     expect(rowToConfig(asConfigRow({ random_greeting: undefined as unknown as boolean })).random_greeting).toBe(true);
   });
+
+  // roaster_rest (migration 020) — a malformed window would otherwise feed NaN into
+  // the freshness maths for every coffee from that roaster.
+  const roasterRest = (v: unknown) =>
+    rowToConfig(asConfigRow({ roaster_rest: v as Tables<"config">["roaster_rest"] })).roaster_rest;
+
+  it("passes through well-formed roaster windows", () => {
+    const stored = { "five senses": { name: "Five Senses", rest_days: 14, peak_days: 42 } };
+    expect(roasterRest(stored)).toEqual(stored);
+  });
+
+  it("defaults roaster_rest to {} when null, absent or not an object", () => {
+    expect(roasterRest(null)).toEqual({});
+    expect(roasterRest(undefined)).toEqual({});
+    expect(roasterRest([])).toEqual({});
+    expect(roasterRest("nope")).toEqual({});
+  });
+
+  it("drops malformed roaster windows and keeps the good ones", () => {
+    const out = roasterRest({
+      "": { name: "Blank key", rest_days: 14, peak_days: 42 },
+      nullish: null,
+      arr: [14, 42],
+      norest: { name: "No rest", peak_days: 42 },
+      zero: { name: "Zero", rest_days: 0, peak_days: 42 },
+      text: { name: "Text", rest_days: "soon", peak_days: 42 },
+      good: { name: "Good", rest_days: 14, peak_days: 42 },
+    });
+    expect(Object.keys(out)).toEqual(["good"]);
+  });
+
+  it("rounds day counts, coerces numeric strings, and names an unnamed entry by its key", () => {
+    const out = roasterRest({ ona: { rest_days: "21", peak_days: 48.6 } });
+    expect(out.ona).toEqual({ name: "ona", rest_days: 21, peak_days: 49 });
+  });
+
+  it("floors peak at rest + 1 so the drink window can never invert", () => {
+    const out = roasterRest({ ona: { name: "ONA", rest_days: 30, peak_days: 10 } });
+    expect(out.ona.peak_days).toBe(31);
+  });
 });
