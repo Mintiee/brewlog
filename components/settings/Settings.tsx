@@ -1,17 +1,20 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon, IconButton, Stepper } from "@/components/ui";
 import { SSection, SText, SRow, SToggle } from "./controls";
 import { AddBrewerSheet } from "./AddBrewerSheet";
 import { ImportSheet } from "@/components/import/ImportSheet";
 import { detectProvider } from "@/lib/llm/detect";
-import type { Config, Profile, SavedRecipe } from "@/lib/types";
+import { distinctRoasters, roasterKey } from "@/lib/domain";
+import type { Coffee, Config, Profile, RoasterWindow, SavedRecipe } from "@/lib/types";
 
 interface SettingsProps {
   config: Config;
   onConfig: (c: Config) => void;
   onClose: () => void;
   profile: Profile;
+  /** The shelf — only used to offer its roasters as per-roaster rest windows. */
+  coffees: Coffee[];
   recipes: SavedRecipe[];
   onUpdateRecipe: (r: SavedRecipe) => void;
   onDeleteRecipe: (id: string) => void;
@@ -25,6 +28,7 @@ export function Settings({
   onConfig,
   onClose,
   profile,
+  coffees,
   recipes,
   onUpdateRecipe,
   onDeleteRecipe,
@@ -44,6 +48,51 @@ export function Settings({
   const [newWater, setNewWater] = useState("");
   const [aiKey, setAiKey] = useState("");
   const [aiSaving, setAiSaving] = useState(false);
+
+  // ---- Per-roaster rest windows ----
+  // Keyed by roasterKey so "Five Senses" and "Five Senses Coffee" share one entry;
+  // the stored `name` is what we display, so a window outlives the last bag.
+  const roasterRest = config.roaster_rest;
+  const roasterRows = useMemo(
+    () => Object.entries(roasterRest).sort((a, b) => a[1].name.localeCompare(b[1].name)),
+    [roasterRest],
+  );
+  // Roasters on the shelf that don't have a window yet. distinctRoasters builds a
+  // nested Map over every coffee, so it stays memoised (see docs/perf-baseline.md).
+  const addableRoasters = useMemo(
+    () =>
+      distinctRoasters(coffees)
+        .filter((r) => !(roasterKey(r) in roasterRest))
+        .sort((a, b) => a.localeCompare(b)),
+    [coffees, roasterRest],
+  );
+
+  const patchRoaster = (key: string, patch: Partial<RoasterWindow>) =>
+    upd({ roaster_rest: { ...roasterRest, [key]: { ...roasterRest[key], ...patch } } });
+
+  // Moving "Ready from" carries "Best until" with it, keeping the drink window the
+  // same length — dropping rest from 28 to 14 on a 28-day window gives 14 → 42,
+  // not 14 → 56. Editing "Best until" afterwards sets it outright.
+  const setRoasterRestDays = (key: string, rest: number) => {
+    const cur = roasterRest[key];
+    const span = Math.max(1, cur.peak_days - cur.rest_days);
+    patchRoaster(key, { rest_days: rest, peak_days: Math.min(365, rest + span) });
+  };
+
+  const addRoasterWindow = (name: string) =>
+    upd({
+      roaster_rest: {
+        ...roasterRest,
+        // Seeded from the defaults, so the row starts as a no-op you then adjust.
+        [roasterKey(name)]: { name, rest_days: config.rest_days, peak_days: config.peak_days },
+      },
+    });
+
+  const removeRoasterWindow = (key: string) => {
+    const next = { ...roasterRest };
+    delete next[key];
+    upd({ roaster_rest: next });
+  };
 
   return (
     <div className="screen">
@@ -229,7 +278,51 @@ export function Settings({
           </div>
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
             &ldquo;Ready from&rdquo; is when a coffee finishes resting; &ldquo;Best until&rdquo; is when the
-            drink window closes. Applies to every coffee.
+            drink window closes. Used for any roaster without its own window below.
+          </div>
+
+          {/* Per-roaster overrides */}
+          <div className="label" style={{ marginTop: 16, marginBottom: 9 }}>By roaster</div>
+          {roasterRows.map(([key, w]) => (
+            <div key={key} className="card" style={{ padding: "11px 16px 3px", marginBottom: 9 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <span
+                  style={{ flex: 1, fontSize: 15, fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                >
+                  {w.name}
+                </span>
+                <button
+                  onClick={() => removeRoasterWindow(key)}
+                  aria-label={`Remove ${w.name} rest window`}
+                  style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", display: "flex", flexShrink: 0, padding: 13, margin: -13 }}
+                >
+                  <Icon name="close" size={18} stroke={1.9} />
+                </button>
+              </div>
+              <Stepper dense icon="timer" label="Ready from" value={w.rest_days} unit="days"
+                step={1} min={1} max={364}
+                onChange={(v) => setRoasterRestDays(key, Math.round(v))} />
+              <div style={{ height: 1, background: "var(--line)" }} />
+              <Stepper dense icon="timer" label="Best until" value={w.peak_days} unit="days"
+                step={1} min={w.rest_days + 1} max={365}
+                onChange={(v) => patchRoaster(key, { peak_days: Math.round(v) })} />
+            </div>
+          ))}
+
+          {addableRoasters.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: roasterRows.length ? 4 : 0 }}>
+              {addableRoasters.map((r) => (
+                <button key={r} type="button" className="chip" onClick={() => addRoasterWindow(r)}>
+                  + {r}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 7, lineHeight: 1.5 }}>
+            {roasterRows.length === 0 && addableRoasters.length === 0
+              ? "Add a coffee and its roaster will appear here, ready for its own rest window."
+              : "A roaster's window applies to every coffee from them, past and future. Moving “Ready from” keeps the window the same length."}
           </div>
         </SSection>
 

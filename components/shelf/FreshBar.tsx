@@ -1,5 +1,5 @@
 "use client";
-import { coffeeStatus, freshColor, getRestWindow, getPeakWindow } from "@/lib/domain";
+import { coffeeStatus, freshColor, resolveWindows } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
 import type { Coffee, Brew } from "@/lib/types";
 
@@ -18,8 +18,11 @@ export function FreshBar({ coffee, brews }: FreshBarProps) {
       </div>
     );
   }
-  const rest = getRestWindow();
-  const total = Math.max(getPeakWindow(), rest + 1);
+  // This coffee's own windows (its roaster's override, else the household default),
+  // so the bar's rest zone and the "peak wk" caption match where the marker sits.
+  const w = resolveWindows(coffee);
+  const rest = w.rest;
+  const total = Math.max(w.peak, rest + 1);
   const restPct = (rest / total) * 100;
   const nowPct = Math.min(100, (st.day / total) * 100);
   return (

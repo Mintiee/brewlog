@@ -194,6 +194,7 @@ function Shell() {
           onConfig={setConfig}
           onClose={closeSettings}
           profile={profile}
+          coffees={coffees}
           recipes={recipes}
           onUpdateRecipe={updateRecipe}
           onDeleteRecipe={deleteRecipe}
