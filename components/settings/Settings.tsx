@@ -410,7 +410,9 @@ export function Settings({
         restDays={config.rest_days}
         peakDays={config.peak_days}
         windows={config.roaster_rest}
+        hidden={config.hidden_roasters}
         onChange={(roaster_rest) => upd({ roaster_rest })}
+        onHiddenChange={(hidden_roasters) => upd({ hidden_roasters })}
         onClose={() => setEditingRoasters(false)}
       />
       <ImportSheet open={importing} onClose={() => setImporting(false)} />

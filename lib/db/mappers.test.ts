@@ -294,4 +294,19 @@ describe("rowToConfig — backfill defaults for rows stored before newer fields 
     const out = roasterRest({ ona: { name: "ONA", rest_days: 30, peak_days: 10 } });
     expect(out.ona.peak_days).toBe(31);
   });
+
+  // hidden_roasters (migration 021) — must be keyed like roaster_rest, since the
+  // editor compares the two.
+  const hiddenRoasters = (v: unknown) =>
+    rowToConfig(asConfigRow({ hidden_roasters: v as string[] })).hidden_roasters;
+
+  it("normalises, dedupes and drops empties in hidden_roasters", () => {
+    expect(hiddenRoasters(["Five Senses Coffee", "five senses", "  ", "ONA Roasters"]))
+      .toEqual(["five senses", "ona"]);
+  });
+
+  it("defaults hidden_roasters to [] when absent", () => {
+    expect(hiddenRoasters(null)).toEqual([]);
+    expect(hiddenRoasters(undefined)).toEqual([]);
+  });
 });

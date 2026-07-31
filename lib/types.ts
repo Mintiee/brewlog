@@ -120,6 +120,9 @@ export interface Config {
   /** Per-roaster overrides of the two windows above, keyed by roasterKey(name).
    *  A coffee whose roaster has no entry uses rest_days/peak_days. */
   roaster_rest: Record<string, RoasterWindow>;
+  /** roasterKey values the user has hidden from the rest-window editor. Purely
+   *  presentational — a hidden roaster's window still applies to its coffees. */
+  hidden_roasters: string[];
 }
 
 export interface Profile {

@@ -11,7 +11,10 @@ interface RoasterRestSheetProps {
   restDays: number;
   peakDays: number;
   windows: Record<string, RoasterWindow>;
+  /** roasterKeys the user has hidden. Presentational only — windows still apply. */
+  hidden: string[];
   onChange: (windows: Record<string, RoasterWindow>) => void;
+  onHiddenChange: (hidden: string[]) => void;
   onClose: () => void;
 }
 
@@ -25,42 +28,57 @@ interface Row {
  * One row per roaster, expanding to steppers on tap.
  *
  * A flat list of always-open stepper cards got unreadable at more than two or three
- * roasters, and offering every roaster ever bought as a chip made the list grow
- * forever. So: roasters currently on the shelf (plus any that carry an override, so
- * a window is never hidden from you) are listed; the rest sit behind a show/hide.
+ * roasters, so rows collapse, and the list is split three ways:
+ *
+ *   - roasters on the shelf (plus any carrying an override, so a window that is
+ *     silently applying is never out of sight)
+ *   - roasters whose bags are all finished — collapsed, an automatic split
+ *   - roasters the user hid by hand — collapsed, and this one wins over the other
+ *     two, because an explicit choice should beat a derived one
  *
  * A row with no override shows the household default and only becomes an override
  * once you actually move a stepper — so opening a row to look costs nothing.
  */
 export function RoasterRestSheet({
-  open, coffees, restDays, peakDays, windows, onChange, onClose,
+  open, coffees, restDays, peakDays, windows, hidden, onChange, onHiddenChange, onClose,
 }: RoasterRestSheetProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
-  const { shelf, past } = useMemo(() => {
+  const { shelf, past, hiddenRows } = useMemo(() => {
     const byName = (a: Row, b: Row) => a.name.localeCompare(b.name);
+    const hiddenKeys = new Set(hidden);
     const onShelfKeys = new Set(
       distinctRoasters(coffees.filter((c) => !c.archived)).map(roasterKey),
     );
     const seen = new Set<string>();
     const shelf: Row[] = [];
     const past: Row[] = [];
+    const hiddenRows: Row[] = [];
+
+    const place = (row: Row) => {
+      if (hiddenKeys.has(row.key)) hiddenRows.push(row);
+      else if (onShelfKeys.has(row.key) || row.window) shelf.push(row);
+      else past.push(row);
+    };
 
     for (const name of distinctRoasters(coffees)) {
       const key = roasterKey(name);
       seen.add(key);
-      const row = { key, name, window: windows[key] ?? null };
-      // Overridden roasters stay visible even once their last bag is finished —
-      // otherwise a window you set could silently apply from a hidden group.
-      (onShelfKeys.has(key) || row.window ? shelf : past).push(row);
+      place({ key, name, window: windows[key] ?? null });
     }
     // A window whose roaster has left the store entirely still needs a row to clear it.
     for (const [key, w] of Object.entries(windows)) {
-      if (!seen.has(key)) shelf.push({ key, name: w.name, window: w });
+      if (!seen.has(key)) { seen.add(key); place({ key, name: w.name, window: w }); }
     }
-    return { shelf: shelf.sort(byName), past: past.sort(byName) };
-  }, [coffees, windows]);
+    // Likewise a hide for a roaster with no coffees and no window — otherwise it
+    // would be unreachable and could never be undone.
+    for (const key of hidden) {
+      if (!seen.has(key)) hiddenRows.push({ key, name: key, window: null });
+    }
+    return { shelf: shelf.sort(byName), past: past.sort(byName), hiddenRows: hiddenRows.sort(byName) };
+  }, [coffees, windows, hidden]);
 
   const setWindow = (key: string, name: string, patch: Partial<RoasterWindow>) => {
     const cur = windows[key] ?? { name, rest_days: restDays, peak_days: peakDays };
@@ -81,8 +99,27 @@ export function RoasterRestSheet({
     onChange(next);
   };
 
+  const setHidden = (key: string, hide: boolean) => {
+    onHiddenChange(hide ? [...hidden, key] : hidden.filter((k) => k !== key));
+    setExpanded(null);   // the row is about to move groups; don't leave it open elsewhere
+  };
+
+  const footerBtn = (label: string, onClick: () => void, ariaLabel: string) => (
+    <button
+      onClick={onClick}
+      aria-label={ariaLabel}
+      style={{
+        background: "none", border: "none", padding: "10px 0 12px", cursor: "pointer",
+        color: "var(--ink-faint)", fontSize: 11.5, fontWeight: 600, fontFamily: "var(--font-ui)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
   const renderRow = (row: Row) => {
     const isOpen = expanded === row.key;
+    const isHidden = hidden.includes(row.key);
     const w = row.window ?? { rest_days: restDays, peak_days: peakDays };
     const overridden = row.window != null;
     return (
@@ -118,21 +155,47 @@ export function RoasterRestSheet({
             <Stepper dense icon="timer" label="Best until" value={w.peak_days} unit="days"
               step={1} min={w.rest_days + 1} max={365}
               onChange={(v) => setWindow(row.key, row.name, { peak_days: Math.round(v) })} />
-            {overridden && (
-              <button
-                onClick={() => clear(row.key)}
-                aria-label={`Use the default window for ${row.name}`}
-                style={{
-                  background: "none", border: "none", padding: "10px 0 12px", cursor: "pointer",
-                  color: "var(--ink-faint)", fontSize: 11.5, fontWeight: 600, fontFamily: "var(--font-ui)",
-                }}
-              >
-                Use default ({restDays}–{peakDays}d)
-              </button>
-            )}
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+              {overridden && footerBtn(
+                `Use default (${restDays}–${peakDays}d)`,
+                () => clear(row.key),
+                `Use the default window for ${row.name}`,
+              )}
+              {footerBtn(
+                isHidden ? "Unhide" : "Hide",
+                () => setHidden(row.key, !isHidden),
+                `${isHidden ? "Unhide" : "Hide"} ${row.name}`,
+              )}
+            </div>
           </div>
         )}
       </div>
+    );
+  };
+
+  const group = (rows: Row[], shown: boolean, toggle: () => void, label: string) => {
+    if (rows.length === 0) return null;
+    // Say when a collapsed group holds live windows, so nothing applies out of sight.
+    const withWindows = rows.filter((r) => r.window).length;
+    return (
+      <>
+        <button
+          onClick={toggle}
+          aria-expanded={shown}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, margin: "6px 0 10px", padding: "6px 0",
+            background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)",
+            fontFamily: "var(--font-ui)", fontSize: 11.5, fontWeight: 600, textAlign: "left",
+          }}
+        >
+          <Icon name={shown ? "chevDown" : "chev"} size={14} stroke={1.8} />
+          {shown ? "Hide" : `Show ${rows.length}`} · {label}
+          {!shown && withWindows > 0 && (
+            <span style={{ color: "var(--accent)" }}>· {withWindows} with a window</span>
+          )}
+        </button>
+        {shown && rows.map(renderRow)}
+      </>
     );
   };
 
@@ -146,7 +209,7 @@ export function RoasterRestSheet({
           &ldquo;Ready from&rdquo; keeps the window the same length.
         </div>
 
-        {shelf.length === 0 && past.length === 0 ? (
+        {shelf.length === 0 && past.length === 0 && hiddenRows.length === 0 ? (
           <div style={{ fontSize: 11.5, color: "var(--ink-faint)", lineHeight: 1.5 }}>
             Add a coffee and its roaster will appear here.
           </div>
@@ -154,23 +217,8 @@ export function RoasterRestSheet({
           shelf.map(renderRow)
         )}
 
-        {past.length > 0 && (
-          <>
-            <button
-              onClick={() => setShowPast((v) => !v)}
-              aria-expanded={showPast}
-              style={{
-                display: "flex", alignItems: "center", gap: 6, margin: "6px 0 10px", padding: "6px 0",
-                background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)",
-                fontFamily: "var(--font-ui)", fontSize: 11.5, fontWeight: 600,
-              }}
-            >
-              <Icon name={showPast ? "chevDown" : "chev"} size={14} stroke={1.8} />
-              {showPast ? "Hide" : `Show ${past.length} more`} · not on the shelf
-            </button>
-            {showPast && past.map(renderRow)}
-          </>
-        )}
+        {group(past, showPast, () => setShowPast((v) => !v), "not on the shelf")}
+        {group(hiddenRows, showHidden, () => setShowHidden((v) => !v), "hidden")}
       </div>
     </Sheet>
   );

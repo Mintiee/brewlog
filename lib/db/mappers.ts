@@ -223,5 +223,8 @@ export function rowToConfig(r: Tables<"config">): Config {
     peak_days: r.peak_days ?? 56,
     serving_grams: r.serving_grams != null ? Number(r.serving_grams) : 12.5,
     roaster_rest: parseRoasterRest(r.roaster_rest),
+    // Normalised and deduped through roasterKey for the same reason as
+    // roaster_rest's keys — the editor compares the two by key.
+    hidden_roasters: [...new Set((r.hidden_roasters ?? []).map(roasterKey).filter(Boolean))],
   };
 }

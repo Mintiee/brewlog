@@ -159,6 +159,7 @@ export interface Database {
           serving_grams: number;       // migration 003
           peak_days: number;           // migration 005
           roaster_rest: Json;          // migration 020
+          hidden_roasters: string[];   // migration 021
         };
         Insert: {
           household_id: string;
@@ -172,6 +173,7 @@ export interface Database {
           serving_grams?: number;
           peak_days?: number;
           roaster_rest?: Json;
+          hidden_roasters?: string[];
         };
         Update: Partial<Database["public"]["Tables"]["config"]["Insert"]>;
         Relationships: [];
