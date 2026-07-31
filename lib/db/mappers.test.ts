@@ -280,6 +280,11 @@ describe("rowToConfig — backfill defaults for rows stored before newer fields 
     expect(Object.keys(out)).toEqual(["good"]);
   });
 
+  it("normalises keys through roasterKey so Settings and the domain agree", () => {
+    const out = roasterRest({ "Five Senses Coffee": { name: "Five Senses", rest_days: 14, peak_days: 42 } });
+    expect(Object.keys(out)).toEqual(["five senses"]);
+  });
+
   it("rounds day counts, coerces numeric strings, and names an unnamed entry by its key", () => {
     const out = roasterRest({ ona: { rest_days: "21", peak_days: 48.6 } });
     expect(out.ona).toEqual({ name: "ona", rest_days: 21, peak_days: 49 });

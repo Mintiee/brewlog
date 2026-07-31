@@ -5,6 +5,7 @@
 import type { Coffee, Brew, Config, SavedRecipe, RoasterWindow } from "@/lib/types";
 import type { Tables, TablesInsert } from "./database.types";
 import { SEED_BREWERS } from "@/lib/domain/seed";
+import { roasterKey } from "@/lib/domain";
 import { parseVarietals } from "@/lib/varietal";
 
 export function rowToCoffee(r: Tables<"coffees">): Coffee {
@@ -170,12 +171,19 @@ export function savedRecipeToRow(rec: Omit<SavedRecipe, "id"> & { id?: string })
  * Entries are kept only with a non-empty key and finite positive day counts;
  * peak is floored at rest + 1 to preserve statusFrom's invariant. `name` falls
  * back to the key so a hand-edited row still renders in Settings.
+ *
+ * Keys are normalised through roasterKey here, which is what lets the Settings
+ * editor and the domain lookup agree on whether a roaster already has a window —
+ * a raw spelling stored by hand would otherwise match in resolveWindows while
+ * still offering itself as an unset roaster in Settings. Two keys that normalise
+ * together collapse to the last one seen.
  */
 function parseRoasterRest(raw: Tables<"config">["roaster_rest"]): Record<string, RoasterWindow> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
   const out: Record<string, RoasterWindow> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (!key.trim()) continue;
+  for (const [rawKey, value] of Object.entries(raw)) {
+    const key = roasterKey(rawKey);
+    if (!key) continue;
     if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
     const v = value as Record<string, unknown>;
     const rest = Number(v.rest_days);
@@ -183,7 +191,7 @@ function parseRoasterRest(raw: Tables<"config">["roaster_rest"]): Record<string,
     if (!Number.isFinite(rest) || rest <= 0) continue;
     if (!Number.isFinite(peak) || peak <= 0) continue;
     out[key] = {
-      name: typeof v.name === "string" && v.name.trim() ? v.name : key,
+      name: typeof v.name === "string" && v.name.trim() ? v.name : rawKey,
       rest_days: Math.round(rest),
       peak_days: Math.max(Math.round(peak), Math.round(rest) + 1),
     };
