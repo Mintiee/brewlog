@@ -8,6 +8,7 @@ import {
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
   setRoasterWindows, getRoasterWindows, resolveWindows,
   sessionDeleteIds, shouldUnarchiveAfterDelete, shouldUnarchiveAfterEdit,
+  recipeRatio, brewEditPatch, type BrewEditForm,
 } from "@/lib/domain";
 import type { Coffee, Brew, Brewer } from "@/lib/types";
 
@@ -624,5 +625,149 @@ describe("shouldUnarchiveAfterEdit — auto-restore a finished bag when weight i
   it("restores when the new remaining exceeds the frozen portion", () => {
     const coffee = makeCoffee({ archived: true, grams: 200, frozen_grams: 25 });
     expect(shouldUnarchiveAfterEdit(coffee, 40)).toBe(true);
+  });
+});
+
+describe("recipeRatio", () => {
+  it("divides total water by dose", () => {
+    expect(recipeRatio({ dose: 15, water: 240, bypass: 0 })).toBeCloseTo(16);
+  });
+
+  it("counts post-brew bypass toward the total", () => {
+    expect(recipeRatio({ dose: 20, water: 200, bypass: 100 })).toBeCloseTo(15);
+  });
+
+  it("returns 0 rather than Infinity for a zero dose", () => {
+    expect(recipeRatio({ dose: 0, water: 240, bypass: 0 })).toBe(0);
+  });
+});
+
+describe("brewEditPatch", () => {
+  const NOW = new Date(2026, 7, 5, 9, 0, 0).getTime();
+  const START_ISO = "2026-08-01";
+  const START_MS = new Date(2026, 7, 1).getTime();
+  const RATED_MS = START_MS + 3_600_000;   // rated an hour after the pour
+
+  function makeForm(overrides: Partial<BrewEditForm> = {}): BrewEditForm {
+    return {
+      date: START_ISO,
+      dose: 15, water: 240, bypass: 0, temp: 96, grind: 22,
+      water_type: "Filtered",
+      stars: 4, stars2: 0, taster2: "",
+      acidity: 3, sweetness: 3, body: 3, clarity: 4, note: "",
+      ...overrides,
+    };
+  }
+
+  function makeTarget(overrides: Partial<Brew> = {}): Brew {
+    return makeBrew({ started_at: String(START_MS), rated_at: String(RATED_MS), ...overrides });
+  }
+
+  const run = (target: Brew, form: BrewEditForm, siblings?: Brew[]) =>
+    brewEditPatch({ target, siblings: siblings ?? [target], form, meName: "Min", nowMs: NOW });
+
+  it("recomputes ratio from the edited dose rather than echoing the stored one", () => {
+    // The stored ratio (16) is deliberately inconsistent with dose 20 — the old
+    // edit sheet carried it through untouched.
+    const [{ patch }] = run(makeTarget({ ratio: 16 }), makeForm({ dose: 20, water: 240 }));
+    expect(patch.ratio).toBeCloseTo(12);
+  });
+
+  it("includes bypass in both the patch and the ratio", () => {
+    const [{ patch }] = run(makeTarget(), makeForm({ dose: 20, water: 200, bypass: 100 }));
+    expect(patch.bypass).toBe(100);
+    expect(patch.ratio).toBeCloseTo(15);
+  });
+
+  it("writes the water type exactly as drafted, with no household default", () => {
+    // Regression: the draft used to be seeded with config.default_water, so a
+    // brew with a blank water type silently acquired one on any save.
+    const [{ patch }] = run(makeTarget({ water_type: "" }), makeForm({ water_type: "" }));
+    expect(patch.water_type).toBe("");
+  });
+
+  it("keeps rated_at when a rated brew's stars are cleared to 0", () => {
+    // rated_at set + stars null is the legitimate "resolved as not rated" state;
+    // clearing it would push the brew back into the pending queue.
+    const [{ patch }] = run(makeTarget(), makeForm({ stars: 0 }));
+    expect(patch.stars).toBeNull();
+    expect(patch.rated_at).toBe(String(RATED_MS));
+  });
+
+  it("rates a never-rated brew: sets rated_at to now and records taster1", () => {
+    const target = makeTarget({ rated_at: null, stars: null, taster1: null, pending: true });
+    const [{ patch }] = run(target, makeForm({ stars: 3.5 }));
+    expect(patch.stars).toBe(3.5);
+    expect(patch.rated_at).toBe(String(NOW));
+    expect(patch.taster1).toBe("Min");
+  });
+
+  it("leaves an unrated brew pending when it is saved with no stars", () => {
+    const target = makeTarget({ rated_at: null, stars: null, taster1: null, pending: true });
+    const [{ patch }] = run(target, makeForm({ stars: 0 }));
+    expect(patch.rated_at).toBeNull();
+    expect(patch.stars).toBeNull();
+    expect(patch.taster1).toBeUndefined();
+  });
+
+  it("never overwrites an existing taster1", () => {
+    const [{ patch }] = run(makeTarget({ taster1: "Kris" }), makeForm({ stars: 5 }));
+    expect(patch.taster1).toBeUndefined();
+  });
+
+  it("maps unset sensory scales and an empty note to null", () => {
+    const [{ patch }] = run(makeTarget(), makeForm({ acidity: 0, sweetness: 2, body: 0, clarity: 0, note: "" }));
+    expect(patch.acidity).toBeNull();
+    expect(patch.sweetness).toBe(2);
+    expect(patch.body).toBeNull();
+    expect(patch.clarity).toBeNull();
+    expect(patch.note).toBeNull();
+  });
+
+  it("nulls the second taster's name when their stars are cleared", () => {
+    const [{ patch }] = run(makeTarget({ stars2: 4, taster2: "Kris" }), makeForm({ stars2: 0, taster2: "Kris" }));
+    expect(patch.stars2).toBeNull();
+    expect(patch.taster2).toBeNull();
+  });
+
+  it("moves every session row's date and shifts each one's own rated_at by the same delta", () => {
+    const a = makeTarget({ id: "a", session_id: "s1", rate_for: null });
+    const b = makeTarget({ id: "b", session_id: "s1", rate_for: "kris", rated_at: String(RATED_MS + 7_200_000) });
+    const newISO = "2026-08-03";
+    const newMs = new Date(2026, 7, 3).getTime();
+    const delta = newMs - START_MS;
+
+    const out = brewEditPatch({ target: a, siblings: [a, b], form: makeForm({ date: newISO }), meName: "Min", nowMs: NOW });
+
+    expect(out.map((o) => o.id)).toEqual(["a", "b"]);
+    expect(out[0].patch.started_at).toBe(String(newMs));
+    expect(out[1].patch.started_at).toBe(String(newMs));
+    expect(out[0].patch.rated_at).toBe(String(RATED_MS + delta));
+    expect(out[1].patch.rated_at).toBe(String(RATED_MS + 7_200_000 + delta));
+  });
+
+  it("applies the rating to the targeted row only, leaving the sibling's untouched", () => {
+    const a = makeTarget({ id: "a", session_id: "s1", stars: 4 });
+    const b = makeTarget({ id: "b", session_id: "s1", stars: 2 });
+
+    const out = brewEditPatch({ target: b, siblings: [a, b], form: makeForm({ stars: 5 }), meName: "Min", nowMs: NOW });
+
+    expect(out[0].id).toBe("b");
+    expect(out[0].patch.stars).toBe(5);
+    expect(out[1].id).toBe("a");
+    expect(out[1].patch).not.toHaveProperty("stars");
+    // The pour itself is shared, so the recipe still fans out.
+    expect(out[1].patch.dose).toBe(15);
+  });
+
+  it("re-derives rest_days only when the date actually moved", () => {
+    const coffee = makeCoffee({ roasted_at: "2026-07-20", grams: 250 });
+    const target = makeTarget({ rest_days: 12 });
+
+    const unmoved = brewEditPatch({ target, siblings: [target], form: makeForm(), meName: "Min", nowMs: NOW, coffee, brews: [] });
+    expect(unmoved[0].patch).not.toHaveProperty("rest_days");
+
+    const moved = brewEditPatch({ target, siblings: [target], form: makeForm({ date: "2026-08-04" }), meName: "Min", nowMs: NOW, coffee, brews: [] });
+    expect(moved[0].patch.rest_days).toBe(15);   // 20 Jul → 4 Aug
   });
 });

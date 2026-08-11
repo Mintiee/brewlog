@@ -6,23 +6,15 @@ import { IconButton } from "@/components/ui/IconButton";
 import { SheetHeader } from "@/components/ui/SheetHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { Segmented } from "@/components/ui/Segmented";
-import { Stepper } from "@/components/ui/Stepper";
-import { Field } from "@/components/shelf/Field";
-import { journalDateText, localISODate, parseLocalDate, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
-import { useCoffeeColor } from "@/lib/store/AppContext";
+import { RecipeFields } from "@/components/brew/RecipeFields";
+import { RatingFields } from "@/components/brew/RatingFields";
+import { WaterTypeRow } from "@/components/brew/WaterTypeRow";
+import {
+  journalDateText, localISODate, previousBrewFor, recipeDelta, brewRating,
+  brewEditPatch, type BrewEditForm,
+} from "@/lib/domain";
+import { useCoffeeColor, useAppSelector } from "@/lib/store/AppContext";
 import type { Brew, Coffee, Config } from "@/lib/types";
-
-interface EditForm {
-  date: string;
-  dose: number;
-  water: number;
-  temp: number;
-  grind: number;
-  ratio: number;
-  water_type: string;
-  stars: number;
-  note: string;
-}
 
 interface BrewDetailProps {
   brew: Brew | null;
@@ -36,23 +28,24 @@ interface BrewDetailProps {
 }
 
 export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, onDelete, onRate }: BrewDetailProps) {
-  const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
+  const { editing, form: ef, startEdit: beginEdit, cancelEdit, setForm } = useEditForm<BrewEditForm>();
   const colorOf = useCoffeeColor();
+  // Needed to record taster1 when a previously-unrated brew is rated from here.
+  const profile = useAppSelector((s) => s.profile);
   // Captured when editing starts (avoids an impure Date.now() in render); caps
   // the date picker so brews can't be dated into the future.
   const [todayISO, setTodayISO] = useState("");
+  // Which row the open draft belongs to. This sheet stays mounted across brews,
+  // so without it a draft abandoned on brew A (dismissing via the backdrop calls
+  // onClose but not cancelEdit) would still be `editing` when brew B is opened —
+  // B would open straight into A's values and Save would write them onto B.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTaster, setActiveTaster] = useState(0);
   // Split deletes remove both tasters' ratings, so they confirm inline; solo
   // deletes go straight through (the post-delete Undo toast covers mistakes).
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (!brew) return null;
-
-  // A brew is "rated" only when a rated_at timestamp exists. Using rated_at
-  // (rather than stars != null) means corrupted rows that were accidentally
-  // written with stars:3 but rated_at:null are treated as unrated and self-heal
-  // on the next edit.
-  const wasRated = brew.rated_at != null;
 
   // Resolve the session group for split brews. Sort so the logger's own cup
   // (!rate_for) comes first, partner's cup second — regardless of which row
@@ -69,9 +62,23 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
     : [];
   const activeIdx = Math.min(activeTaster, tasterNames.length - 1);
 
+  // The row an edit acts on. On a split, that's whichever taster's tab is open —
+  // the tabs used to drive only the read view, so you could be looking at taster
+  // B and silently rewriting taster A's rating.
+  const target = isSplit ? group![activeIdx] : brew;
+  // Every row of the one physical brew: the pour (recipe, water, date) is shared.
+  const siblings = group ?? [brew];
+
   const coffee = coffees.find((c) => c.id === brew.coffee_id);
   const brewer = config.brewers.find((b) => b.id === brew.brewer_id);
   const startMs = parseInt(brew.started_at, 10);
+  // Legacy rows can carry a bypass their brewer no longer declares (the brewer
+  // config is editable) — keep the field reachable rather than stranding a value.
+  const showBypass = !!brewer?.bypass || (brew.bypass || 0) > 0;
+  // Who the edit sheet's rating belongs to. Falls back to the signed-in profile
+  // only for a row that was never handed off — a partner's cup keeps their name.
+  const editorName = target.taster1
+    || (target.rate_for == null ? (profile.name || "You") : (config.taster2 || "Partner"));
 
   // Previous comparable brew: same coffee + brewer, strictly earlier, excluding
   // this brew's own session siblings (same physical brew split between tasters).
@@ -84,74 +91,61 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
   const ratingMovementText = prevRating != null && currentRating != null
     ? `★${prevRating.toFixed(1)} → ★${currentRating.toFixed(1)}`
     : null;
-  const DELTA_SUFFIX: Record<string, string> = { grind: config.grinder.unit[0], temp: "°", dose: "g", water: "mL" };
+  // Water is grams everywhere (it's weighed, and bypass/total arithmetic is in g).
+  const DELTA_SUFFIX: Record<string, string> = { grind: config.grinder.unit[0], temp: "°", dose: "g", water: "g" };
 
   const startEdit = () => {
     setTodayISO(localISODate(Date.now()));
+    setEditingId(target.id);
     beginEdit({
       date: localISODate(startMs),
-      dose: brew.dose,
-      water: brew.water,
-      temp: brew.temp,
-      grind: brew.grind,
-      ratio: brew.ratio,
-      water_type: brew.water_type || config.default_water || "",
-      stars: brew.stars ?? 0,
-      note: brew.note || "",
+      dose: target.dose,
+      water: target.water,
+      bypass: target.bypass || 0,
+      temp: target.temp,
+      grind: target.grind,
+      // No default_water fallback: seeding one here meant a brew with a blank
+      // water type silently acquired the household default the moment anything
+      // else on it was saved.
+      water_type: target.water_type || "",
+      stars: target.stars ?? 0,
+      stars2: target.stars2 ?? 0,
+      taster2: target.taster2 || "",
+      acidity: target.acidity ?? 0,
+      sweetness: target.sweetness ?? 0,
+      body: target.body ?? 0,
+      clarity: target.clarity ?? 0,
+      note: target.note || "",
     });
+  };
+
+  // Curried partial-patch setter for the shared field blocks, which hand back a
+  // patch rather than a single value.
+  const patchForm = (p: Partial<BrewEditForm>) => setForm((f) => (f ? { ...f, ...p } : f));
+
+  const closeEdit = () => {
+    setEditingId(null);
+    cancelEdit();
   };
 
   const saveEdit = () => {
     if (!ef) return;
-    // Parse the picked "YYYY-MM-DD" as local midnight (not UTC) to avoid ±1-day drift.
-    const newStartMs = parseLocalDate(ef.date).getTime();
-    // Fields that describe the one physical brew — a split session's two rows
-    // share them, so they must move together. If only the opened row's date
-    // changed, the sibling would keep the old date, fall into a different journal
-    // day-group, and surface as a phantom "duplicate" card linked by session_id.
-    const shared: Partial<Brew> = {
-      dose: ef.dose,
-      water: ef.water,
-      temp: ef.temp,
-      grind: ef.grind,
-      ratio: ef.ratio,
-      water_type: ef.water_type,
-      started_at: String(newStartMs),
-    };
-    // Shift a rated row's rated_at by the same delta the start date moved, so its
-    // rating timestamp keeps its offset. Unrated rows (rated_at null) stay null.
-    const shiftRatedAt = (row: Brew) =>
-      row.rated_at != null
-        ? String(parseInt(row.rated_at, 10) + (newStartMs - startMs))
-        : null;
-    onUpdate(brew.id, {
-      ...shared,
-      // Key the stars-write on the actual edited value (0 from the stepper means
-      // "no rating"), not on wasRated alone: a brew resolved as "unrated"
-      // (rated_at set, stars null) must NOT pick up a phantom stars:0 on edit, and
-      // a corrupted stars-without-rated_at row still self-heals to null. Bumping
-      // the stepper above 0 re-rates it.
-      stars: wasRated && ef.stars > 0 ? ef.stars : null,
-      note: ef.note || null,
-      rated_at: wasRated && brew.rated_at ? shiftRatedAt(brew) : null,
-    });
-    // Propagate the shared physical-brew fields (date + recipe) to the session
-    // sibling(s), keeping each sibling's own per-taster rating untouched.
-    if (group) {
-      for (const sib of group) {
-        if (sib.id === brew.id) continue;
-        onUpdate(sib.id, { ...shared, rated_at: shiftRatedAt(sib) });
-      }
+    for (const { id, patch } of brewEditPatch({
+      target, siblings, form: ef, meName: profile.name || "You", coffee, brews,
+    })) {
+      onUpdate(id, patch);
     }
-    cancelEdit();
+    closeEdit();
     onClose();
   };
 
-  if (editing && ef) {
+  if (editing && ef && editingId === target.id) {
     return (
-      <Sheet open={true} onClose={onClose}>
+      // Dismissing by the backdrop must drop the draft too, not just hide the
+      // sheet — otherwise it reopens over the next brew that's tapped.
+      <Sheet open={true} onClose={() => { closeEdit(); onClose(); }}>
         <div className="screen-pad" style={{ paddingTop: 6 }}>
-          <SheetHeader title="Edit brew" onClose={cancelEdit} />
+          <SheetHeader title="Edit brew" onClose={closeEdit} />
 
           <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 0", minWidth: 0 }}>
@@ -163,7 +157,7 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
                 type="date"
                 value={ef.date}
                 max={todayISO}
-                onChange={(e) => setE("date")(e.target.value)}
+                onChange={(e) => patchForm({ date: e.target.value })}
                 style={{
                   background: "var(--surface-3)", border: "1px solid var(--line)", borderRadius: 10,
                   color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 600,
@@ -172,39 +166,32 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
               />
             </div>
             <div style={{ height: 1, background: "var(--line)" }} />
-            <Stepper icon="scale" label="Dose" value={ef.dose} unit="g"
-              step={0.1} min={5} max={40}
-              format={(v) => v.toFixed(1)}
-              onChange={setE("dose")} />
-            <div style={{ height: 1, background: "var(--line)" }} />
-            <Stepper icon="drop" label="Water" value={ef.water} unit="mL"
-              step={5} min={50} max={600} onChange={setE("water")} />
-            <div style={{ height: 1, background: "var(--line)" }} />
-            <Stepper icon="thermo" label="Temp" value={ef.temp} unit="°C"
-              step={1} min={80} max={100} onChange={setE("temp")} />
-            <div style={{ height: 1, background: "var(--line)" }} />
-            <Stepper icon="grind" label="Grind" value={ef.grind} unit={config.grinder.unit}
-              step={config.grinder.grind_step ?? 1}
-              min={config.grinder.grind_min ?? 0}
-              max={config.grinder.grind_max ?? 50}
-              format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
-              onChange={setE("grind")} />
+            <WaterTypeRow value={ef.water_type} onChange={(v) => patchForm({ water_type: v })} waters={config.waters} />
           </div>
 
-          {wasRated && (
-            <div className="card" style={{ padding: "2px 16px", marginBottom: 14 }}>
-              <Stepper icon="star" label="Rating" value={ef.stars} unit="/ 5"
-                step={0.5} min={0.5} max={5}
-                format={(v) => v % 1 === 0 ? String(v) : v.toFixed(1)}
-                onChange={setE("stars")} />
+          <RecipeFields recipe={ef} onChange={patchForm} config={config} showBypass={showBypass} />
+
+          {/* Guest cups never enter the rating queue and are excluded from palate
+              stats — offering a rating here would quietly contradict that. */}
+          {!brew.guest && (
+            <div style={{ marginTop: 14 }}>
+              <div className="label" style={{ marginBottom: 8 }}>Rating</div>
+              <RatingFields
+                value={ef}
+                onChange={patchForm}
+                meName={editorName}
+                partnerName={config.taster2}
+                // A split already gives each taster their own row; the legacy
+                // two-slot field would be a second, conflicting mechanism.
+                allowSecondTaster={!isSplit}
+              />
             </div>
           )}
 
-          <Field label="Notes" value={ef.note} onChange={setE("note")} placeholder="Tasting notes…" />
-
-          <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveEdit}>
+          <button className="btn btn-accent" style={{ marginTop: 14 }} onClick={saveEdit}>
             <Icon name="check" size={20} stroke={2} /> Save changes
           </button>
+          <div className="screen-bottom" />
         </div>
       </Sheet>
     );
@@ -320,7 +307,9 @@ export function BrewDetail({ brew, coffees, brews, config, onClose, onUpdate, on
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginTop: 20, background: "var(--line)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
           {([
             ["Dose", `${brew.dose}g`],
-            ["Water", `${brew.water}mL`],
+            [showBypass ? "Brew" : "Water", `${brew.water}g`],
+            // Only for bypass brewers, where it's a real parameter rather than a 0.
+            ...(showBypass ? [["After", `${brew.bypass || 0}g`]] : []),
             ["Rested", brew.rest_days != null ? `${brew.rest_days}d` : "—"],
             ["Temp", `${brew.temp}°C`],
             ["Grind", `${brew.grind}${config.grinder.unit}`],

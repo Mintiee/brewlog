@@ -424,6 +424,126 @@ export function shouldUnarchiveAfterEdit(coffee: Coffee, newRemaining: number): 
   return coffee.archived && newRemaining > (coffee.frozen_grams || 0);
 }
 
+/** Canonical brew ratio. Total water is brew water plus any post-brew bypass, so
+ *  bypass brewers (OXO) must include it. One definition, read by both the log
+ *  flow and the edit sheet — the edit sheet used to carry a `ratio` it never
+ *  recomputed and wrote it back stale on every save. */
+export function recipeRatio(r: Pick<Recipe, "dose" | "water" | "bypass">): number {
+  const total = r.water + (r.bypass || 0);
+  return r.dose > 0 ? total / r.dose : 0;
+}
+
+/** Draft the BrewDetail edit sheet collects. Sentinels rather than nulls: 0 for
+ *  an unset star/scale, "" for an unset string — the widgets never see null. */
+export interface BrewEditForm {
+  date: string;        // "YYYY-MM-DD", interpreted as local midnight
+  dose: number;
+  water: number;
+  bypass: number;
+  temp: number;
+  grind: number;
+  water_type: string;
+  stars: number;       // 0 = not rated
+  stars2: number;      // 0 = no second taster
+  taster2: string;
+  acidity: number;     // 0 = unset, else 1–5
+  sweetness: number;
+  body: number;
+  clarity: number;
+  note: string;
+}
+
+/**
+ * Build the update patches for a brew edit — one per affected row.
+ *
+ * Split (session) brews are one physical cup poured into two: the recipe, water
+ * and date describe the pour and must move together across every row, while the
+ * rating belongs to the one taster whose tab is open. `siblings` is every row of
+ * the session (target included); pass `[target]` for a solo brew.
+ *
+ * Pulled out of BrewDetail because every rule here is one the app has already
+ * been bitten by — phantom 3★ ratings, resurrected pending brews, split rows
+ * drifting onto different dates — and none of them were testable in a component.
+ */
+export function brewEditPatch(opts: {
+  target: Brew;
+  siblings: Brew[];
+  form: BrewEditForm;
+  /** Recorded as taster1 when a previously-unrated row gets a rating. */
+  meName: string;
+  /** Injectable for tests; callers in components must leave it unset — reading
+   *  the clock there trips the purity lint (and would be wrong on a re-render). */
+  nowMs?: number;
+  /** Supplied only so a moved date can re-derive the rest snapshot. */
+  coffee?: Coffee;
+  brews?: Brew[];
+}): Array<{ id: string; patch: Partial<Brew> }> {
+  const { target, siblings, form, meName, nowMs = Date.now(), coffee, brews } = opts;
+
+  const newStartMs = parseLocalDate(form.date).getTime();
+  const oldStartMs = parseTs(target.started_at);
+  const dateDelta = newStartMs - oldStartMs;
+
+  // Fields describing the one physical brew. If only the opened row's date
+  // changed, a sibling would keep the old date, fall into a different journal
+  // day-group, and surface as a phantom "duplicate" card linked by session_id.
+  const shared: Partial<Brew> = {
+    dose: form.dose,
+    water: form.water,
+    bypass: form.bypass,
+    temp: form.temp,
+    grind: form.grind,
+    ratio: recipeRatio(form),
+    water_type: form.water_type,
+    started_at: String(newStartMs),
+  };
+
+  // Move the rest snapshot with the date. Caveat: restForBrew branches on the
+  // bag's *current* activeGrams, so on a long-finished bag this can take the
+  // calendar branch where the original snapshot took the freeze-adjusted one.
+  // Still better than a knowingly-stale value feeding the rest-vs-rating stat.
+  if (dateDelta !== 0 && coffee) {
+    shared.rest_days = restForBrew(coffee, brews ?? [], newStartMs);
+  }
+
+  // A rated row's rated_at keeps its offset from the start time.
+  const shiftRatedAt = (row: Brew) =>
+    row.rated_at != null ? String(parseTs(row.rated_at) + dateDelta) : null;
+
+  const rated = form.stars > 0;
+  // Never clear rated_at once set: `pending` derives from it, and a row that was
+  // deliberately resolved as "not rated" (rated_at set, stars null) must not fall
+  // back into the pending queue just because its stars are still 0.
+  const targetRatedAt = target.rated_at != null
+    ? shiftRatedAt(target)
+    : rated ? String(nowMs) : null;
+
+  const targetPatch: Partial<Brew> = {
+    ...shared,
+    stars: rated ? form.stars : null,
+    stars2: form.stars2 > 0 ? form.stars2 : null,
+    taster2: form.stars2 > 0 ? (form.taster2 || null) : null,
+    // 0 means "unset" in the draft; the columns are constrained to 1–5 or null.
+    acidity: form.acidity || null,
+    sweetness: form.sweetness || null,
+    body: form.body || null,
+    clarity: form.clarity || null,
+    note: form.note || null,
+    rated_at: targetRatedAt,
+    // Record who rated it, but only when filling in a rating that had no taster —
+    // never overwrite the name already on the row.
+    ...(rated && !target.taster1 ? { taster1: meName } : {}),
+  };
+
+  return [
+    { id: target.id, patch: targetPatch },
+    // Siblings take the shared pour only; each keeps its own taster's rating.
+    ...siblings
+      .filter((s) => s.id !== target.id)
+      .map((s) => ({ id: s.id, patch: { ...shared, rated_at: shiftRatedAt(s) } })),
+  ];
+}
+
 /** Whose "waiting to rate" list a brew belongs in: the person it was handed off
  *  to (rate_for) if set, otherwise the person who logged it. A logged brew is
  *  the logger's to rate until they send it to someone else. */

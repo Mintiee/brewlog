@@ -1,10 +1,12 @@
 "use client";
 import { useState, useMemo } from "react";
 import type { Coffee, Brew, Brewer, Config, Recipe, SavedRecipe } from "@/lib/types";
-import { defaultsFor, previousBrewFor, recipeDelta, brewRating } from "@/lib/domain";
-import { Icon, Stepper, SheetHeader } from "@/components/ui";
+import { defaultsFor, previousBrewFor, recipeDelta, brewRating, recipeRatio } from "@/lib/domain";
+import { Icon, SheetHeader } from "@/components/ui";
 import { Sheet } from "@/components/ui/Sheet";
 import { CoffeePin } from "./CoffeePin";
+import { RecipeFields } from "./RecipeFields";
+import { WaterTypeRow } from "./WaterTypeRow";
 
 export type Audience = "me" | "partner" | "split" | "guest";
 
@@ -98,7 +100,6 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
   // otherwise "Just me". "For a guest" is always available but never the automatic default.
   const defaultAudience = (b: Brewer): Audience => (!!canSplit && brewerIcon(b) === "dripperOxo" ? "split" : "me");
   const [audience, setAudience] = useState<Audience>(() => defaultAudience(initialBrewer));
-  const [waterPickerOpen, setWaterPickerOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [recipeName, setRecipeName] = useState("");
 
@@ -135,7 +136,7 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
       id: crypto.randomUUID(),
       name,
       dose: r.dose, water: r.water, bypass: r.bypass || 0, temp: r.temp,
-      grind: r.grind, ratio: (r.water + (r.bypass || 0)) / r.dose, water_type: r.water_type,
+      grind: r.grind, ratio: recipeRatio(r), water_type: r.water_type,
       brewer_id: brewer.id,
     });
     setSaveOpen(false);
@@ -161,13 +162,7 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
   const prevDelta = prevBrew ? recipeDelta(prevBrew, r) : null;
   const prevRating = prevBrew && prevBrew.stars != null ? brewRating(prevBrew) : null;
 
-  const total = r.water + (r.bypass || 0);
-  const ratio = total / r.dose;
-  const setDose = (v: number) => setR((s) => ({ ...s, dose: v }));
-  const setWater = (v: number) => setR((s) => ({ ...s, water: v }));
-  const setBypass = (v: number) => setR((s) => ({ ...s, bypass: v }));
-  const setTemp = (v: number) => setR((s) => ({ ...s, temp: v }));
-  const setGrind = (v: number) => setR((s) => ({ ...s, grind: v }));
+  const patchRecipe = (p: Partial<Recipe>) => setR((s) => ({ ...s, ...p }));
 
   return (
     <div className="screen-pad">
@@ -212,36 +207,8 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
       )}
 
       {/* recipe — grind-led, dense steppers to save vertical space */}
-      <div className="card rise rise-3" style={{ marginTop: 10, padding: "2px 16px" }}>
-        <Stepper
-          dense
-          icon="grind"
-          label={`Grind · ${config.grinder.name}`}
-          value={r.grind}
-          unit={config.grinder.unit}
-          step={config.grinder.grind_step ?? 1}
-          min={config.grinder.grind_min ?? 0}
-          max={config.grinder.grind_max ?? 50}
-          format={(v) => (config.grinder.grind_step ?? 1) < 1 ? v.toFixed(1) : String(v)}
-          onChange={setGrind}
-        />
-
-        <div style={{ height: 1, background: "var(--line)" }} />
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
-          <Stepper dense icon="scale"  label="Dose"  value={r.dose}   unit="g"   step={0.5} min={8}  max={40}  onChange={setDose} />
-          <Stepper dense icon="drop"   label={brewer.bypass ? "Brew" : "Water"} value={r.water} unit="g" step={1} min={50} max={600} onChange={setWater} />
-          <Stepper dense icon="thermo" label="Temp"  value={r.temp}   unit="°C"  step={1}   min={80} max={100} onChange={setTemp} />
-          {brewer.bypass && (
-            <Stepper dense icon="snow" label="After" value={r.bypass || 0} unit="g" step={1} min={0} max={400} onChange={setBypass} />
-          )}
-        </div>
-
-        <div className="mono" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, color: "var(--ink-faint)", fontSize: 12, marginTop: 4, paddingTop: 8, paddingBottom: 8, borderTop: "1px solid var(--line)" }}>
-          {brewer.bypass
-            ? <span>{r.water}g brew + {r.bypass || 0}g after · {total}g · 1:{ratio.toFixed(1)}</span>
-            : <span>{r.dose}g in <Icon name="chev" size={11} stroke={2} /> {total}g out · 1:{ratio.toFixed(1)}</span>}
-        </div>
+      <div className="rise rise-3" style={{ marginTop: 10 }}>
+        <RecipeFields dense recipe={r} onChange={patchRecipe} config={config} showBypass={brewer.bypass} />
       </div>
 
       {/* Save the current recipe to the library — small ghost affordance */}
@@ -283,7 +250,7 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
           </span>
           <span>·</span>
           <span style={{ color: prevDelta.find((d) => d.key === "water")?.changed ? "var(--ink)" : "var(--ink-faint)" }}>
-            {prevBrew.water}mL
+            {prevBrew.water}g
           </span>
           {prevRating != null && (
             <>
@@ -297,18 +264,7 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
       {/* Water + Who's it for */}
       <div className="card rise rise-4" style={{ marginTop: 10, padding: "2px 16px" }}>
         {/* Water — tap row opens the picker sheet */}
-        <button
-          onClick={() => setWaterPickerOpen(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 12, width: "100%",
-            padding: "11px 0", background: "none", border: "none",
-            cursor: "pointer", color: "var(--ink)", textAlign: "left",
-          }}
-        >
-          <span className="label" style={{ flex: 1 }}>Water</span>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>{r.water_type || "—"}</span>
-          <Icon name="chev" size={16} stroke={1.8} style={{ color: "var(--ink-faint)" }} />
-        </button>
+        <WaterTypeRow value={r.water_type} onChange={(w) => patchRecipe({ water_type: w })} waters={config.waters} />
 
         <div style={{ height: 1, background: "var(--line)" }} />
         <div style={{ padding: "10px 0" }}>
@@ -332,28 +288,6 @@ export function StepHow({ coffee, brews, config, recipes, addRecipe, canSplit, s
         </button>
       </div>
       <div className="screen-bottom" />
-
-      {/* Water picker sheet */}
-      <Sheet open={waterPickerOpen} onClose={() => setWaterPickerOpen(false)}>
-        <div className="screen-pad" style={{ paddingTop: 6, paddingBottom: 8 }}>
-          <div className="label" style={{ marginBottom: 6 }}>Water</div>
-          {config.waters.map((w) => (
-            <button
-              key={w}
-              onClick={() => { setR((s) => ({ ...s, water_type: w })); setWaterPickerOpen(false); }}
-              style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                width: "100%", padding: "14px 2px", background: "none", border: "none",
-                borderBottom: "1px solid var(--line)", cursor: "pointer",
-                color: "var(--ink)", fontSize: 16, fontWeight: 600, fontFamily: "var(--font-ui)",
-              }}
-            >
-              {w}
-              {r.water_type === w && <Icon name="check" size={18} stroke={2} style={{ color: "var(--accent)" }} />}
-            </button>
-          ))}
-        </div>
-      </Sheet>
 
       {/* Save-recipe naming sheet */}
       <Sheet open={saveOpen} onClose={() => setSaveOpen(false)}>
