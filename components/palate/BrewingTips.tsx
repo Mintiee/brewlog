@@ -182,7 +182,12 @@ const MAX_DIGEST_BREWS = 40;
 const TIPS_LS_KEY = "brew_tips_v4";  // bumped: tighter copy + full-history input (no caps)
 const TIPS_MIN_BREWS = 5;
 
+// AI-generated tips are switched off — the weekly LLM call wasn't worth its cost.
+// Flip back to true to re-enable; the rule-based buildTips() heuristics render either way.
+const AI_TIPS_ENABLED = false;
+
 export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsProps) {
+  const aiTips = llmEnabled && AI_TIPS_ENABLED;
   const [llmTips, setLlmTips] = useState<Tip[] | null>(null);
   // Heuristic tips render immediately — they're the fallback and the placeholder.
   // Skipped entirely once LLM tips have landed: `tips` below prefers those, so
@@ -254,13 +259,13 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
   }, [brews, coffees, config]);
 
   useEffect(() => {
-    if (!llmEnabled) return;
+    if (!aiTips) return;
     // Deferred a tick: run() sets state synchronously on its cache-hit path,
     // which must not happen directly in the effect body.
     const t = setTimeout(() => void run(false), 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brews, coffees, config, llmEnabled]);
+  }, [brews, coffees, config, aiTips]);
 
   const tips = llmTips ?? heuristic;
   if (!tips.length) return null;
@@ -269,7 +274,7 @@ export function BrewingTips({ brews, coffees, config, llmEnabled }: BrewingTipsP
     <>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "6px 2px -2px" }}>
       <div className="label">Brewing tips</div>
-      {llmEnabled && (
+      {aiTips && (
         <button
           onClick={() => void run(true)}
           disabled={refreshing}
