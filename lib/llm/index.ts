@@ -10,8 +10,13 @@ export { detectProvider } from "./detect";
 
 /** Most capable model per provider — used by the routes whose output is
  *  worth the extra cost (insight, tips): a single sentence or a couple of
- *  short tips per household per day/week. */
-export const BEST_MODEL: Record<Provider, string> = { anthropic: "claude-opus-4-8", openai: "gpt-5.5" };
+ *  short tips per household per day/week.
+ *
+ *  claude-opus-5 thinks by default (unlike 4.8, where omitting `thinking`
+ *  meant no thinking) and `max_tokens` bounds thinking + text together, so
+ *  callers using this model must leave real headroom — see the maxTokens
+ *  on app/api/insight and app/api/tips. */
+export const BEST_MODEL: Record<Provider, string> = { anthropic: "claude-opus-5", openai: "gpt-5.5" };
 
 export interface LLMRequest {
   system: string;

@@ -60,7 +60,10 @@ export async function POST(req: NextRequest) {
       system: SYSTEM,
       prompt: `BREW LOG:\n${digest}`,
       model: BEST_MODEL[hk.provider],
-      maxTokens: 1024,
+      // Headroom, not a target: the reply is one sentence, but BEST_MODEL
+      // thinks by default and max_tokens bounds thinking + text together —
+      // at 1024 a thinking-heavy turn would truncate the sentence away.
+      maxTokens: 4096,
     })).trim().replace(/^["']|["']$/g, "");
 
     // Persist the fresh insight as the new daily cache (service role bypasses RLS).

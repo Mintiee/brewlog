@@ -139,7 +139,9 @@ export async function POST(req: NextRequest) {
       system: SYSTEM,
       prompt: `${statsBlock}BREW LOG (most recent first):\n${digest}`,
       model: BEST_MODEL[hk.provider],
-      maxTokens: 1024,
+      // Headroom, not a target — see app/api/insight/route.ts: BEST_MODEL
+      // thinks by default and max_tokens bounds thinking + text together.
+      maxTokens: 4096,
       schemaName: "brewing_tips",
       schema: TIPS_SCHEMA,
     });
