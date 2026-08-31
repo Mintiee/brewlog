@@ -58,3 +58,6 @@ __pycache__/
 next-env.d.ts
 
 .vercel
+
+# Supabase CLI scratch (linked-project ref, version check)
+supabase/.temp
