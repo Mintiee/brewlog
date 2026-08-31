@@ -15,7 +15,7 @@
 // Bump CACHE_VERSION whenever the caching strategy or precache list changes; old versioned
 // caches are pruned on activate.
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE = `brewlog-shell-${CACHE_VERSION}`;
 
 // Country outline silhouettes for every code in ORIGIN_CODES (lib/domain/index.ts),
@@ -151,4 +151,73 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(runtimeCacheGet(req));
+});
+
+// ---------------------------------------------------------------------------
+// Push nudges (see app/api/notify/run and lib/notify/*).
+//
+// Two kinds arrive here: "rate that brew?" and "log a coffee?". The payload is
+// three short strings — title, body, and the in-app URL to open — so there is
+// nothing to fetch and nothing to decode beyond JSON.
+// ---------------------------------------------------------------------------
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    return; // never show a notification we can't read
+  }
+
+  const { title, body, url, tag } = payload;
+  if (!title) return;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: body || "",
+      // Same tag replaces rather than stacks, so a second tick can never leave
+      // two copies of the same nudge on the lock screen.
+      tag: tag || "brewlog",
+      renotify: false,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Prefer an already-open window: the app is a single client-side shell, so
+      // reopening it would throw away in-progress state (a half-filled brew
+      // draft, the current tab). Tell the live one where to go instead.
+      for (const client of clients) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        client.postMessage({ type: "brewlog:navigate", url });
+        return client.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
+// Chrome rotates endpoints without warning. There is no session in here to
+// re-authenticate with, so we can't re-register from the worker — but we can
+// drop the stale endpoint so the next app open (which calls syncPushSubscription)
+// creates a clean one rather than adding a second row.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  const old = event.oldSubscription;
+  if (!old) return;
+  event.waitUntil(
+    fetch(`/api/notify/subscribe?endpoint=${encodeURIComponent(old.endpoint)}`, {
+      method: "DELETE",
+      credentials: "include",
+    }).catch(() => {})
+  );
 });

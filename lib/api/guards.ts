@@ -4,6 +4,7 @@
  * (status codes + response shapes) matches the original inline checks.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getHouseholdKey, type HouseholdKey } from "@/lib/llm/getKey";
 import type { User } from "@supabase/supabase-js";
@@ -27,6 +28,22 @@ export async function requireHouseholdKey(): Promise<Guard<HouseholdKey>> {
     return { ok: false, response: NextResponse.json({ error: "No AI key configured" }, { status: 403 }) };
   }
   return { ok: true, value: hk };
+}
+
+/**
+ * Require the shared secret used by the pg_cron scheduler (see migration 022's
+ * companion cron.schedule block). Constant-time compare, and an empty 401 so an
+ * unauthenticated caller learns nothing about the route.
+ */
+export function requireCronSecret(req: NextRequest): Guard<void> {
+  const expected = process.env.NOTIFY_CRON_SECRET;
+  const got = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  const deny: Guard<void> = { ok: false, response: new NextResponse(null, { status: 401 }) };
+  if (!expected) return deny;
+  const a = Buffer.from(got);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return deny;
+  return { ok: true, value: undefined };
 }
 
 /** Parse the request body as JSON, requiring a plain object, or a 400 NextResponse. */
