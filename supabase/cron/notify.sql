@@ -53,8 +53,12 @@ select cron.schedule(
 -- ---------------------------------------------------------------------------
 -- Checking on it
 -- ---------------------------------------------------------------------------
--- Did the tick fire?
+-- Did the tick fire? (Note: this pg_cron build's job_run_details has no
+-- `jobname` column — join on jobid, or just take the last few rows.)
 --   select * from cron.job_run_details order by start_time desc limit 20;
+--   select d.* from cron.job_run_details d
+--     join cron.job j using (jobid) where j.jobname = 'notify-run'
+--     order by d.start_time desc limit 20;
 --
 -- What did the route say? (net.http_post is fire-and-forget; the response lands
 -- here a moment later.)

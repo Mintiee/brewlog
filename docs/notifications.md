@@ -267,9 +267,23 @@ That is the way to check this feature against real data — it reports each
 person's learned times and every decision, including why something was skipped.
 
 ```sql
-select * from cron.job_run_details order by start_time desc limit 20;
-select id, status_code, content from net._http_response order by created desc limit 20;
+-- job_run_details has no `jobname` column in this pg_cron build — join on jobid.
+select d.* from cron.job_run_details d
+  join cron.job j using (jobid) where j.jobname = 'notify-run'
+  order by d.start_time desc limit 20;
+
+-- What the route actually replied. net.http_post is fire-and-forget, so this is
+-- where the answer lands a moment after each tick.
+select id, status_code, content, created from net._http_response order by created desc limit 20;
 ```
+
+Deployed and verified on **2026-08-31**: migration 022 applied, `pg_cron` +
+`pg_net` enabled, the secret in Vault as `notify_cron_secret`, and job `notify-run`
+active on `*/5 * * * *`. First ticks returned
+`{"ok":true,"dryRun":false,"decisions":[],"note":"no subscriptions"}` at 04:40
+and 04:45 UTC — five minutes apart, status 200, which is the whole pipeline
+proven end to end. Nudges begin once someone installs the PWA and turns on
+Settings → Reminders.
 
 ## Limits
 
