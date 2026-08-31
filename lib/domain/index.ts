@@ -551,6 +551,14 @@ export function ratingOwnerId(b: Brew): string {
   return b.rate_for ?? b.logged_by;
 }
 
+/** The canonical key for a *person* within a household. Identity is by name,
+ *  not profile id — see rateBelongsTo. Shared with the push-nudge engine
+ *  (lib/notify, public.push_subscriptions.person_key) so the tab badge and the
+ *  notification can never disagree about whose brew this is. */
+export function normName(name: string | null | undefined): string {
+  return (name ?? "").trim().toLowerCase();
+}
+
 /** Does this brew's rating belong to `profile`? Identity is by NAME, not profile
  *  id: anonymous re-logins mint duplicate same-name profiles (e.g. several
  *  "Min-Taec"s), and they're all the same person. Falls back to id match when a
@@ -563,7 +571,7 @@ export function rateBelongsTo(
   const ownerId = ratingOwnerId(b);
   if (ownerId === profile.id) return true;
   const ownerName = members.find((m) => m.id === ownerId)?.name;
-  return ownerName != null && ownerName === profile.name;
+  return ownerName != null && normName(ownerName) === normName(profile.name);
 }
 
 // ---------- Time helpers ----------

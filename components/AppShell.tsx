@@ -101,6 +101,7 @@ function Shell() {
   const [brewResetKey, setBrewResetKey] = useState(0);
   const [brewStart, setBrewStart] = useState<{ coffee: Coffee; nonce: number } | null>(null);
   const [brewStep, setBrewStep] = useState("what");
+  const [rateStart, setRateStart] = useState<{ brewId: string; nonce: number } | null>(null);
 
   // Only brews that are mine to rate — ones I logged (and haven't sent away) or
   // that were handed to me. Brews I sent to someone else drop off my badge.
@@ -145,6 +146,37 @@ function Shell() {
     setTab(t);
   }, []);
 
+  // Push-notification deep links. The app has no router — tabs and sheets are
+  // local state — so a nudge lands as a query param that we consume once and
+  // then strip from the URL, otherwise a refresh would reopen the same sheet.
+  //
+  // Two arrival paths, both funnelled through here: a cold open (the URL from
+  // the notification) and a warm one (the service worker focuses the existing
+  // window and postMessages the route — see notificationclick in sw.js).
+  const openNudge = useCallback((rawUrl: string) => {
+    const params = new URLSearchParams(rawUrl.includes("?") ? rawUrl.slice(rawUrl.indexOf("?")) : "");
+    const rate = params.get("rate");
+    if (rate) {
+      setTab("brew");
+      setRateStart({ brewId: rate, nonce: Date.now() });
+    } else if (params.get("log")) {
+      gotoTab("brew");
+    }
+  }, [gotoTab]);
+
+  useEffect(() => {
+    if (window.location.search) {
+      openNudge(window.location.search);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "brewlog:navigate" && typeof e.data.url === "string") openNudge(e.data.url);
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [openNudge]);
+
   const openSettings = () => { setPrevTab(tab); setTab("settings"); };
   const closeSettings = () => setTab(prevTab || "brew");
 
@@ -166,6 +198,7 @@ function Shell() {
         <BrewFlow
           resetKey={brewResetKey}
           startCoffee={brewStart}
+          rateStart={rateStart}
           onStep={setBrewStep}
           onGotoShelf={() => gotoTab("shelf")}
         />

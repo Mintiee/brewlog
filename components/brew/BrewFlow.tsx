@@ -16,6 +16,9 @@ type Step = "what" | "how" | "logged" | "rate" | "done";
 interface BrewFlowProps {
   resetKey?: number;
   startCoffee?: { coffee: Coffee; nonce: number } | null;
+  /** A "rate that brew?" push notification was tapped — open this brew's rating
+   *  sheet. Carries a nonce so tapping the same nudge twice still reopens it. */
+  rateStart?: { brewId: string; nonce: number } | null;
   onStep?: (step: string) => void;
   onGotoShelf?: () => void;
 }
@@ -66,7 +69,7 @@ function clearDraft() {
   }
 }
 
-export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlowProps = {}) {
+export function BrewFlow({ resetKey, startCoffee, rateStart, onStep, onGotoShelf }: BrewFlowProps = {}) {
   const { coffees, brews, recipes, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession, addRecipe } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
@@ -130,6 +133,15 @@ export function BrewFlow({ resetKey, startCoffee, onStep, onGotoShelf }: BrewFlo
   useEffect(() => {
     if (startCoffee?.coffee) { setCoffee(startCoffee.coffee); setStep("how"); }
   }, [startCoffee?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Open the rating sheet for a brew named by a push notification. Waits on
+  // `brews` because the store seeds asynchronously — on a cold open from the
+  // notification the array is still empty for a beat. A brew that has since been
+  // rated (or deleted) simply doesn't resolve, and we land on the normal screen.
+  useEffect(() => {
+    if (!rateStart) return;
+    const b = brews.find((x) => x.id === rateStart.brewId);
+    if (b) openRate(b);
+  }, [rateStart?.nonce, brews]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function coffeeById(id: string) {
     return coffees.find((c) => c.id === id) ?? null;

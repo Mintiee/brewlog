@@ -4,6 +4,7 @@ import { Icon, IconButton, Stepper } from "@/components/ui";
 import { SSection, SText, SRow, SToggle } from "./controls";
 import { AddBrewerSheet } from "./AddBrewerSheet";
 import { RoasterRestSheet } from "./RoasterRestSheet";
+import { Reminders } from "./Reminders";
 import { ImportSheet } from "@/components/import/ImportSheet";
 import { detectProvider } from "@/lib/llm/detect";
 import type { Coffee, Config, Profile, SavedRecipe } from "@/lib/types";
@@ -332,6 +333,9 @@ export function Settings({
             </div>
           </div>
         </SSection>
+
+        {/* REMINDERS */}
+        <Reminders />
 
         {/* INTELLIGENCE */}
         <SSection label="Intelligence">

@@ -53,7 +53,9 @@ Lower-severity notes: `next` redirect param in `app/auth/callback/route.ts` shou
 
 ### Parked features (owner-rejected — do not resurrect without new rationale)
 
-Rejected for AI-coaching direction or me-too/feature-parity rationale: next-brew nudge (P1), brew timer (P2), dial-in wizard (P3), insight on home screen (P4), inventory/reorder nudges (P6), PWA notifications (P7), tip follow-through tracking (P9), share card (P10).
+Rejected for AI-coaching direction or me-too/feature-parity rationale: next-brew nudge (P1), brew timer (P2), dial-in wizard (P3), insight on home screen (P4), inventory/reorder nudges (P6), tip follow-through tracking (P9), share card (P10).
+
+**P7 (PWA notifications) was un-parked on 2026-08-31** on new rationale from the owner. The original rejection read it as an engagement/coaching feature. As built it is neither: two nudges that are strictly about the *record* — "you logged a cup 25 minutes ago and haven't rated it" and "nothing logged in the window when you normally brew". Nothing advises how to make coffee, brew times are learned from the household's own history rather than prescribed, and the log nudge fires 30 minutes *after* the time you would normally already have logged, so it only speaks when something is unusual. A slot with no clear pattern stays silent rather than falling back to an invented time. Implementation and the reasoning behind each constant: `docs/notifications.md`. P1 (next-brew nudge) stays rejected — that one really is advice.
 
 ## Tier 3 — UX fixes (owner-approved)
 

@@ -1,300 +1,839 @@
-/**
- * Database schema types — hand-derived from supabase/migrations/001–018.
- *
- * Mirrors the shape `supabase gen types typescript` produces, so it can be
- * replaced by the generated file once CLI auth is set up:
- *   npx supabase login
- *   npm run gen:types
- * (the npm script wraps: supabase gen types typescript --project-id
- * amtyxwqwnjiqodoiazpt --schema public > lib/db/database.types.ts — requires
- * `supabase login` first; not run automatically by anything in this repo.)
- *
- * KEEP IN SYNC: any new migration that adds/renames a column must update this
- * file (or regenerate it) — the typed clients and mappers compile against it.
- */
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
-
-export interface Database {
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
-      households: {
-        Row: { id: string; invite_code: string; created_at: string };
-        Insert: { id?: string; invite_code: string; created_at?: string };
-        Update: { id?: string; invite_code?: string; created_at?: string };
-        Relationships: [];
-      };
-      profiles: {
-        Row: { id: string; household_id: string; name: string; created_at: string };
-        Insert: { id: string; household_id: string; name?: string; created_at?: string };
-        Update: { id?: string; household_id?: string; name?: string; created_at?: string };
-        Relationships: [];
-      };
-      coffees: {
-        Row: {
-          id: string;
-          household_id: string;
-          roaster: string;
-          name: string;
-          origin: string;
-          region: string;
-          varietal: string;            // legacy single string — dual-written from varietals (migration 019)
-          varietals: string[];         // migration 019
-          process: string;
-          roast: string;
-          roasted_at: string;          // date
-          rest_days: number;
-          peak_days: number;
-          grams: number;               // numeric (migration 014)
-          frozen_grams: number;        // numeric (migration 014)
-          frozen_at: string | null;    // date (migration 010)
-          thawed_at: string | null;    // date (migration 010)
-          archived: boolean;
-          notes: string[];
-          color: string;
-          cc: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          household_id?: string;       // defaults to my_household_id() (migration 002)
-          roaster: string;
-          name: string;
-          origin?: string;
-          region?: string;
-          varietal?: string;
-          varietals?: string[];
-          process?: string;
-          roast?: string;
-          roasted_at: string;
-          rest_days?: number;
-          peak_days?: number;
-          grams?: number;
-          frozen_grams?: number;
-          frozen_at?: string | null;
-          thawed_at?: string | null;
-          archived?: boolean;
-          notes?: string[];
-          color?: string;
-          cc?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["coffees"]["Insert"]>;
-        Relationships: [];
-      };
       brews: {
         Row: {
-          id: string;
-          household_id: string;
-          coffee_id: string;
-          brewer_id: string;
-          dose: number;
-          water: number;
-          bypass: number;
-          temp: number;
-          grind: number;               // numeric(4,1) (migration 007)
-          ratio: number;
-          water_type: string;
-          started_at: string;          // timestamptz
-          rated_at: string | null;     // timestamptz
-          logged_by: string;
-          rest_days: number | null;    // snapshot (migration 010)
-          rate_for: string | null;     // handoff target (migration 011)
-          session_id: string | null;   // split-brew link (migration 012)
-          guest: boolean;              // cup made for a guest — no rating, excluded from stats (migration 016)
-          stars: number | null;        // numeric(2,1) (migration 006)
-          stars2: number | null;       // numeric(2,1) (migration 006)
-          taster1: string | null;
-          taster2: string | null;
-          acidity: number | null;
-          sweetness: number | null;
-          body: number | null;
-          clarity: number | null;
-          note: string | null;
-          created_at: string;
-        };
+          acidity: number | null
+          body: number | null
+          brewer_id: string
+          bypass: number
+          clarity: number | null
+          coffee_id: string
+          created_at: string
+          dose: number
+          grind: number
+          guest: boolean
+          household_id: string
+          id: string
+          logged_by: string
+          note: string | null
+          rate_for: string | null
+          rate_nudged_at: string | null
+          rated_at: string | null
+          ratio: number
+          rest_days: number | null
+          session_id: string | null
+          stars: number | null
+          stars2: number | null
+          started_at: string
+          sweetness: number | null
+          taster1: string | null
+          taster2: string | null
+          temp: number
+          water: number
+          water_type: string
+        }
         Insert: {
-          id?: string;
-          household_id?: string;       // defaults to my_household_id() (migration 002)
-          coffee_id: string;
-          brewer_id: string;
-          dose: number;
-          water: number;
-          bypass?: number;
-          temp: number;
-          grind: number;
-          ratio: number;
-          water_type?: string;
-          started_at?: string;
-          rated_at?: string | null;
-          logged_by?: string;          // defaults to auth.uid() (migration 002)
-          rest_days?: number | null;
-          rate_for?: string | null;
-          session_id?: string | null;
-          guest?: boolean;
-          stars?: number | null;
-          stars2?: number | null;
-          taster1?: string | null;
-          taster2?: string | null;
-          acidity?: number | null;
-          sweetness?: number | null;
-          body?: number | null;
-          clarity?: number | null;
-          note?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["brews"]["Insert"]>;
-        Relationships: [];
-      };
+          acidity?: number | null
+          body?: number | null
+          brewer_id: string
+          bypass?: number
+          clarity?: number | null
+          coffee_id: string
+          created_at?: string
+          dose: number
+          grind: number
+          guest?: boolean
+          household_id?: string
+          id?: string
+          logged_by?: string
+          note?: string | null
+          rate_for?: string | null
+          rate_nudged_at?: string | null
+          rated_at?: string | null
+          ratio: number
+          rest_days?: number | null
+          session_id?: string | null
+          stars?: number | null
+          stars2?: number | null
+          started_at?: string
+          sweetness?: number | null
+          taster1?: string | null
+          taster2?: string | null
+          temp: number
+          water: number
+          water_type?: string
+        }
+        Update: {
+          acidity?: number | null
+          body?: number | null
+          brewer_id?: string
+          bypass?: number
+          clarity?: number | null
+          coffee_id?: string
+          created_at?: string
+          dose?: number
+          grind?: number
+          guest?: boolean
+          household_id?: string
+          id?: string
+          logged_by?: string
+          note?: string | null
+          rate_for?: string | null
+          rate_nudged_at?: string | null
+          rated_at?: string | null
+          ratio?: number
+          rest_days?: number | null
+          session_id?: string | null
+          stars?: number | null
+          stars2?: number | null
+          started_at?: string
+          sweetness?: number | null
+          taster1?: string | null
+          taster2?: string | null
+          temp?: number
+          water?: number
+          water_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brews_coffee_id_fkey"
+            columns: ["coffee_id"]
+            isOneToOne: false
+            referencedRelation: "coffees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brews_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brews_logged_by_fkey"
+            columns: ["logged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brews_rate_for_fkey"
+            columns: ["rate_for"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coffees: {
+        Row: {
+          archived: boolean
+          cc: string | null
+          color: string
+          created_at: string
+          frozen_at: string | null
+          frozen_grams: number
+          grams: number
+          household_id: string
+          id: string
+          name: string
+          notes: string[]
+          origin: string
+          peak_days: number
+          process: string
+          region: string
+          rest_days: number
+          roast: string
+          roasted_at: string
+          roaster: string
+          thawed_at: string | null
+          varietal: string
+          varietals: string[]
+        }
+        Insert: {
+          archived?: boolean
+          cc?: string | null
+          color?: string
+          created_at?: string
+          frozen_at?: string | null
+          frozen_grams?: number
+          grams?: number
+          household_id?: string
+          id?: string
+          name: string
+          notes?: string[]
+          origin?: string
+          peak_days?: number
+          process?: string
+          region?: string
+          rest_days?: number
+          roast?: string
+          roasted_at: string
+          roaster: string
+          thawed_at?: string | null
+          varietal?: string
+          varietals?: string[]
+        }
+        Update: {
+          archived?: boolean
+          cc?: string | null
+          color?: string
+          created_at?: string
+          frozen_at?: string | null
+          frozen_grams?: number
+          grams?: number
+          household_id?: string
+          id?: string
+          name?: string
+          notes?: string[]
+          origin?: string
+          peak_days?: number
+          process?: string
+          region?: string
+          rest_days?: number
+          roast?: string
+          roasted_at?: string
+          roaster?: string
+          thawed_at?: string | null
+          varietal?: string
+          varietals?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coffees_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       config: {
         Row: {
-          household_id: string;
-          grinder: Json;
-          brewers: Json;
-          waters: string[];
-          default_water: string;
-          taster2: string;
-          random_greeting: boolean;
-          rest_days: number;           // migration 003
-          serving_grams: number;       // migration 003
-          peak_days: number;           // migration 005
-          roaster_rest: Json;          // migration 020
-          hidden_roasters: string[];   // migration 021
-        };
+          brewers: Json
+          default_water: string
+          grinder: Json
+          hidden_roasters: string[]
+          household_id: string
+          peak_days: number
+          random_greeting: boolean
+          rest_days: number
+          roaster_rest: Json
+          serving_grams: number
+          taster2: string
+          waters: string[]
+        }
         Insert: {
-          household_id: string;
-          grinder?: Json;
-          brewers?: Json;
-          waters?: string[];
-          default_water?: string;
-          taster2?: string;
-          random_greeting?: boolean;
-          rest_days?: number;
-          serving_grams?: number;
-          peak_days?: number;
-          roaster_rest?: Json;
-          hidden_roasters?: string[];
-        };
-        Update: Partial<Database["public"]["Tables"]["config"]["Insert"]>;
-        Relationships: [];
-      };
-      household_ai: {
-        Row: {
-          household_id: string;
-          provider: "openai" | "anthropic";
-          key_ciphertext: string;
-          key_iv: string;
-          set_by: string;
-          set_at: string;
-        };
-        Insert: {
-          household_id: string;
-          provider: "openai" | "anthropic";
-          key_ciphertext: string;
-          key_iv: string;
-          set_by: string;
-          set_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["household_ai"]["Insert"]>;
-        Relationships: [];
-      };
-      household_insight: {
-        Row: { household_id: string; text: string; generated_at: string };
-        Insert: { household_id: string; text: string; generated_at?: string };
-        Update: { household_id?: string; text?: string; generated_at?: string };
-        Relationships: [];
-      };
-      household_tips: {
-        Row: { household_id: string; tips: Json; generated_at: string };
-        Insert: { household_id: string; tips: Json; generated_at?: string };
-        Update: { household_id?: string; tips?: Json; generated_at?: string };
-        Relationships: [];
-      };
-      recipes: {
-        Row: {
-          id: string;
-          household_id: string;
-          name: string;
-          dose: number;
-          water: number;
-          bypass: number;
-          temp: number;
-          grind: number;
-          ratio: number;
-          water_type: string;
-          brewer_id: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          household_id?: string;       // defaults to my_household_id() (migration 018)
-          name: string;
-          dose: number;
-          water: number;
-          bypass?: number;
-          temp: number;
-          grind: number;
-          ratio: number;
-          water_type?: string;
-          brewer_id?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["recipes"]["Insert"]>;
-        Relationships: [];
-      };
-      learned_notes: {
-        Row: { note: string; family: string };
-        Insert: { note: string; family: string };
-        Update: { note?: string; family?: string };
-        Relationships: [];
-      };
-      learned_varietals: {
-        Row: { raw: string; canonical: string; is_blend_label: boolean };
-        Insert: { raw: string; canonical: string; is_blend_label?: boolean };
-        Update: { raw?: string; canonical?: string; is_blend_label?: boolean };
-        Relationships: [];
-      };
+          brewers?: Json
+          default_water?: string
+          grinder?: Json
+          hidden_roasters?: string[]
+          household_id: string
+          peak_days?: number
+          random_greeting?: boolean
+          rest_days?: number
+          roaster_rest?: Json
+          serving_grams?: number
+          taster2?: string
+          waters?: string[]
+        }
+        Update: {
+          brewers?: Json
+          default_water?: string
+          grinder?: Json
+          hidden_roasters?: string[]
+          household_id?: string
+          peak_days?: number
+          random_greeting?: boolean
+          rest_days?: number
+          roaster_rest?: Json
+          serving_grams?: number
+          taster2?: string
+          waters?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "config_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gear_catalog: {
         Row: {
-          id: string;
-          kind: "grinder" | "brewer";
-          name: string;
-          unit: string | null;
-          short: string | null;
-          dose: number | null;
-          ratio: number | null;
-          temp: number | null;
-          grind: number | null;
-          pours: number | null;
-          bypass: boolean | null;
-          source: "seed" | "community";
-        };
+          bypass: boolean | null
+          dose: number | null
+          grind: number | null
+          id: string
+          kind: string
+          name: string
+          pours: number | null
+          ratio: number | null
+          short: string | null
+          source: string
+          temp: number | null
+          unit: string | null
+        }
         Insert: {
-          id?: string;
-          kind: "grinder" | "brewer";
-          name: string;
-          unit?: string | null;
-          short?: string | null;
-          dose?: number | null;
-          ratio?: number | null;
-          temp?: number | null;
-          grind?: number | null;
-          pours?: number | null;
-          bypass?: boolean | null;
-          source?: "seed" | "community";
-        };
-        Update: Partial<Database["public"]["Tables"]["gear_catalog"]["Insert"]>;
-        Relationships: [];
-      };
-    };
-    Views: Record<string, never>;
+          bypass?: boolean | null
+          dose?: number | null
+          grind?: number | null
+          id?: string
+          kind: string
+          name: string
+          pours?: number | null
+          ratio?: number | null
+          short?: string | null
+          source?: string
+          temp?: number | null
+          unit?: string | null
+        }
+        Update: {
+          bypass?: boolean | null
+          dose?: number | null
+          grind?: number | null
+          id?: string
+          kind?: string
+          name?: string
+          pours?: number | null
+          ratio?: number | null
+          short?: string | null
+          source?: string
+          temp?: number | null
+          unit?: string | null
+        }
+        Relationships: []
+      }
+      household_ai: {
+        Row: {
+          household_id: string
+          key_ciphertext: string
+          key_iv: string
+          provider: string
+          set_at: string
+          set_by: string
+        }
+        Insert: {
+          household_id: string
+          key_ciphertext: string
+          key_iv: string
+          provider: string
+          set_at?: string
+          set_by: string
+        }
+        Update: {
+          household_id?: string
+          key_ciphertext?: string
+          key_iv?: string
+          provider?: string
+          set_at?: string
+          set_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_ai_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_ai_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_insight: {
+        Row: {
+          generated_at: string
+          household_id: string
+          text: string
+        }
+        Insert: {
+          generated_at?: string
+          household_id: string
+          text: string
+        }
+        Update: {
+          generated_at?: string
+          household_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_insight_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_tips: {
+        Row: {
+          generated_at: string
+          household_id: string
+          tips: Json
+        }
+        Insert: {
+          generated_at?: string
+          household_id: string
+          tips: Json
+        }
+        Update: {
+          generated_at?: string
+          household_id?: string
+          tips?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_tips_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      households: {
+        Row: {
+          created_at: string
+          id: string
+          invite_code: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invite_code: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invite_code?: string
+        }
+        Relationships: []
+      }
+      learned_notes: {
+        Row: {
+          family: string
+          note: string
+        }
+        Insert: {
+          family: string
+          note: string
+        }
+        Update: {
+          family?: string
+          note?: string
+        }
+        Relationships: []
+      }
+      learned_varietals: {
+        Row: {
+          canonical: string
+          is_blend_label: boolean
+          raw: string
+        }
+        Insert: {
+          canonical: string
+          is_blend_label?: boolean
+          raw: string
+        }
+        Update: {
+          canonical?: string
+          is_blend_label?: boolean
+          raw?: string
+        }
+        Relationships: []
+      }
+      notification_log: {
+        Row: {
+          household_id: string
+          id: number
+          kind: string
+          local_day: string
+          person_key: string
+          sent_at: string
+          slot: string
+        }
+        Insert: {
+          household_id: string
+          id?: number
+          kind: string
+          local_day: string
+          person_key: string
+          sent_at?: string
+          slot?: string
+        }
+        Update: {
+          household_id?: string
+          id?: number
+          kind?: string
+          local_day?: string
+          person_key?: string
+          sent_at?: string
+          slot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_log_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notify_person: {
+        Row: {
+          arvo_active: boolean
+          arvo_fire_min: number | null
+          arvo_misses: number
+          created_at: string
+          household_id: string
+          log_nudge: boolean
+          morning_active: boolean
+          morning_fire_min: number | null
+          morning_misses: number
+          person_key: string
+          rate_nudge: boolean
+          slots_computed_on: string | null
+        }
+        Insert: {
+          arvo_active?: boolean
+          arvo_fire_min?: number | null
+          arvo_misses?: number
+          created_at?: string
+          household_id: string
+          log_nudge?: boolean
+          morning_active?: boolean
+          morning_fire_min?: number | null
+          morning_misses?: number
+          person_key: string
+          rate_nudge?: boolean
+          slots_computed_on?: string | null
+        }
+        Update: {
+          arvo_active?: boolean
+          arvo_fire_min?: number | null
+          arvo_misses?: number
+          created_at?: string
+          household_id?: string
+          log_nudge?: boolean
+          morning_active?: boolean
+          morning_fire_min?: number | null
+          morning_misses?: number
+          person_key?: string
+          rate_nudge?: boolean
+          slots_computed_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notify_person_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id: string
+          name?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          household_id: string
+          iana_tz: string
+          last_seen_at: string
+          p256dh: string
+          person_key: string
+          profile_id: string | null
+          ua: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          household_id: string
+          iana_tz?: string
+          last_seen_at?: string
+          p256dh: string
+          person_key: string
+          profile_id?: string | null
+          ua?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          household_id?: string
+          iana_tz?: string
+          last_seen_at?: string
+          p256dh?: string
+          person_key?: string
+          profile_id?: string | null
+          ua?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_household_id_person_key_fkey"
+            columns: ["household_id", "person_key"]
+            isOneToOne: false
+            referencedRelation: "notify_person"
+            referencedColumns: ["household_id", "person_key"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          brewer_id: string | null
+          bypass: number
+          created_at: string
+          dose: number
+          grind: number
+          household_id: string
+          id: string
+          name: string
+          ratio: number
+          temp: number
+          water: number
+          water_type: string
+        }
+        Insert: {
+          brewer_id?: string | null
+          bypass?: number
+          created_at?: string
+          dose: number
+          grind: number
+          household_id?: string
+          id?: string
+          name: string
+          ratio: number
+          temp: number
+          water: number
+          water_type?: string
+        }
+        Update: {
+          brewer_id?: string | null
+          bypass?: number
+          created_at?: string
+          dose?: number
+          grind?: number
+          household_id?: string
+          id?: string
+          name?: string
+          ratio?: number
+          temp?: number
+          water?: number
+          water_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipes_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
-      my_household_id: { Args: Record<string, never>; Returns: string };
-    };
-    Enums: Record<string, never>;
-    CompositeTypes: Record<string, never>;
-  };
+      my_household_id: { Args: never; Returns: string }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
 
-export type Tables<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
-export type TablesInsert<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Insert"];
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
