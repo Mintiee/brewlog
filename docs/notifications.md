@@ -40,6 +40,32 @@ runs at minute granularity. Setup lives in `supabase/cron/notify.sql`.
 A side effect: the 5-minute heartbeat is database activity, so the project no
 longer auto-pauses for inactivity.
 
+## The two nudges resolve to different people
+
+This is deliberate and easy to "simplify" by mistake:
+
+| Nudge | Owner | Column |
+|---|---|---|
+| **Log** | the **brewer** | `logged_by` |
+| **Rate** | the **drinker** | `rate_for ?? logged_by` (i.e. `ratingOwnerId`) |
+
+Only the person holding the phone can log a cup, so the log nudge follows
+whoever actually brews. But a cup is often brewed *for* the other member — the
+log flow's `partner` and `split` audiences set `rate_for` on the row (see
+`logCoffee` in `BrewFlow.tsx`) — and that cup is theirs to rate, so the rate
+nudge follows the handoff.
+
+Concretely, in this household: Min-Taec brews most of Kris's coffees. He gets
+the "log a coffee?" nudge; she gets "how was it?" for the cups he made her. A
+split creates two rows and each drinker is nudged for their own half.
+
+The consequence to keep in mind: **the log nudge learns only from what a person
+logs themselves.** A household routine shared between two loggers is scored
+separately for each, and if neither individually clears the density gate, both
+go quiet even though the household pattern is strong. That is the intended
+trade — see the probe output below, where the household brews an arvo coffee on
+31/56 days but no individual logger reaches 55%.
+
 ## Identity
 
 Everything keys on `person_key = lower(btrim(profiles.name))` within a household,
@@ -212,7 +238,19 @@ Nudge probe — Australia/Sydney, 122 non-guest brews in the last 56 days
   min-taec — 94 brews
       morning  37/56 days, 14/28 recent — nudges at 7:45am
       arvo     21/56 days, 14/28 recent — silent (no clear pattern)
+
+  rate routing — recent handed-off / split cups (brewer -> rater):
+      2026-08-28  7:37am  partner min-taec -> kris
+      2026-08-30  7:04am  partner min-taec -> kris
+      2026-08-31 11:38am  split   min-taec -> kris
 ```
+
+Read that alongside the household totals, which the per-person view hides:
+morning on **40/56** days, arvo on **31/56**. The arvo routine is real at
+household level but splits 21/15 across two loggers, so neither clears the gate.
+Some of that is under-recording — the gap the rate nudge exists to close — so
+expect the arvo slot to switch itself on as the log fills in. Nothing needs
+changing for that to happen; the daily recompute picks it up.
 
 Re-run it if the nudges ever feel wrong — it shows both the counts the gates read
 and the verdict, so you can see *which* gate said no.

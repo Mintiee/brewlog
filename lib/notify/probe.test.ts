@@ -44,7 +44,7 @@ describe.skipIf(!process.env.NUDGE_PROBE)("nudge probe (live data, read-only)", 
 
     const [{ data: profiles, error: pErr }, { data: brews, error: bErr }] = await Promise.all([
       db.from("profiles").select("id, name, household_id"),
-      db.from("brews").select("started_at, logged_by").eq("guest", false).gte("started_at", since),
+      db.from("brews").select("started_at, logged_by, rate_for, session_id").eq("guest", false).gte("started_at", since),
     ]);
     if (pErr) throw pErr;
     if (bErr) throw bErr;
@@ -78,6 +78,25 @@ describe.skipIf(!process.env.NUDGE_PROBE)("nudge probe (live data, read-only)", 
         lines.push(`      ${slot.padEnd(8)} ${String(dayset.size).padStart(2)}/56 days, ${String(recent).padStart(2)}/28 recent — ${verdict}`);
       }
     }
+    // Rate routing. The two nudges deliberately resolve to different people:
+    // the log nudge follows logged_by (the brewer — only they can log a cup),
+    // while the rate nudge follows rate_for ?? logged_by (the drinker), so a cup
+    // brewed *for* the other member asks them to rate it, not you. `partner` and
+    // `split` in the log flow are what set rate_for.
+    const handed = (brews ?? []).filter((b) => b.rate_for || b.session_id).slice(-8);
+    lines.push("\n  rate routing — recent handed-off / split cups (brewer -> rater):");
+    if (handed.length === 0) {
+      lines.push("      none in this window");
+    }
+    for (const b of handed) {
+      const brewer = nameOf.get(b.logged_by) ?? "?";
+      const rater = nameOf.get(b.rate_for ?? b.logged_by) ?? "?";
+      const z = zoned(Date.parse(b.started_at), TZ);
+      const kind = b.session_id ? "split" : "partner";
+      const note = !b.rate_for ? " (rate_for already cleared — rated)" : "";
+      lines.push(`      ${z.day} ${minutesToClock(z.minutes).padStart(7)}  ${kind.padEnd(7)} ${brewer} -> ${rater}${note}`);
+    }
+
     console.log(lines.join("\n"));
 
     expect(byPerson.size).toBeGreaterThan(0);
