@@ -1,22 +1,17 @@
 /**
  * Service-role data access for the nudge engine.
  *
- * The generated `Database` type is produced from the live project
- * (`npm run gen:types`), so until migration 022 has been applied there these
- * tables don't exist in it. This module therefore declares its own row shapes
- * and talks to an untyped view of the same client — deliberately quarantined to
- * one file. Once 022 is live and types are regenerated, the cast can go.
+ * Typed against the generated schema — migration 022 is live, so the notify
+ * tables are in `Database`. The row interfaces below are still declared by hand
+ * rather than derived from `Tables<"...">`, because they are the shape this
+ * module promises its callers; if a future migration changes a column, the
+ * mismatch should surface here rather than silently reshaping the engine.
  */
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { SlotName, PersonSlots } from "./schedule";
 import { EMPTY_SLOT } from "./schedule";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function db(): SupabaseClient<any, "public", any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createServiceClient() as unknown as SupabaseClient<any, "public", any>;
-}
+const db = createServiceClient;
 
 export interface SubscriptionRow {
   endpoint: string;
