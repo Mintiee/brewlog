@@ -175,10 +175,15 @@ export async function GET(req: NextRequest) {
       const p = byPerson.get(`${b.household_id}::${personKey}`)!;
       const localDay = zoned(nowMs, p.tz).day;
       const coffee = store.coffeeOf(b)?.name ?? "that brew";
+      // A cup that was *sent* to you reads differently from one you made
+      // yourself — name the sender, since the ask came from them.
+      const sender = b.rate_handed_at ? profiles.get(b.logged_by)?.name : null;
 
       const res = await fanOut(p.targets, {
         title: `How was the ${coffee}?`,
-        body: "Tap to add your rating while it's fresh.",
+        body: sender
+          ? `${sender} sent this one over to rate.`
+          : "Tap to add your rating while it's fresh.",
         url: `/?rate=${b.id}`,
         tag: `rate-${b.id}`,
       });

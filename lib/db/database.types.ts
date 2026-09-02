@@ -31,6 +31,7 @@ export type Database = {
           logged_by: string
           note: string | null
           rate_for: string | null
+          rate_handed_at: string | null
           rate_nudged_at: string | null
           rated_at: string | null
           ratio: number
@@ -62,6 +63,7 @@ export type Database = {
           logged_by?: string
           note?: string | null
           rate_for?: string | null
+          rate_handed_at?: string | null
           rate_nudged_at?: string | null
           rated_at?: string | null
           ratio: number
@@ -93,6 +95,7 @@ export type Database = {
           logged_by?: string
           note?: string | null
           rate_for?: string | null
+          rate_handed_at?: string | null
           rate_nudged_at?: string | null
           rated_at?: string | null
           ratio?: number

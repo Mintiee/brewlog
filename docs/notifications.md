@@ -55,6 +55,29 @@ log flow's `partner` and `split` audiences set `rate_for` on the row (see
 `logCoffee` in `BrewFlow.tsx`) — and that cup is theirs to rate, so the rate
 nudge follows the handoff.
 
+There are **two** ways `rate_for` gets set, and they need different handling:
+
+- **At log time** (`partner` / `split`) — `rate_for` is on the row from birth, so
+  the ordinary 25-minute path already targets the right person.
+- **Afterwards**, via *send to rate* (`StepWhat` → `onSend` → `updateBrew`) — an
+  UPDATE on an existing row. 022 shipped with this broken: the update touched
+  nothing the nudge query read, so if the tick had already nudged the logger,
+  `rate_nudged_at` was stamped and the new owner got **nothing**. Migration 023
+  adds `brews.rate_handed_at` and a `before update` trigger that stamps it and
+  clears `rate_nudged_at` whenever `rate_for` changes to a different person,
+  putting the row back in the queue for its new owner.
+
+A handed-off cup is nudged on the **next tick**, with no 25-minute delay: the
+delay exists so you've had time to drink a cup you just made, and a handoff is
+already an explicit request about a cup that is however old it is. Its
+notification names the sender ("Min-Taec sent this one over to rate") rather
+than the generic prompt.
+
+The trigger fires only on a change *to* a non-null `rate_for`. Rating a brew
+sets `rate_for` back to NULL (`rateBrew` in `AppContext.tsx`), which must not
+re-arm the nudge or every rating would bounce back into the queue — verified
+against the live database before deploying.
+
 Concretely, in this household: Min-Taec brews most of Kris's coffees. He gets
 the "log a coffee?" nudge; she gets "how was it?" for the cups he made her. A
 split creates two rows and each drinker is nudged for their own half.

@@ -43,6 +43,9 @@ export interface RateCandidate {
   created_at: string;
   logged_by: string;
   rate_for: string | null;
+  /** Set by the migration-023 trigger when this cup was handed to its current
+   *  rater. NULL = never handed off. */
+  rate_handed_at: string | null;
   /** Embedded to-one coffee. PostgREST returns an object, but some supabase-js
    *  versions surface a single-element array — normalised by coffeeOf(). */
   coffees: { name: string; roaster: string } | { name: string; roaster: string }[] | null;
@@ -113,17 +116,45 @@ export async function brewTimes(householdIds: string[], sinceIso: string): Promi
  */
 export async function rateCandidates(nowMs: number): Promise<RateCandidate[]> {
   const iso = (ms: number) => new Date(ms).toISOString();
-  const { data, error } = await db()
-    .from("brews")
-    .select("id, household_id, started_at, created_at, logged_by, rate_for, coffees(name, roaster)")
-    .is("rated_at", null)
-    .is("rate_nudged_at", null)
-    .eq("guest", false)
-    .lte("started_at", iso(nowMs - RATE_DELAY_MS))
-    .gte("started_at", iso(nowMs - RATE_MAX_AGE_MS))
-    .gte("created_at", iso(nowMs - RATE_MAX_AGE_MS));
-  if (error) throw error;
-  return ((data ?? []) as unknown as RateCandidate[]).filter(rateGate);
+  const COLUMNS =
+    "id, household_id, started_at, created_at, rate_handed_at, logged_by, rate_for, coffees(name, roaster)";
+
+  const [fresh, handed] = await Promise.all([
+    // A cup you just made: wait out RATE_DELAY_MS so you've actually drunk it.
+    db()
+      .from("brews")
+      .select(COLUMNS)
+      .is("rated_at", null)
+      .is("rate_nudged_at", null)
+      .eq("guest", false)
+      .lte("started_at", iso(nowMs - RATE_DELAY_MS))
+      .gte("started_at", iso(nowMs - RATE_MAX_AGE_MS))
+      .gte("created_at", iso(nowMs - RATE_MAX_AGE_MS)),
+
+    // A cup someone sent you. No delay — the handoff *is* the request, and the
+    // coffee is already however old it is, so waiting another 25 minutes would
+    // only make the ask arrive later. rate_handed_at is stamped by a trigger
+    // (migration 023) using the server clock, so the offline-replay problem that
+    // rateGate() guards against cannot apply here.
+    db()
+      .from("brews")
+      .select(COLUMNS)
+      .is("rated_at", null)
+      .is("rate_nudged_at", null)
+      .eq("guest", false)
+      .not("rate_handed_at", "is", null)
+      .gte("rate_handed_at", iso(nowMs - RATE_MAX_AGE_MS)),
+  ]);
+  if (fresh.error) throw fresh.error;
+  if (handed.error) throw handed.error;
+
+  // A cup handed over inside the first 25 minutes matches both queries.
+  const byId = new Map<string, RateCandidate>();
+  for (const b of (fresh.data ?? []) as unknown as RateCandidate[]) {
+    if (rateGate(b)) byId.set(b.id, b);
+  }
+  for (const b of (handed.data ?? []) as unknown as RateCandidate[]) byId.set(b.id, b);
+  return [...byId.values()];
 }
 
 /** Wait this long after the brew before asking — you've actually drunk it by then. */
