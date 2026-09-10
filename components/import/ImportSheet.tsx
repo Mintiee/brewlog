@@ -21,8 +21,9 @@ import { useApp } from "@/lib/store/AppContext";
 import { parseBeanConqueror } from "@/lib/import/beanconqueror";
 import { parseCsv } from "@/lib/import/csv";
 import { markDuplicates } from "@/lib/import/dedup";
-import { toCoffee } from "@/lib/import/materialize";
+import { toCoffee, ROAST_ENUM, normalizeRoast } from "@/lib/import/materialize";
 import { IMPORT_PROMPT, CSV_COLUMNS, CSV_EXAMPLE } from "@/lib/import/prompt";
+import { Stepper } from "@/components/ui/Stepper";
 import type { ReviewCoffee } from "@/lib/import/types";
 import type { Coffee } from "@/lib/types";
 
@@ -86,6 +87,7 @@ function ReviewRow({
             {item.roaster}
             {item.origin ? ` · ${item.origin}` : ""}
             {item.roasted_at ? ` · ${item.roasted_at}` : ""}
+            {item.grams ? ` · ${item.grams}g` : ""}
           </div>
         </div>
 
@@ -106,7 +108,7 @@ function ReviewRow({
       {/* Expanded editor */}
       {expanded && (
         <div style={{ borderTop: "1px solid var(--line)", padding: "12px 13px" }}>
-          {(["roaster", "name", "origin", "region", "varietal", "process", "roast", "roasted_at"] as const).map((field) => (
+          {(["roaster", "name", "origin", "region", "varietal", "process", "roasted_at"] as const).map((field) => (
             <label key={field} style={{ display: "block", marginBottom: 10 }}>
               <div className="label" style={{ marginBottom: 4, color: "var(--ink-faint)" }}>{field.replace(/_/g, " ")}</div>
               <input
@@ -121,6 +123,37 @@ function ReviewRow({
               />
             </label>
           ))}
+          <label style={{ display: "block", marginBottom: 10 }}>
+            <div className="label" style={{ marginBottom: 4, color: "var(--ink-faint)" }}>roast</div>
+            <select
+              // Parsed rows carry the source's own wording ("Medium Roast", a BC
+              // enum, a CSV typo) — normalise it to one of our five so the select
+              // shows what will actually be saved rather than falling back blank.
+              value={normalizeRoast(item.roast)}
+              onChange={(e) => onChange({ roast: e.target.value })}
+              style={{
+                width: "100%", padding: "9px 12px", borderRadius: 10,
+                background: "var(--bg)", border: "1px solid var(--line)",
+                color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 15,
+                outline: "none", boxSizing: "border-box",
+              }}
+            >
+              {ROAST_ENUM.map((r) => (
+                <option key={r} value={r}>{r.replace(/-/g, " ")}</option>
+              ))}
+            </select>
+          </label>
+          <Stepper
+            icon="scale"
+            label="Bag size"
+            unit="g"
+            step={25}
+            min={0}
+            max={2000}
+            dense
+            value={item.grams ?? 250}
+            onChange={(v) => onChange({ grams: v })}
+          />
           <label style={{ display: "block", marginBottom: 0 }}>
             <div className="label" style={{ marginBottom: 4, color: "var(--ink-faint)" }}>notes (comma-separated)</div>
             <input
