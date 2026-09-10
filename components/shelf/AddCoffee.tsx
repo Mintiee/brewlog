@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import { originCode, todayISO, daysAgoISO, canonicalRoaster, roasterSuggestions } from "@/lib/domain";
+import { todayISO, daysAgoISO, roasterSuggestions } from "@/lib/domain";
 import { Icon } from "@/components/ui/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import { SheetHeader } from "@/components/ui/SheetHeader";
@@ -8,7 +8,9 @@ import { ProcessPicker } from "./ProcessPicker";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 import { Field } from "./Field";
 import { SuggestField } from "@/components/ui/SuggestField";
-import { parseVarietals } from "@/lib/varietal";
+import { Stepper } from "@/components/ui/Stepper";
+import { ROAST_ENUM, toCoffee } from "@/lib/import/materialize";
+import type { ImportedCoffee } from "@/lib/import/types";
 import type { Coffee } from "@/lib/types";
 
 type Phase = "capture" | "scanning" | "review";
@@ -24,7 +26,18 @@ interface ReviewForm {
   roast: string;
   roastedAt: string;        // ISO YYYY-MM-DD; defaults to today
   needsRoastDate: boolean;
+  grams: number;            // bag size; 250 is a real default, never "blank"
   notes: string;
+}
+
+/** All four entry points (open, clear, scan failure, manual) start here, so the
+ *  defaults can't drift apart. A function, not a const: todayISO() must be read
+ *  when the form opens, not once at module load. */
+function blankForm(): ReviewForm {
+  return {
+    roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed",
+    roast: "light", roastedAt: todayISO(), needsRoastDate: false, grams: 250, notes: "",
+  };
 }
 
 interface AddCoffeeProps {
@@ -36,13 +49,13 @@ interface AddCoffeeProps {
   coffees?: Coffee[];
 }
 
-const ROAST_LEVELS = ["light", "medium-light", "medium", "medium-dark", "dark"];
-
 // A scan/manual entry in progress is thrown away today if the sheet closes and
 // reopens (e.g. backgrounding mid-scan, or a fat-fingered close). Persist the
 // review-phase draft (and its source) to sessionStorage so it survives that —
 // cleared on a successful save or an explicit "Clear" from the restored banner.
-const DRAFT_KEY = "addcoffee:draft:v1";
+// v2: ReviewForm gained `grams`, and a v1 draft would restore it as undefined
+// straight into the Stepper. Bumping the key retires those drafts instead.
+const DRAFT_KEY = "addcoffee:draft:v2";
 
 /** Coalesce per-keystroke draft writes. */
 const DRAFT_DEBOUNCE_MS = 300;
@@ -89,6 +102,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
   const [source, setSource] = useState<Source>("photo");
   const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(undefined);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -104,13 +118,14 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
         setDraftRestored(false);
       } else {
         setPhase("review");
-        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
+        setForm(blankForm());
         setSource("manual");
         setDraftRestored(false);
       }
       setScanPct(0);
       setUrl("");
       setPhotoDataUrl(undefined);
+      setScanError(null);
     }
   }, [open, llmEnabled]);
 
@@ -138,18 +153,23 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
   function clearDraft() {
     clearDraftStorage();
     setDraftRestored(false);
+    setScanError(null);
     if (llmEnabled) {
       setPhase("capture");
       setForm(null);
     } else {
       setPhase("review");
-      setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
+      setForm(blankForm());
       setSource("manual");
     }
   }
 
-  async function runScan(fromUrl: boolean) {
+  // `dataUrl` is passed in rather than read from state: the photo scan starts in the
+  // same tick as setPhotoDataUrl, and reading the state there would send `{ image:
+  // undefined }` — a 400 from /api/extract that used to surface as a blank form.
+  async function runScan(fromUrl: boolean, dataUrl?: string) {
     setSource(fromUrl ? "url" : "photo");
+    setScanError(null);
     setPhase("scanning");
     setScanPct(0);
     const tick = setInterval(() => setScanPct((p) => Math.min(95, p + 6 + Math.random() * 8)), 140);
@@ -157,7 +177,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
     try {
       const body = fromUrl
         ? JSON.stringify({ url: url.trim() })
-        : JSON.stringify({ image: photoDataUrl });
+        : JSON.stringify({ image: dataUrl });
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -177,13 +197,22 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
     // dead time bolted onto the end of a request the user had already waited on.
     setTimeout(() => {
       if (!data || !data.roaster) {
-        // fall through to manual entry
-        setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
+        // Fall through to manual entry, but say so. Source becomes "manual" on
+        // purpose: nothing was read, so the "Got most of it from the bag" banner
+        // and the scanned-field highlights would both be lying. The error banner
+        // below is gated on scanError alone, so it survives that switch.
+        setForm(blankForm());
         setSource("manual");
+        setScanError(fromUrl
+          ? "Couldn't read that link — fill it in below"
+          : "Couldn't read that bag — fill it in below");
       } else {
         const notes = Array.isArray((data as any).notes) ? (data as any).notes : [];
         const scannedDaysAgo = (data as any).roastDaysAgo;
         setForm({
+          // Spread the blank first so fields a scan never returns (bag size) keep
+          // their default rather than being forgotten when ReviewForm grows.
+          ...blankForm(),
           roaster: (data as any).roaster || "",
           name: (data as any).name || "",
           origin: (data as any).origin || "",
@@ -192,7 +221,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
             ? (data as any).varietals.filter(Boolean).join(", ")
             : ((data as any).varietal || ""),
           process: (data as any).process || "Washed",
-          roast: ROAST_LEVELS.includes((data as any).roast) ? (data as any).roast : "light",
+          roast: ROAST_ENUM.includes((data as any).roast) ? (data as any).roast : "light",
           // A link rarely carries the roast date → default to today and flag for the user.
           roastedAt: fromUrl ? todayISO() : daysAgoISO(scannedDaysAgo != null ? Number(scannedDaysAgo) : 4),
           needsRoastDate: !!fromUrl,
@@ -205,37 +234,29 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
 
   function startManual() {
     setSource("manual");
-    setForm({ roaster: "", name: "", origin: "", region: "", varietal: "", process: "Washed", roast: "light", roastedAt: todayISO(), needsRoastDate: false, notes: "" });
+    setForm(blankForm());
     setPhase("review");
   }
 
   function commit() {
     if (!form) return;
     const notes = form.notes ? form.notes.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const roasted_at = form.roastedAt || todayISO();
-    const c: Coffee = {
-      id: crypto.randomUUID(),
-      // Adopt the shelf's existing spelling when this roaster (or a case/suffix
-      // variant of it) is already known — keeps stats grouping by one name.
-      roaster: canonicalRoaster(form.roaster, coffees) || "Unknown",
-      name: form.name || "Untitled",
-      origin: form.origin || "—",
-      region: form.region || form.origin || "—",
-      varietals: parseVarietals(form.varietal),
-      process: form.process || "Washed",
-      roast: "light",
-      roasted_at,
-      rest_days: 28,
-      peak_days: 56,
-      grams: 250,
-      frozen_grams: 0,
-      frozen_at: null,
-      thawed_at: null,
-      archived: false,
+    // Hand the entered fields to the shared create path rather than assembling a
+    // Coffee here — toCoffee owns canonicalRoaster, parseVarietals, originCode and
+    // the rest/peak defaults, and this used to be a copy of it that drifted.
+    const imported: ImportedCoffee = {
+      roaster: form.roaster,
+      name: form.name,
+      origin: form.origin,
+      region: form.region,
+      varietal: form.varietal,
+      process: form.process,
+      roast: form.roast,
+      roasted_at: form.roastedAt || todayISO(),
+      grams: form.grams,
       notes,
-      cc: originCode(form.origin),
     };
-    onAdd(c);
+    onAdd(toCoffee(imported, coffees));
     clearDraftStorage();
     setDraftRestored(false);
     onClose();
@@ -253,14 +274,14 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
           <div>
             <div style={{ position: "relative" }}>
               <ImagePicker
-                onFile={(_file, dataUrl) => setPhotoDataUrl(dataUrl)}
+                // Picking the photo *is* the scan — there's nothing to confirm in
+                // between, and the old "Scan bag" button could be tapped with no
+                // photo at all, POSTing an empty body for a 400 and a blank form.
+                onFile={(_file, dataUrl) => { setPhotoDataUrl(dataUrl); runScan(false, dataUrl); }}
                 preview={photoDataUrl}
                 height={200}
               />
             </div>
-            <button className="btn btn-accent" style={{ marginTop: 14 }} onClick={() => runScan(false)}>
-              <Icon name="camera" size={21} stroke={1.7} /> Scan bag
-            </button>
 
             <div style={{ display: "flex", alignItems: "center", gap: 9, margin: "16px 2px 14px", color: "var(--ink-faint)" }}>
               <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
@@ -297,7 +318,7 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
 
             <div style={{ display: "flex", gap: 8, marginTop: 14, color: "var(--ink-faint)", fontSize: 12.5, lineHeight: 1.5 }}>
               <Icon name="spark" size={15} stroke={1.6} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>Snap the bag or paste a product link — roaster, origin, varietal &amp; process fill in for you. (A link won&apos;t have the roast date, so you&apos;ll add that.)</span>
+              <span>Add a bag photo and it reads itself — roaster, origin, varietal &amp; process fill in for you. A product link works too, but won&apos;t have the roast date, so you&apos;ll add that.</span>
             </div>
           </div>
         )}
@@ -326,6 +347,24 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
           const fromSrc = source === "url" ? "the link" : source === "photo" ? "the bag" : null;
           return (
             <div>
+              {scanError && (
+                <div style={{ display: "flex", gap: 11, alignItems: "flex-start", marginBottom: 16, padding: 13, borderRadius: 14, background: "var(--accent-soft)", border: "1px solid var(--accent)" }}>
+                  <span style={{ color: "var(--accent)", flexShrink: 0, marginTop: 1 }}>
+                    <Icon name="spark" size={17} stroke={1.8} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{scanError}</div>
+                    <button
+                      // Without a way back to capture, one bad photo (or a link the
+                      // page blocked) can only be escaped by closing the whole sheet.
+                      onClick={() => { setPhase("capture"); setPhotoDataUrl(undefined); setScanError(null); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent)", fontFamily: "var(--font-ui)", fontSize: 12.5, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 2, padding: 0, marginTop: 3 }}
+                    >
+                      Try another photo or link
+                    </button>
+                  </div>
+                </div>
+              )}
               {draftRestored && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14, padding: "9px 13px", borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-faint)", fontSize: 12.5 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -409,6 +448,16 @@ export function AddCoffee({ open, onClose, onAdd, llmEnabled, coffees = [] }: Ad
                   </div>
                 )}
               </div>
+              <Stepper
+                icon="scale"
+                label="Bag size"
+                value={form.grams}
+                unit="g"
+                step={25}
+                min={0}
+                max={2000}
+                onChange={(v) => setForm((f) => f ? { ...f, grams: v } : f)}
+              />
               <Field label="Tasting notes" value={form.notes} onChange={set("notes")} placeholder="comma, separated" />
               <button
                 className="btn btn-accent"
