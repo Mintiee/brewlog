@@ -1,14 +1,19 @@
 /**
  * Converts an ImportedCoffee into a full Coffee domain object.
- * Replicates the logic in AddCoffee.commit() so imports are consistent with
- * manually-added coffees (canonicalRoaster, originCode, defaults).
+ *
+ * This is *the* create path: bulk import (ImportSheet) and single-bag add
+ * (AddCoffee.commit) both funnel their entered fields through toCoffee(), so the
+ * defaults — canonicalRoaster, originCode, bag size, rest/peak windows — are
+ * defined once. It used to be a hand-kept copy of AddCoffee.commit() and the two
+ * promptly drifted: grams and roast were honoured here and hardcoded there.
  */
 import type { Coffee, Roast } from "@/lib/types";
 import { canonicalRoaster, originCode, todayISO } from "@/lib/domain";
 import { parseVarietals } from "@/lib/varietal";
 import type { ImportedCoffee } from "./types";
 
-const ROAST_ENUM: Roast[] = ["light", "medium-light", "medium", "medium-dark", "dark"];
+/** The five roast levels, light → dark. Shared with the entry forms. */
+export const ROAST_ENUM: Roast[] = ["light", "medium-light", "medium", "medium-dark", "dark"];
 
 /** Normalize any roast string to our Roast enum, falling back to "light". */
 export function normalizeRoast(raw: string | undefined): Roast {
@@ -16,12 +21,18 @@ export function normalizeRoast(raw: string | undefined): Roast {
   const s = raw.toLowerCase().trim();
   // Exact enum matches
   if (ROAST_ENUM.includes(s as Roast)) return s as Roast;
-  // Common aliases / partial matches
-  if (s.includes("dark")) return "dark";
-  if (s.includes("medium-dark") || s.includes("medium dark") || s.includes("vien")) return "medium-dark";
+  // Common aliases / partial matches. Order matters twice over: a compound level
+  // must be tested before the single word it contains ("Medium Dark Roast" used to
+  // hit the bare `includes("dark")` and come back plain "dark"), and "full city"
+  // must be tested before "city roast" or it would read as medium-light.
+  if (s.includes("medium-dark") || s.includes("medium dark") || s.includes("vien")
+      || s.includes("full city+") || s.includes("full city +")) return "medium-dark";
   if (s.includes("full city")) return "medium";
   if (s.includes("city+") || s.includes("city plus")) return "medium";
-  if (s.includes("medium-light") || s.includes("moderate-light") || s.includes("city roast")) return "medium-light";
+  if (s.includes("medium-light") || s.includes("medium light")
+      || s.includes("moderate-light") || s.includes("moderate light")
+      || s.includes("city roast")) return "medium-light";
+  if (s.includes("dark") || s.includes("french") || s.includes("italian")) return "dark";
   if (s.includes("medium")) return "medium";
   if (s.includes("cinnamon") || s.includes("american") || s.includes("new england") || s.includes("half city")) return "light";
   if (s.includes("light")) return "light";
