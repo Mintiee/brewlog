@@ -8,6 +8,7 @@ import { Shelf } from "@/components/shelf/Shelf";
 import { History } from "@/components/palate/History";
 import dynamic from "next/dynamic";
 import type { Coffee } from "@/lib/types";
+import { claimNudgeIntent, takeNudgeIntent } from "@/lib/notify/intent";
 
 /**
  * Settings is a tab the user opens deliberately, and it transitively pulls in
@@ -95,7 +96,7 @@ function TabBar({ active, onChange, pendingCount }: { active: Tab; onChange: (t:
 }
 
 function Shell() {
-  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState, queuedCount, setAiKey, removeAiKey } = useApp();
+  const { coffees, brews, recipes, config, profile, members, llmEnabled, ready, addCoffee, updateCoffee, setConfig, updateRecipe, deleteRecipe, lastError, clearError, undoState, queuedCount, setAiKey, removeAiKey, refresh } = useApp();
   const [tab, setTab] = useState<Tab>("brew");
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
@@ -146,36 +147,88 @@ function Shell() {
     setTab(t);
   }, []);
 
-  // Push-notification deep links. The app has no router — tabs and sheets are
-  // local state — so a nudge lands as a query param that we consume once and
-  // then strip from the URL, otherwise a refresh would reopen the same sheet.
+  // Push-notification deep links. The app has no router: tabs and sheets are
+  // local state. So a nudge arrives as a route, which we act on once.
   //
-  // Two arrival paths, both funnelled through here: a cold open (the URL from
-  // the notification) and a warm one (the service worker focuses the existing
-  // window and postMessages the route — see notificationclick in sw.js).
+  // It can arrive three ways, all of them funnelled through openNudge:
+  //  - the mailbox: an entry notificationclick in sw.js writes to Cache Storage.
+  //    We pull it on launch and every time the app comes to the front. This is
+  //    the path iOS actually honours, because a suspended home-screen app that a
+  //    tap brings forward drops both of the others (lib/notify/intent.ts).
+  //  - a postMessage from the worker to an already-open window (the fast path
+  //    where it works).
+  //  - the launch URL's query, for a cold open. The query is stripped afterwards,
+  //    otherwise a refresh would reopen the same sheet.
+  // Intents carry an id and are claimed at most once, so a tap that arrives by
+  // more than one path still acts once.
   const openNudge = useCallback((rawUrl: string) => {
     const params = new URLSearchParams(rawUrl.includes("?") ? rawUrl.slice(rawUrl.indexOf("?")) : "");
     const rate = params.get("rate");
+    const log = params.get("log");
+    if (!rate && !log) return;
+    // The in-memory data may be hours old (a backgrounded app), or it may be the
+    // service worker's cached shell. Refresh now, so a brew logged elsewhere
+    // resolves and the screen we open is current. BrewFlow waits on `brews` for
+    // the rate target.
+    void refresh();
     if (rate) {
       setTab("brew");
       setRateStart({ brewId: rate, nonce: Date.now() });
-    } else if (params.get("log")) {
+    } else {
       gotoTab("brew");
     }
-  }, [gotoTab]);
+  }, [gotoTab, refresh]);
 
   useEffect(() => {
-    if (window.location.search) {
-      openNudge(window.location.search);
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    if (!("serviceWorker" in navigator)) return;
-    const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === "brewlog:navigate" && typeof e.data.url === "string") openNudge(e.data.url);
+    let alive = true;
+    const pull = () => {
+      void takeNudgeIntent().then((intent) => { if (alive && intent) openNudge(intent.url); });
     };
-    navigator.serviceWorker.addEventListener("message", onMessage);
-    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+
+    // Cold open. When the mailbox has an entry, it describes the same tap as the
+    // launch URL (openWindow was given that URL), so it wins and the query is only
+    // a fallback: an older worker, or Cache Storage unavailable.
+    const query = window.location.search;
+    if (query) window.history.replaceState(null, "", window.location.pathname);
+    void takeNudgeIntent().then((intent) => {
+      if (!alive) return;
+      if (intent) openNudge(intent.url);
+      else if (query) openNudge(query);
+    });
+
+    // Coming to the front. notificationclick can write the mailbox a beat after
+    // the page resumes, so look again shortly afterwards. These are cheap reads
+    // of one cache entry.
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const onFront = () => {
+      if (document.visibilityState !== "visible") return;
+      pull();
+      timers.push(setTimeout(pull, 600), setTimeout(pull, 2000));
+    };
+    document.addEventListener("visibilitychange", onFront);
+    window.addEventListener("pageshow", onFront);
+    window.addEventListener("focus", onFront);
+
+    const sw = "serviceWorker" in navigator ? navigator.serviceWorker : null;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type !== "brewlog:navigate") return;
+      const intent = claimNudgeIntent(e.data.intent);
+      if (intent) openNudge(intent.url);
+      pull(); // clears the mailbox copy of this same tap (already claimed, so a no-op)
+    };
+    sw?.addEventListener("message", onMessage);
+
+    return () => {
+      alive = false;
+      timers.forEach(clearTimeout);
+      document.removeEventListener("visibilitychange", onFront);
+      window.removeEventListener("pageshow", onFront);
+      window.removeEventListener("focus", onFront);
+      sw?.removeEventListener("message", onMessage);
+    };
   }, [openNudge]);
+
+  const clearRateStart = useCallback(() => setRateStart(null), []);
 
   const openSettings = () => { setPrevTab(tab); setTab("settings"); };
   const closeSettings = () => setTab(prevTab || "brew");
@@ -199,6 +252,7 @@ function Shell() {
           resetKey={brewResetKey}
           startCoffee={brewStart}
           rateStart={rateStart}
+          onRateStarted={clearRateStart}
           onStep={setBrewStep}
           onGotoShelf={() => gotoTab("shelf")}
         />
