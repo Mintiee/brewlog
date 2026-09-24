@@ -228,20 +228,55 @@ is derived in `mappers.ts`, not a column — it cannot appear in SQL.
 
 ## Deep links
 
-The app has no router; tabs and sheets are local state. So a notification carries
-a URL (`/?rate=<brewId>` or `/?log=1`) which `AppShell` consumes once on mount
-and then strips with `history.replaceState`, otherwise a refresh would reopen the
-same sheet.
+The app has no router: tabs and sheets are local state. So a notification carries
+a route (`/?rate=<brewId>` or `/?log=1`), and `AppShell.openNudge` acts on it
+once.
 
-Two arrival paths funnel through the same `openNudge`:
+On a tap, `notificationclick` in `sw.js` first writes an intent
+`{ id, url, at }` to a **mailbox**: the Cache Storage entry `brewlog-intent` /
+`/__nudge-intent`. It then focuses an already-open window and `postMessage`s the
+same intent, or calls `openWindow(url)` when no window is open. It prefers
+focusing because reopening would throw away in-progress state (a half-filled brew
+draft, the current tab).
 
-- **Cold** — the URL the notification opened.
-- **Warm** — `notificationclick` in `sw.js` prefers focusing an already-open
-  window and `postMessage`s the route, because reopening would throw away
-  in-progress state (a half-filled brew draft, the current tab).
+Three arrival paths feed `openNudge`:
 
-`?rate=` sets `rateStart` on `BrewFlow`, which calls the pre-existing
-`openRate(brew)`. No new rating UI was built.
+- **Mailbox.** `AppShell` pulls it on launch and on every
+  `visibilitychange`/`pageshow`/`focus`, then again at 600 ms and 2 s, in case the
+  worker's write lands after the page resumes. **This is the path that works on
+  iOS.** A suspended home-screen app brought forward by a tap comes back exactly
+  as it was left: WebKit drops both the `postMessage` and the `openWindow` URL.
+  Before the mailbox, a tap only landed after killing and relaunching the app.
+- **Message.** The fast path where the platform delivers it (Chrome/Android,
+  desktop).
+- **Launch URL query.** A cold open. It's the fallback when the mailbox is empty
+  (an older worker, or Cache Storage unavailable), and it's stripped with
+  `history.replaceState` so a refresh can't reopen the sheet.
+
+`lib/notify/intent.ts` claims each intent id at most once. So a tap that arrives
+by more than one path acts once. Entries older than 10 minutes are discarded, and
+a read always clears the mailbox. The mailbox cache is excluded from the worker's
+`activate` pruning.
+
+`openNudge` also forces a data refresh, skipping the foreground throttle. The app
+may have been backgrounded for hours, or booted from the worker's cached shell, so
+a brew logged elsewhere might not be in memory yet.
+
+`?rate=` sets `rateStart` on `BrewFlow`. `BrewFlow` waits for the brew to resolve
+in `brews`, calls the pre-existing `openRate(brew)`, then hands the request back
+(`onRateStarted`) so `AppShell` clears it. Without that, every later `brews` change
+or tab-switch remount would reopen the sheet. No new rating UI was built.
+
+**Stale shell.** On a slow launch, `sw.js` serves its cached copy of the page, and
+that copy's embedded data can be days old. `app/page.tsx` stamps
+`AppData.fetchedAt`, and `AppContext` refreshes once on boot when the seed is more
+than 30 s old. The worker caches navigations by path with the query stripped, so
+deep links don't pile up one cache entry each.
+
+Verify all of this with `node scripts/verify/verify-nudge-tap.mjs`. It needs
+`npm run dev`, and it's read-only: it opens the rating sheet, never saves. On a
+real iPhone, tap a nudge while the app is suspended in the app switcher (not
+killed). The rating sheet should open directly.
 
 ## Operating it
 
