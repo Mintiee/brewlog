@@ -92,6 +92,9 @@ export interface AppActions {
   /** Remove the household AI key. Never throws — a failed DELETE just leaves the
    *  server-side key in place; llmEnabled reflects the client's optimistic intent. */
   removeAiKey: () => Promise<void>;
+  /** Pull household data from the server now, skipping the foreground throttle.
+   *  Used when a notification is tapped, so the screen it opens shows current data. */
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -125,7 +128,16 @@ export interface AppData {
   aiStatus: { set: boolean; provider?: string } | null;
   notes: Record<string, string>;
   varietals: Record<string, LearnedVarietal>;
+  /** When the server built this payload (ms epoch). The service worker can serve
+   *  an old cached copy of the page on a slow launch, and this is how the client
+   *  tells it's looking at one. */
+  fetchedAt?: number;
 }
+
+/** A seed older than this came from the service worker's cached shell rather than a
+ *  live render, so it gets refreshed on boot. It's generous enough to cover server
+ *  render + transfer + hydration on a slow phone. */
+const STALE_SEED_MS = 30_000;
 
 function initialState(initialData?: AppData): AppState {
   return {
@@ -548,6 +560,7 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
       setProfile: (p: Profile) => patch({ profile: p }),
       clearError: () => patch({ lastError: null }),
       importCoffees, addRecipe, updateRecipe, deleteRecipe, setAiKey, removeAiKey,
+      refresh,
     };
 
     return { actions, internals: { refresh, syncOutbox, learnNotes, learnVarietals, flushConfig } };
@@ -623,6 +636,17 @@ export function AppProvider({ children, initialData }: { children: ReactNode; in
     });
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run-once boot; store identity is constant
+  }, []);
+
+  // A seeded boot normally carries data from a moment ago. But when the network is
+  // slow, the service worker falls back to its cached copy of the page, and that
+  // copy's data can be days old. Nothing else refreshes on boot, so the old
+  // snapshot would stay on screen until a later foreground. A seed with no
+  // timestamp predates fetchedAt and is treated as stale.
+  useEffect(() => {
+    if (!initialData?.profile) return;
+    if (Date.now() - (initialData.fetchedAt ?? 0) > STALE_SEED_MS) void internals.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- boot-only; initialData never changes
   }, []);
 
   // On the seeded first-load path the household members aren't prefetched, so

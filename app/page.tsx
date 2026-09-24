@@ -7,6 +7,11 @@ import {
   fetchAiKeyStatus, fetchLearnedNotes, fetchLearnedVarietals, fetchRecipes,
 } from "@/lib/db";
 
+/** Record when the prefetch settled. See AppData.fetchedAt. */
+function stampFetchedAt<T>(results: T): { results: T; fetchedAt: number } {
+  return { results, fetchedAt: Date.now() };
+}
+
 export default async function Home() {
   // Check if Supabase is configured — if no env vars, run in demo mode (seed data, no auth)
   const supabaseConfigured = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -42,7 +47,7 @@ export default async function Home() {
         fetchAiKeyStatus(supabase),
         fetchLearnedNotes(supabase),
         fetchLearnedVarietals(supabase),
-      ])
+      ]).then(stampFetchedAt)
     : null;
 
   const { data: { user } } = await authCheck;
@@ -51,7 +56,7 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const results = await prefetch!;
+  const { results, fetchedAt } = await prefetch!;
   const [profileR, coffeesR, brewsR, recipesR, configR, aiStatusR, notesR, varietalsR] = results;
 
   // Anything the app genuinely can't render without still fails the request.
@@ -79,6 +84,8 @@ export default async function Home() {
     notes: required(notesR),
     // Degrade gracefully if migration 019 hasn't been applied yet.
     varietals: optional(varietalsR, {}),
+    // Lets the client spot the service worker's cached copy of this page (AppData.fetchedAt).
+    fetchedAt,
   };
   return <AppShell initialData={initialData} />;
 }
