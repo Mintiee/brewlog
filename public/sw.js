@@ -15,8 +15,14 @@
 // Bump CACHE_VERSION whenever the caching strategy or precache list changes; old versioned
 // caches are pruned on activate.
 
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE = `brewlog-shell-${CACHE_VERSION}`;
+
+// Notification-tap mailbox (see notificationclick below and lib/notify/intent.ts,
+// which must use the same names). It isn't versioned and is never pruned: it holds
+// one short-lived entry, not cached content.
+const INTENT_CACHE = "brewlog-intent";
+const INTENT_KEY = "/__nudge-intent";
 
 // Country outline silhouettes for every code in ORIGIN_CODES (lib/domain/index.ts),
 // vendored same-origin by scripts/fetch-outlines.mjs. Precached rather than left to
@@ -56,7 +62,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE && k !== INTENT_CACHE).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -96,18 +102,25 @@ const NAV_TIMEOUT_MS = 1500;
  *
  * The network response is still cached when it eventually arrives, even if the
  * timeout already won the race, so the next launch starts from fresher data.
+ *
+ * Entries are keyed by path with the query dropped. The page ignores the query on
+ * the server (deep links like /?rate=<id> are read on the client), so the HTML is
+ * the same either way. Keying by the full URL stored one copy per notification,
+ * and none of them was ever hit again.
  */
 function networkFirstNavigation(req) {
+  const key = new URL(req.url);
+  key.search = "";
   const network = fetch(req)
     .then((res) => {
       if (res.ok) {
         const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        caches.open(CACHE).then((c) => c.put(key.href, copy)).catch(() => {});
       }
       return res;
     });
 
-  const cached = () => caches.match(req).then((hit) => hit || caches.match("/"));
+  const cached = () => caches.match(key.href).then((hit) => hit || caches.match("/"));
 
   // Resolves to undefined on timeout, so the race below can tell "slow" from "done".
   const timeout = new Promise((resolve) => setTimeout(() => resolve(undefined), NAV_TIMEOUT_MS));
@@ -191,19 +204,41 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || "/";
+  const intent = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    url,
+    at: Date.now(),
+  };
+
+  // Mailbox first, then the fast path. On iOS, a suspended home-screen app that is
+  // brought forward by a tap comes back exactly as it was left: WebKit drops both
+  // the postMessage and the openWindow URL. So the page also pulls this entry
+  // whenever it comes to the front (AppShell, via lib/notify/intent.ts), and that
+  // pull is what actually makes the tap land.
+  const stash = caches
+    .open(INTENT_CACHE)
+    .then((c) =>
+      c.put(
+        INTENT_KEY,
+        new Response(JSON.stringify(intent), { headers: { "Content-Type": "application/json" } })
+      )
+    )
+    .catch(() => {});
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      // Prefer an already-open window: the app is a single client-side shell, so
-      // reopening it would throw away in-progress state (a half-filled brew
-      // draft, the current tab). Tell the live one where to go instead.
-      for (const client of clients) {
-        if (new URL(client.url).origin !== self.location.origin) continue;
-        client.postMessage({ type: "brewlog:navigate", url });
-        return client.focus();
-      }
-      return self.clients.openWindow(url);
-    })
+    stash
+      .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))
+      .then((clients) => {
+        // Prefer an already-open window: the app is a single client-side shell, so
+        // reopening it would throw away in-progress state (a half-filled brew
+        // draft, the current tab). Tell the live one where to go instead.
+        for (const client of clients) {
+          if (new URL(client.url).origin !== self.location.origin) continue;
+          client.postMessage({ type: "brewlog:navigate", intent });
+          return client.focus();
+        }
+        return self.clients.openWindow(url);
+      })
   );
 });
 

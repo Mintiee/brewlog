@@ -19,6 +19,8 @@ interface BrewFlowProps {
   /** A "rate that brew?" push notification was tapped — open this brew's rating
    *  sheet. Carries a nonce so tapping the same nudge twice still reopens it. */
   rateStart?: { brewId: string; nonce: number } | null;
+  /** Called once the rating sheet for `rateStart` has opened. */
+  onRateStarted?: () => void;
   onStep?: (step: string) => void;
   onGotoShelf?: () => void;
 }
@@ -69,7 +71,7 @@ function clearDraft() {
   }
 }
 
-export function BrewFlow({ resetKey, startCoffee, rateStart, onStep, onGotoShelf }: BrewFlowProps = {}) {
+export function BrewFlow({ resetKey, startCoffee, rateStart, onRateStarted, onStep, onGotoShelf }: BrewFlowProps = {}) {
   const { coffees, brews, recipes, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession, addRecipe } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
@@ -137,10 +139,17 @@ export function BrewFlow({ resetKey, startCoffee, rateStart, onStep, onGotoShelf
   // `brews` because the store seeds asynchronously — on a cold open from the
   // notification the array is still empty for a beat. A brew that has since been
   // rated (or deleted) simply doesn't resolve, and we land on the normal screen.
+  //
+  // Once it opens, the request is handed back so the parent can clear it.
+  // Otherwise every later `brews` change (the nudge's own refresh, or the rating
+  // being saved) would find the brew again and pop the sheet back open. So would
+  // a remount after a tab switch.
   useEffect(() => {
     if (!rateStart) return;
     const b = brews.find((x) => x.id === rateStart.brewId);
-    if (b) openRate(b);
+    if (!b) return;
+    openRate(b);
+    onRateStarted?.();
   }, [rateStart?.nonce, brews]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function coffeeById(id: string) {
