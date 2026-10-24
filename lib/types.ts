@@ -13,6 +13,9 @@ export interface Coffee {
   name: string;
   origin: string;
   region: string;
+  /** Producer/farm override. null/absent = guessed from the name (see producerKey
+   *  in lib/domain/search.ts) — names are meant to identify the producer. */
+  producer?: string | null;
   /** Varietals as printed on the bag, one tag each ("SL28", "Heirloom"). Proportions
    *  are unknown, so stats group mixes via varietalGroup() rather than splitting. */
   varietals: string[];
