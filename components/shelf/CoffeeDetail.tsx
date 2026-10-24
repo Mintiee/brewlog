@@ -6,6 +6,7 @@ import {
 } from "@/lib/domain";
 import { noteColor, noteIcon } from "@/lib/flavour";
 import { parseVarietals } from "@/lib/varietal";
+import { normalizeText, producerLabel } from "@/lib/domain/search";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
@@ -25,6 +26,8 @@ interface EditForm {
   name: string;
   origin: string;
   region: string;
+  /** Producer/farm override; blank = keep guessing from the name. */
+  producer: string;
   varietal: string;
   process: string;
   notes: string;
@@ -89,12 +92,16 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   // Going into the freezer pauses aging. Keep the original freeze date if already
   // frozen; clear any prior thaw (this is the active freeze cycle).
   const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || todayISO(), thawed_at: null }); onClose(); };
+  // What the name alone would link on — shown as the producer field's placeholder.
+  const guessProducer = (f: EditForm) =>
+    producerLabel({ ...coffee, name: f.name, origin: f.origin, region: f.region, varietals: parseVarietals(f.varietal), process: f.process, producer: null });
   const startEdit = () => {
     beginEdit({
       roaster: coffee.roaster,
       name: coffee.name,
       origin: coffee.origin,
       region: coffee.region,
+      producer: coffee.producer ?? "",
       varietal: coffee.varietals.join(", "),
       process: coffee.process,
       notes: (coffee.notes || []).join(", "),
@@ -114,12 +121,18 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
     // what's already been brewed, so remainingGrams() reads back the edited value.
     const newRemaining = Number.isFinite(Number(ef.remaining)) ? Number(ef.remaining) : remaining;
     const grams = newRemaining + gramsUsed(coffee.id, brews);
+    // Store an override only when it says something the name doesn't, so the bag
+    // keeps following later renames. The key is left off entirely for a coffee read
+    // before migration 024 (see coffeeToRow) unless there's something to save.
+    const typed = ef.producer.trim();
+    const producer = typed && normalizeText(typed) !== normalizeText(guessProducer(ef) ?? "") ? typed : null;
     onUpdate({
       ...coffee,
       roaster: canonicalRoaster(ef.roaster, coffees) || "Unknown",
       name: ef.name || "Untitled",
       origin: ef.origin,
       region: ef.region || ef.origin,
+      ...("producer" in coffee || producer ? { producer } : {}),
       varietals: parseVarietals(ef.varietal),
       process: ef.process || "Washed",
       notes,
@@ -156,6 +169,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
             <div style={{ flex: 1 }}><Field label="Origin" value={ef.origin} onChange={setE("origin")} placeholder="Country" /></div>
             <div style={{ flex: 1.3 }}><Field label="Region" value={ef.region} onChange={setE("region")} placeholder="Region" /></div>
           </div>
+          <Field label="Producer / farm" value={ef.producer} onChange={setE("producer")} placeholder={guessProducer(ef) ?? "Links bags from the same farm"} />
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}><Field label="Varietal" value={ef.varietal} onChange={setE("varietal")} placeholder="Varietal" /></div>
             <div style={{ flex: 1 }}>

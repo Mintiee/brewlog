@@ -158,6 +158,7 @@ export type Database = {
           origin: string
           peak_days: number
           process: string
+          producer: string | null
           region: string
           rest_days: number
           roast: string
@@ -182,6 +183,7 @@ export type Database = {
           origin?: string
           peak_days?: number
           process?: string
+          producer?: string | null
           region?: string
           rest_days?: number
           roast?: string
@@ -206,6 +208,7 @@ export type Database = {
           origin?: string
           peak_days?: number
           process?: string
+          producer?: string | null
           region?: string
           rest_days?: number
           roast?: string

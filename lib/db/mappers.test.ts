@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rowToBrew, brewToRow, brewPatchToRow, rowToSavedRecipe, savedRecipeToRow, rowToConfig } from "@/lib/db/mappers";
+import { rowToBrew, brewToRow, brewPatchToRow, rowToSavedRecipe, savedRecipeToRow, rowToConfig, rowToCoffee, coffeeToRow } from "@/lib/db/mappers";
 import type { Tables } from "@/lib/db/database.types";
 import type { Brew, SavedRecipe } from "@/lib/types";
 import { SEED_BREWERS } from "@/lib/domain/seed";
@@ -308,5 +308,36 @@ describe("rowToConfig — backfill defaults for rows stored before newer fields 
   it("defaults hidden_roasters to [] when absent", () => {
     expect(hiddenRoasters(null)).toEqual([]);
     expect(hiddenRoasters(undefined)).toEqual([]);
+  });
+});
+
+describe("coffee producer column", () => {
+  function coffeeRow(extra: object = {}): Tables<"coffees"> {
+    return {
+      id: "c1", household_id: "h1", created_at: "2026-01-01T00:00:00Z",
+      roaster: "Sey", name: "Hamasho", origin: "Ethiopia", region: "Sidama",
+      varietals: ["Heirloom"], varietal: "Heirloom", process: "Washed", roast: "light",
+      roasted_at: "2026-01-01", rest_days: 28, peak_days: 56, grams: 250, frozen_grams: 0,
+      frozen_at: null, thawed_at: null, archived: false, notes: [], cc: "ET",
+      ...extra,
+    } as unknown as Tables<"coffees">;
+  }
+
+  it("round-trips an override", () => {
+    const c = rowToCoffee(coffeeRow({ producer: "Daye Bensa" }));
+    expect(c.producer).toBe("Daye Bensa");
+    expect(coffeeToRow(c).producer).toBe("Daye Bensa");
+  });
+
+  it("writes null to clear an override once the column exists", () => {
+    const c = rowToCoffee(coffeeRow({ producer: null }));
+    expect("producer" in coffeeToRow(c)).toBe(true);
+    expect(coffeeToRow(c).producer).toBeNull();
+  });
+
+  it("leaves the column out for pre-migration rows", () => {
+    const c = rowToCoffee(coffeeRow());
+    expect("producer" in c).toBe(false);
+    expect("producer" in coffeeToRow(c)).toBe(false);
   });
 });
