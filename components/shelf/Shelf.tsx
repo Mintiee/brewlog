@@ -313,6 +313,8 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
         onClose={() => setDetail(null)}
         onBrew={(c) => { setDetail(null); onBrew(c); }}
         onUpdate={onUpdate}
+        onOpen={setDetail}
+        onSearch={(text) => { setDetail(null); setOrigin(null); setRoaster(null); setQuery(text); }}
       />
     </div>
   );

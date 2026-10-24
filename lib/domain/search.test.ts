@@ -129,6 +129,7 @@ describe("producerKey", () => {
 
   it("labels with the cleaned name segment in its original casing", () => {
     expect(producerLabel(makeCoffee({ name: "El Desarrollo · Lot 14", origin: "Colombia" }))).toBe("El Desarrollo");
+    expect(producerLabel(makeCoffee({ name: "Finca El Desarrollo Castillo", origin: "Colombia", varietals: ["Castillo"] }))).toBe("El Desarrollo");
   });
 });
 

@@ -166,12 +166,20 @@ export function producerKey(c: Coffee): string | null {
   return keyOf(cleanedNameSegment(c), ownWords(c));
 }
 
-/** Display form of the producer: the override, else the cleaned name segment. */
+/**
+ * Display form of the producer: the override as typed, else the cleaned name
+ * segment minus farm-type words, so linked bags share one heading ("El Desarrollo"
+ * whether the bag said "Finca El Desarrollo" or "El Desarrollo · Lot 9").
+ */
 export function producerLabel(c: Coffee): string | null {
   const override = (c.producer || "").trim();
   if (override) return override;
   if (!producerKey(c)) return null;
-  return cleanedNameSegment(c);
+  let label = cleanedNameSegment(c);
+  for (let i = 0; i < 2; i++) {
+    label = label.replace(new RegExp(FARM_PREFIX.source, "i"), "").replace(new RegExp(FARM_SUFFIX.source, "i"), "").trim();
+  }
+  return label;
 }
 
 /** Other bags from the same producer, newest roast first. */
