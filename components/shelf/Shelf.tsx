@@ -42,6 +42,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
   const [origin, setOrigin] = useState<string | null>(null);
   const [roaster, setRoaster] = useState<string | null>(null);
   const [pickingRoaster, setPickingRoaster] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const colorOf = useCoffeeColor();
 
   // One pass over brews for the whole shelf, instead of ~15 per coffee. See
@@ -98,6 +99,8 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
     );
   }, [coffees, haystacks, deferredQuery, origin, roaster]);
   const clearFilters = () => { setQuery(""); setOrigin(null); setRoaster(null); };
+  // Closing always returns the plain shelf — no filter is left applied out of sight.
+  const toggleSearch = () => { if (searchOpen) clearFilters(); setSearchOpen(!searchOpen); };
 
   // Top roasters as chips; the rest live behind "More…". A selection from the
   // sheet that isn't in the top set still shows as an active chip.
@@ -118,18 +121,32 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
           <div className="label">{live.length} coffee{live.length === 1 ? "" : "s"} · {formatWeight(totalGrams)}{worth ? ` · ${worth}` : ""}</div>
           <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3 }}>Shelf</h1>
         </div>
-        <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>
-          <Icon name="plus" size={24} stroke={2} />
-        </button>
+        <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+          {coffees.length > 0 && (
+            <button
+              onClick={toggleSearch}
+              aria-label={searchOpen ? "Close search" : "Search shelf"}
+              aria-expanded={searchOpen}
+              className="btn btn-soft"
+              style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}
+            >
+              <Icon name={searchOpen ? "close" : "search"} size={21} stroke={2} />
+            </button>
+          )}
+          <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>
+            <Icon name="plus" size={24} stroke={2} />
+          </button>
+        </div>
       </div>
 
-      {coffees.length > 0 && (
+      {searchOpen && coffees.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div className="screen-pad">
             <div style={{ position: "relative" }}>
               <Icon name="search" size={17} stroke={1.8} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--ink-faint)", pointerEvents: "none" }} />
               <input
                 inputMode="search"
+                autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search bags, farms, notes…"
@@ -314,7 +331,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
         onBrew={(c) => { setDetail(null); onBrew(c); }}
         onUpdate={onUpdate}
         onOpen={setDetail}
-        onSearch={(text) => { setDetail(null); setOrigin(null); setRoaster(null); setQuery(text); }}
+        onSearch={(text) => { setDetail(null); setOrigin(null); setRoaster(null); setQuery(text); setSearchOpen(true); }}
       />
     </div>
   );
