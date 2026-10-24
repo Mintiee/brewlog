@@ -21,8 +21,8 @@ interface BrewFlowProps {
   rateStart?: { brewId: string; nonce: number } | null;
   /** Called once the rating sheet for `rateStart` has opened. */
   onRateStarted?: () => void;
-  onStep?: (step: string) => void;
   onGotoShelf?: () => void;
+  onOpenSettings?: () => void;
 }
 
 // Minimal in-progress draft: enough to restore "what coffee, which brewer, what
@@ -71,7 +71,7 @@ function clearDraft() {
   }
 }
 
-export function BrewFlow({ resetKey, startCoffee, rateStart, onRateStarted, onStep, onGotoShelf }: BrewFlowProps = {}) {
+export function BrewFlow({ resetKey, startCoffee, rateStart, onRateStarted, onGotoShelf, onOpenSettings }: BrewFlowProps = {}) {
   const { coffees, brews, recipes, config, profile, members, authed, startBrew, rateBrew, updateBrew, updateCoffee, dismissBrewSession, addRecipe } = useApp();
   // The other household member (if any) — the target for "send to rate". Matched
   // by name, not id, so duplicate same-name profiles don't make me my own target.
@@ -105,7 +105,7 @@ export function BrewFlow({ resetKey, startCoffee, rateStart, onRateStarted, onSt
   const draftRestored = useRef(false);
 
   useEffect(() => () => { if (logTimer.current) clearTimeout(logTimer.current); }, []);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; onStep?.(step); }, [step, onStep]);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [step]);
   // Restore an in-progress draft once coffee data is loaded (coffees arrives
   // async from the store, so we can't validate the referenced coffee any earlier).
   // Only restores if the referenced coffee still exists — a deleted/archived-away
@@ -347,6 +347,7 @@ export function BrewFlow({ resetKey, startCoffee, rateStart, onRateStarted, onSt
           onSend={(b) => { if (otherMember) updateBrew(b.id, { rate_for: otherMember.id }); }}
           onOpenBrew={setDetailBrew}
           onGotoShelf={onGotoShelf}
+          onOpenSettings={onOpenSettings}
           onBrewAgain={brewAgain}
         />
       )}

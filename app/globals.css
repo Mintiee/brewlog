@@ -87,7 +87,6 @@ button { color: inherit; font-family: inherit; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .num  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 
-.h-greet { font-size: 15px; color: var(--ink-dim); font-weight: 500; }
 .h-ask {
   font-size: 30px; font-weight: 600; letter-spacing: -0.02em;
   line-height: 1.05; text-wrap: balance;

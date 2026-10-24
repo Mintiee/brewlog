@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Icon, IconButton, Stepper } from "@/components/ui";
-import { SSection, SText, SRow, SToggle } from "./controls";
+import { Icon, IconButton, ScreenHeader, Stepper } from "@/components/ui";
+import { SSection, SText, SToggle } from "./controls";
 import { AddBrewerSheet } from "./AddBrewerSheet";
 import { RoasterRestSheet } from "./RoasterRestSheet";
 import { Reminders } from "./Reminders";
@@ -57,15 +57,8 @@ export function Settings({
 
   return (
     <div className="screen">
-      <div className="screen-pad" style={{ paddingTop: 8 }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div className="label">your setup</div>
-            <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 20 }}>Settings</h1>
-          </div>
-          <IconButton icon="close" label="Done" onClick={onClose} size={38} />
-        </div>
+      <ScreenHeader eyebrow="your setup" title="Settings" actions={<IconButton icon="close" label="Done" onClick={onClose} size={40} />} />
+      <div className="screen-pad">
 
         {/* ACCOUNT */}
         <SSection label="Account">
@@ -319,11 +312,7 @@ export function Settings({
 
         {/* RITUAL */}
         <SSection label="Ritual">
-          <div className="card" style={{ padding: "4px 16px 14px" }}>
-            <SRow label="Surprise me with greetings">
-              <SToggle on={config.random_greeting !== false} onChange={(v) => upd({ random_greeting: v })} />
-            </SRow>
-            <div style={{ height: 1, background: "var(--line)" }} />
+          <div className="card" style={{ padding: "4px 16px" }}>
             <div style={{ padding: "12px 0" }}>
               <div className="label" style={{ marginBottom: 7 }}>Second taster&apos;s name</div>
               <SText value={config.taster2} onChange={(v) => upd({ taster2: v })} placeholder="e.g. Kris" />

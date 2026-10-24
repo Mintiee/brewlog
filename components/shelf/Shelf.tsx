@@ -4,6 +4,8 @@ import { avgDailyGrams, formatWeight, formatDaysWorth, bagAvgRatings } from "@/l
 import { coffeeHaystack, filterCoffees, isFilterActive, originFacets, roasterFacets } from "@/lib/domain/search";
 import { useCoffeeStats } from "@/lib/hooks/useCoffeeStats";
 import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
 import { FreshDot } from "@/components/ui/FreshDot";
@@ -116,31 +118,33 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
 
   return (
     <div className="screen">
-      <div className="screen-pad" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 8 }}>
-        <div>
-          <div className="label">{live.length} coffee{live.length === 1 ? "" : "s"} · {formatWeight(totalGrams)}{worth ? ` · ${worth}` : ""}</div>
-          <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3 }}>Shelf</h1>
-        </div>
-        <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+      <ScreenHeader
+        eyebrow={`${live.length} coffee${live.length === 1 ? "" : "s"} · ${formatWeight(totalGrams)}${worth ? ` · ${worth}` : ""}`}
+        title="Shelf"
+        actions={<>
           {coffees.length > 0 && (
-            <button
+            <IconButton
+              icon={searchOpen ? "close" : "search"}
+              label={searchOpen ? "Close search" : "Search shelf"}
+              expanded={searchOpen}
               onClick={toggleSearch}
-              aria-label={searchOpen ? "Close search" : "Search shelf"}
-              aria-expanded={searchOpen}
-              className="btn btn-soft"
-              style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}
-            >
-              <Icon name={searchOpen ? "close" : "search"} size={21} stroke={2} />
-            </button>
+              size={40}
+            />
           )}
-          <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>
-            <Icon name="plus" size={24} stroke={2} />
-          </button>
-        </div>
-      </div>
+          <IconButton
+            icon="plus"
+            label="Add coffee"
+            onClick={() => setAdding(true)}
+            size={40}
+            iconSize={20}
+            stroke={2}
+            style={{ background: "var(--accent)", borderColor: "var(--accent)", color: "#1a0f06" }}
+          />
+        </>}
+      />
 
       {searchOpen && coffees.length > 0 && (
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginBottom: 18 }}>
           <div className="screen-pad">
             <div style={{ position: "relative" }}>
               <Icon name="search" size={17} stroke={1.8} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--ink-faint)", pointerEvents: "none" }} />
@@ -200,7 +204,7 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
         </div>
       )}
 
-      <div className="screen-pad" style={{ marginTop: 22 }}>
+      <div className="screen-pad" style={{ marginTop: 4 }}>
         {filtering && (
           <div>
             <div className="label" style={{ marginBottom: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
