@@ -3,7 +3,7 @@ import {
   coffeeStatus, remainingGrams, frozenGramsOf, activeGrams, cupsLeft,
   gramsUsed, avgDailyGrams,
   brewRating, lastBrewOf, previousBrewFor, recipeDelta, pendingBrews, sinceText, defaultsFor, roastedDaysAgo,
-  roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating,
+  roasterKey, distinctRoasters, canonicalRoaster, roasterSuggestions, bagAvgRating, bagAvgRatings,
   effectiveDaysAgo, restDaysAt, restForBrew,
   setRestWindow, setServingGrams, daysAgoFromStartedAt, todayISO, daysAgoISO,
   setRoasterWindows, getRoasterWindows, resolveWindows,
@@ -547,6 +547,13 @@ describe("bagAvgRating", () => {
 
   it("returns null with no rated brews", () => {
     expect(bagAvgRating("none", brews)).toBeNull();
+  });
+
+  it("bagAvgRatings agrees with bagAvgRating for every coffee", () => {
+    const all = bagAvgRatings(brews);
+    expect(all.get("c9")).toBeCloseTo(3.75);
+    expect(all.get("other")).toBe(1);
+    expect(all.has("none")).toBe(false);
   });
 });
 

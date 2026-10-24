@@ -84,6 +84,7 @@ const PATHS: Record<string, (ps: StrokeProps) => React.ReactNode> = {
   leaf: (ps) => <g {...ps}><path d="M5 19c0-7.2 5-13 14-14 0 9.2-6 14-14 14Z"/><path d="M9 15c2-3 4.4-5 7-6"/></g>,
   gear: (ps) => <g {...ps}><path d="M4 8h7M15 8h5"/><circle cx="13" cy="8" r="2.1"/><path d="M4 16h5M13 16h7"/><circle cx="11" cy="16" r="2.1"/></g>,
   snow: (ps) => <g {...ps}><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M12 6.6 9.9 4.9M12 6.6l2.1-1.7M12 17.4l-2.1 1.7M12 17.4l2.1 1.7M5.8 9.3 5 6.9M5.8 9.3 3.4 9.7M18.2 14.7l.8 2.4M18.2 14.7l2.4-.4M18.2 9.3l2.4.4M18.2 9.3 19 6.9M5.8 14.7l-2.4.4M5.8 14.7 5 17.1"/></g>,
+  search: (ps) => <g {...ps}><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.4-4.4"/></g>,
   link: (ps) => <g {...ps}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></g>,
   // Upload / import — upward arrow with a tray underline
   upload: (ps) => <g {...ps}><path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M4 19h16"/></g>,

@@ -330,6 +330,22 @@ export function bagAvgRating(coffeeId: string, brews: Brew[]): number | null {
   return ratings.reduce((s, r) => s + r, 0) / ratings.length;
 }
 
+/** bagAvgRating for every coffee in one pass over brews — for lists, where calling
+ *  it per row rescans every brew each time. Coffees with no rated brew are absent. */
+export function bagAvgRatings(brews: Brew[]): Map<string, number> {
+  const sums = new Map<string, { total: number; n: number }>();
+  for (const b of brews) {
+    if (b.pending || b.stars == null) continue;
+    const s = sums.get(b.coffee_id) ?? { total: 0, n: 0 };
+    s.total += brewRating(b);
+    s.n++;
+    sums.set(b.coffee_id, s);
+  }
+  const out = new Map<string, number>();
+  sums.forEach(({ total, n }, id) => out.set(id, total / n));
+  return out;
+}
+
 export function lastBrewOf(coffeeId: string, brews: Brew[]): Brew | null {
   const rated = brews
     .filter((b) => b.coffee_id === coffeeId && !b.pending)
