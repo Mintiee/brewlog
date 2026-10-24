@@ -16,6 +16,9 @@ export function rowToCoffee(r: Tables<"coffees">): Coffee {
     name: r.name,
     origin: r.origin,
     region: r.region,
+    // Only carried when the column exists (024), so coffeeToRow can tell a
+    // pre-migration row apart and leave the column out of the write.
+    ...(r.producer !== undefined ? { producer: r.producer } : {}),
     // Gap rows written by pre-019 code have varietals='{}' but a legacy string —
     // parse it so nothing disappears between the migration and the deploy.
     varietals: r.varietals?.length ? r.varietals : parseVarietals(r.varietal ?? ""),
@@ -41,6 +44,9 @@ export function coffeeToRow(c: Omit<Coffee, "id"> & { id?: string }): TablesInse
     ...(c.id ? { id: c.id } : {}),
     ...(c.household_id ? { household_id: c.household_id } : {}),
     roaster: c.roaster, name: c.name, origin: c.origin, region: c.region,
+    // Emitted only when the coffee carries the key: PostgREST rejects unknown
+    // columns, so a build deployed ahead of migration 024 still writes coffees.
+    ...(c.producer !== undefined ? { producer: c.producer } : {}),
     // Dual-write: varietals is the source of truth; the legacy varietal string is
     // kept in sync so a code rollback (pre-array build) still shows varietals.
     varietals: c.varietals, varietal: c.varietals.join(" · "),

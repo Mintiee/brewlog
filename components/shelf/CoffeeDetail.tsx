@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   coffeeStatus, freshColor, activeGrams, frozenGramsOf, remainingGrams, gramsUsed, cupsLeft, originCode, roastDateText,
   todayISO, frozenDays, canonicalRoaster, roasterSuggestions, bagAvgRating, shouldUnarchiveAfterEdit,
 } from "@/lib/domain";
 import { noteColor, noteIcon } from "@/lib/flavour";
 import { parseVarietals } from "@/lib/varietal";
+import { normalizeText, producerKey, producerLabel, relatedByProducer } from "@/lib/domain/search";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { useEditForm } from "@/lib/hooks/useEditForm";
 import { Icon } from "@/components/ui/Icon";
@@ -16,6 +17,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Stepper } from "@/components/ui/Stepper";
 import { ProcessPicker } from "./ProcessPicker";
 import { FreshBar } from "./FreshBar";
+import { ResultRow } from "./ResultRow";
 import { Field } from "./Field";
 import { SuggestField } from "@/components/ui/SuggestField";
 import type { Coffee, Brew } from "@/lib/types";
@@ -25,6 +27,8 @@ interface EditForm {
   name: string;
   origin: string;
   region: string;
+  /** Producer/farm override; blank = keep guessing from the name. */
+  producer: string;
   varietal: string;
   process: string;
   notes: string;
@@ -40,9 +44,13 @@ interface CoffeeDetailProps {
   onClose: () => void;
   onBrew: (c: Coffee) => void;
   onUpdate: (c: Coffee) => void;
+  /** Jump to another bag (from the producer history). */
+  onOpen?: (c: Coffee) => void;
+  /** Search the shelf for this text (tapping the producer name). */
+  onSearch?: (text: string) => void;
 }
 
-export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onUpdate }: CoffeeDetailProps) {
+export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onUpdate, onOpen, onSearch }: CoffeeDetailProps) {
   const [freezing, setFreezing] = useState(false);
   const [thawing, setThawing] = useState(false);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
@@ -50,8 +58,12 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   const [thawAmt, setThawAmt] = useState(0);
   const { editing, form: ef, startEdit: beginEdit, cancelEdit, set: setE } = useEditForm<EditForm>();
   const colorOf = useCoffeeColor();
+  const topRef = useRef<HTMLDivElement>(null);
+  const related = useMemo(() => (coffee ? relatedByProducer(coffee, coffees) : []), [coffee, coffees]);
 
   useEffect(() => {
+    // Jumping between bags from the history keeps the same sheet mounted; start the new one at the top.
+    topRef.current?.closest(".sheet")?.scrollTo({ top: 0 });
     setFreezing(false);
     setThawing(false);
     setConfirmingFinish(false);
@@ -62,6 +74,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   if (!coffee) return null;
 
   const st = coffeeStatus(coffee, brews);
+  const producer = producerLabel(coffee);
   const coffeeBrews = brews.filter((b) => b.coffee_id === coffee.id);
   const avgRating = bagAvgRating(coffee.id, brews);
   const remaining = remainingGrams(coffee, brews);
@@ -89,12 +102,16 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
   // Going into the freezer pauses aging. Keep the original freeze date if already
   // frozen; clear any prior thaw (this is the active freeze cycle).
   const confirmFreeze = () => { onUpdate({ ...coffee, frozen_grams: frozen + amt, frozen_at: coffee.frozen_at || todayISO(), thawed_at: null }); onClose(); };
+  // What the name alone would link on — shown as the producer field's placeholder.
+  const guessProducer = (f: EditForm) =>
+    producerLabel({ ...coffee, name: f.name, origin: f.origin, region: f.region, varietals: parseVarietals(f.varietal), process: f.process, producer: null });
   const startEdit = () => {
     beginEdit({
       roaster: coffee.roaster,
       name: coffee.name,
       origin: coffee.origin,
       region: coffee.region,
+      producer: coffee.producer ?? "",
       varietal: coffee.varietals.join(", "),
       process: coffee.process,
       notes: (coffee.notes || []).join(", "),
@@ -114,12 +131,18 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
     // what's already been brewed, so remainingGrams() reads back the edited value.
     const newRemaining = Number.isFinite(Number(ef.remaining)) ? Number(ef.remaining) : remaining;
     const grams = newRemaining + gramsUsed(coffee.id, brews);
+    // Store an override only when it says something the name doesn't, so the bag
+    // keeps following later renames. The key is left off entirely for a coffee read
+    // before migration 024 (see coffeeToRow) unless there's something to save.
+    const typed = ef.producer.trim();
+    const producer = typed && normalizeText(typed) !== normalizeText(guessProducer(ef) ?? "") ? typed : null;
     onUpdate({
       ...coffee,
       roaster: canonicalRoaster(ef.roaster, coffees) || "Unknown",
       name: ef.name || "Untitled",
       origin: ef.origin,
       region: ef.region || ef.origin,
+      ...("producer" in coffee || producer ? { producer } : {}),
       varietals: parseVarietals(ef.varietal),
       process: ef.process || "Washed",
       notes,
@@ -156,6 +179,7 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
             <div style={{ flex: 1 }}><Field label="Origin" value={ef.origin} onChange={setE("origin")} placeholder="Country" /></div>
             <div style={{ flex: 1.3 }}><Field label="Region" value={ef.region} onChange={setE("region")} placeholder="Region" /></div>
           </div>
+          <Field label="Producer / farm" value={ef.producer} onChange={setE("producer")} placeholder={guessProducer(ef) ?? "Links bags from the same farm"} />
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}><Field label="Varietal" value={ef.varietal} onChange={setE("varietal")} placeholder="Varietal" /></div>
             <div style={{ flex: 1 }}>
@@ -199,13 +223,23 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
 
   return (
     <Sheet open={!!coffee} onClose={onClose}>
-      <div className="screen-pad" style={{ paddingTop: 8 }}>
+      <div ref={topRef} className="screen-pad" style={{ paddingTop: 8 }}>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <OriginTile code={coffee.cc} roaster={coffee.roaster} color={colorOf(coffee.notes)} size={56} radius={13} process={coffee.process} />
           <div style={{ flex: 1 }}>
             <div className="label">{coffee.roaster}</div>
             <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{coffee.name}</div>
             <div style={{ fontSize: 13, color: "var(--ink-dim)", marginTop: 4 }}>{coffee.origin} · {coffee.region}</div>
+            {/* Searches by the matching key, not the label, so every linked bag shows up. */}
+            {producer && onSearch && (
+              <button
+                onClick={() => onSearch(producerKey(coffee) ?? producer)}
+                aria-label={`Search the shelf for ${producer}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5, padding: 0, background: "none", border: "none", cursor: "pointer", color: "var(--ink-dim)", fontFamily: "var(--font-ui)", fontSize: 13, textAlign: "left" }}
+              >
+                <Icon name="search" size={12} stroke={2} /> <span style={{ textDecoration: "underline", textDecorationColor: "var(--line-2)", textUnderlineOffset: 3 }}>{producer}</span>
+              </button>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <IconButton icon="edit" label="Edit details" onClick={startEdit} size={36} iconSize={17} stroke={1.7} />
@@ -273,6 +307,22 @@ export function CoffeeDetail({ coffee, brews, coffees = [], onClose, onBrew, onU
             </span>
           )}
         </div>
+
+        {related.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <div className="label" style={{ marginBottom: 10 }}>From {producer} · {related.length}</div>
+            {related.map((c) => (
+              <ResultRow
+                key={c.id}
+                coffee={c}
+                status={c.archived ? undefined : coffeeStatus(c, brews)}
+                avg={bagAvgRating(c.id, brews)}
+                onOpen={(next) => onOpen?.(next)}
+                variant="history"
+              />
+            ))}
+          </div>
+        )}
 
         {coffee.archived ? (
           <button className="btn btn-accent" style={{ marginTop: 18 }} onClick={() => setArchived(false)}>

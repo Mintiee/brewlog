@@ -1,15 +1,17 @@
 "use client";
-import { useMemo, useState } from "react";
-import { avgDailyGrams, formatWeight, formatDaysWorth, bagAvgRating } from "@/lib/domain";
+import { useDeferredValue, useMemo, useState } from "react";
+import { avgDailyGrams, formatWeight, formatDaysWorth, bagAvgRatings } from "@/lib/domain";
+import { coffeeHaystack, filterCoffees, isFilterActive, originFacets, roasterFacets } from "@/lib/domain/search";
 import { useCoffeeStats } from "@/lib/hooks/useCoffeeStats";
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OriginTile } from "@/components/ui/OriginTile";
-import { CoffeeName } from "@/components/ui/CoffeeName";
 import { FreshDot } from "@/components/ui/FreshDot";
 import { useCoffeeColor } from "@/lib/store/AppContext";
 import { ShelfRow } from "./ShelfRow";
 import { FrozenRow } from "./FrozenRow";
+import { ResultRow } from "./ResultRow";
+import { RoasterPickerSheet } from "./RoasterPickerSheet";
 import dynamic from "next/dynamic";
 import { EMPTY_STAT } from "@/lib/domain/derive";
 import type { Coffee, Brew, FreshStatus } from "@/lib/types";
@@ -19,6 +21,9 @@ import type { Coffee, Brew, FreshStatus } from "@/lib/types";
 // Shelf tab first mounts, well before anyone can tap into them.
 const CoffeeDetail = dynamic(() => import("./CoffeeDetail").then((m) => m.CoffeeDetail), { ssr: false });
 const AddCoffee = dynamic(() => import("./AddCoffee").then((m) => m.AddCoffee), { ssr: false });
+
+const chipRow: React.CSSProperties = { display: "flex", gap: 7, overflowX: "auto", scrollbarWidth: "none", marginTop: 8, paddingBottom: 2 };
+const chipStyle: React.CSSProperties = { fontSize: 13, padding: "7px 12px", flexShrink: 0 };
 
 interface ShelfProps {
   coffees: Coffee[];
@@ -33,6 +38,11 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<Coffee | null>(null);
   const [showArchive, setShowArchive] = useState(false);
+  const [query, setQuery] = useState("");
+  const [origin, setOrigin] = useState<string | null>(null);
+  const [roaster, setRoaster] = useState<string | null>(null);
+  const [pickingRoaster, setPickingRoaster] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const colorOf = useCoffeeColor();
 
   // One pass over brews for the whole shelf, instead of ~15 per coffee. See
@@ -72,6 +82,32 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
     return { live, archived, totalGrams, groups, frozenList, emptyList };
   }, [coffees, stats]);
 
+  const avgs = useMemo(() => bagAvgRatings(brews), [brews]);
+
+  // Haystacks and facets rebuild only when the shelf changes, never per keystroke.
+  const haystacks = useMemo(() => new Map(coffees.map((c) => [c.id, coffeeHaystack(c)])), [coffees]);
+  const origins = useMemo(() => originFacets(coffees), [coffees]);
+  const roasters = useMemo(() => roasterFacets(coffees), [coffees]);
+
+  const deferredQuery = useDeferredValue(query);
+  const filtering = isFilterActive({ query, origin, roaster });
+  const results = useMemo(() => {
+    if (!isFilterActive({ query: deferredQuery, origin, roaster })) return [];
+    // Live bags first, then finished; newest roast first within each.
+    return filterCoffees(coffees, { query: deferredQuery, origin, roaster }, haystacks).sort(
+      (a, b) => Number(a.archived) - Number(b.archived) || (b.roasted_at || "").localeCompare(a.roasted_at || ""),
+    );
+  }, [coffees, haystacks, deferredQuery, origin, roaster]);
+  const clearFilters = () => { setQuery(""); setOrigin(null); setRoaster(null); };
+  // Closing always returns the plain shelf — no filter is left applied out of sight.
+  const toggleSearch = () => { if (searchOpen) clearFilters(); setSearchOpen(!searchOpen); };
+
+  // Top roasters as chips; the rest live behind "More…". A selection from the
+  // sheet that isn't in the top set still shows as an active chip.
+  const TOP_ROASTERS = 4;
+  const roasterChips = roasters.slice(0, TOP_ROASTERS);
+  const pickedExtra = roaster && !roasterChips.some((r) => r.key === roaster) ? roasters.find((r) => r.key === roaster) : undefined;
+
   const perDay = useMemo(() => avgDailyGrams(brews), [brews]);
   const worth = perDay > 0 ? formatDaysWorth(totalGrams / perDay) : null;
 
@@ -85,12 +121,106 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
           <div className="label">{live.length} coffee{live.length === 1 ? "" : "s"} · {formatWeight(totalGrams)}{worth ? ` · ${worth}` : ""}</div>
           <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3 }}>Shelf</h1>
         </div>
-        <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>
-          <Icon name="plus" size={24} stroke={2} />
-        </button>
+        <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+          {coffees.length > 0 && (
+            <button
+              onClick={toggleSearch}
+              aria-label={searchOpen ? "Close search" : "Search shelf"}
+              aria-expanded={searchOpen}
+              className="btn btn-soft"
+              style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}
+            >
+              <Icon name={searchOpen ? "close" : "search"} size={21} stroke={2} />
+            </button>
+          )}
+          <button onClick={() => setAdding(true)} className="btn btn-accent" style={{ width: 50, height: 50, borderRadius: 16, flexShrink: 0 }}>
+            <Icon name="plus" size={24} stroke={2} />
+          </button>
+        </div>
       </div>
 
+      {searchOpen && coffees.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div className="screen-pad">
+            <div style={{ position: "relative" }}>
+              <Icon name="search" size={17} stroke={1.8} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--ink-faint)", pointerEvents: "none" }} />
+              <input
+                inputMode="search"
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search bags, farms, notes…"
+                aria-label="Search the shelf"
+                enterKeyHint="search"
+                style={{
+                  width: "100%", padding: "11px 40px 11px 38px", borderRadius: 13, background: "var(--surface)", border: "1px solid var(--line)",
+                  color: "var(--ink)", fontFamily: "var(--font-ui)", fontSize: 16, outline: "none", boxSizing: "border-box",
+                }}
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 32, height: 32, display: "grid", placeItems: "center", background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer" }}
+                >
+                  <Icon name="close" size={15} stroke={2} />
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Origins and roasters on separate rows, so a long origin list never buries the roasters. */}
+          {origins.length > 1 && (
+            <div className="screen-pad" style={chipRow}>
+              {origins.map((o) => (
+                <button key={o.key} className="chip" data-on={origin === o.key} onClick={() => setOrigin(origin === o.key ? null : o.key)} style={chipStyle}>
+                  {o.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {roasters.length > 1 && (
+            <div className="screen-pad" style={chipRow}>
+              {pickedExtra && (
+                <button className="chip" data-on onClick={() => setRoaster(null)} style={chipStyle}>
+                  {pickedExtra.name} <span style={{ opacity: 0.6 }}>{pickedExtra.count}</span>
+                </button>
+              )}
+              {roasterChips.map((r) => (
+                <button key={r.key} className="chip" data-on={roaster === r.key} onClick={() => setRoaster(roaster === r.key ? null : r.key)} style={chipStyle}>
+                  {r.name} <span style={{ opacity: 0.6 }}>{r.count}</span>
+                </button>
+              ))}
+              {roasters.length > TOP_ROASTERS && (
+                <button className="chip" onClick={() => setPickingRoaster(true)} style={chipStyle}>
+                  More…
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="screen-pad" style={{ marginTop: 22 }}>
+        {filtering && (
+          <div>
+            <div className="label" style={{ marginBottom: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>{results.length} bag{results.length === 1 ? "" : "s"}</span>
+              <button onClick={clearFilters} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-dim)", font: "inherit", padding: 0 }}>
+                Clear
+              </button>
+            </div>
+            {results.map((c) => (
+              <ResultRow key={c.id} coffee={c} status={stats.get(c.id)?.status} avg={avgs.get(c.id) ?? null} onOpen={setDetail} />
+            ))}
+            {results.length === 0 && (
+              <EmptyState icon="search" title="No bags match" body="Try a farm, roaster, origin or tasting note." iconSize={36} titleSize={15} pad="36px 20px">
+                <button className="chip" style={{ marginTop: 14 }} onClick={clearFilters}>Clear filters</button>
+              </EmptyState>
+            )}
+          </div>
+        )}
+
+        {!filtering && (<>
         {live.length === 0 && (
           <EmptyState
             icon="shelf"
@@ -178,40 +308,20 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
             </button>
             {showArchive && (
               <div style={{ marginTop: 6 }}>
-                {archived.map((c) => {
-                  const avg = bagAvgRating(c.id, brews);
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => setDetail(c)}
-                      style={{
-                        width: "100%", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
-                        background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 13, padding: "10px 14px", marginBottom: 8, opacity: 0.6,
-                      }}
-                    >
-                      <OriginTile code={c.cc} roaster={c.roaster} color={colorOf(c.notes)} size={30} radius={8} process={c.process} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <CoffeeName coffee={c} style={{ fontSize: 14 }} />
-                        <div className="label" style={{ color: "var(--ink-faint)" }}>{c.roaster}{c.grams ? ` · ${formatWeight(c.grams)}` : ""}</div>
-                      </div>
-                      {avg != null ? (
-                        <span className="mono" style={{ fontSize: 12, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                          <Icon name="star" size={12} stroke={1.8} /> {avg.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="label" style={{ fontSize: 9 }}>finished</span>
-                      )}
-                    </button>
-                  );
-                })}
+                {archived.map((c) => (
+                  <ResultRow key={c.id} coffee={c} avg={avgs.get(c.id) ?? null} onOpen={setDetail} />
+                ))}
               </div>
             )}
           </div>
         )}
 
+        </>)}
+
         <div className="screen-bottom" />
       </div>
 
+      <RoasterPickerSheet open={pickingRoaster} roasters={roasters} selected={roaster} onPick={setRoaster} onClose={() => setPickingRoaster(false)} />
       <AddCoffee open={adding} onClose={() => setAdding(false)} onAdd={onAdd} llmEnabled={llmEnabled} coffees={coffees} />
       <CoffeeDetail
         coffee={liveDetail}
@@ -220,6 +330,8 @@ export function Shelf({ coffees, brews, onAdd, onBrew, onUpdate, llmEnabled }: S
         onClose={() => setDetail(null)}
         onBrew={(c) => { setDetail(null); onBrew(c); }}
         onUpdate={onUpdate}
+        onOpen={setDetail}
+        onSearch={(text) => { setDetail(null); setOrigin(null); setRoaster(null); setQuery(text); setSearchOpen(true); }}
       />
     </div>
   );
