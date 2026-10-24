@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect, useMemo, memo } from "react";
 import type { Coffee, Brew, Config, Profile } from "@/lib/types";
-import { cupsLeft, sinceText, daysAgoFromStartedAt, makeIntro, rateBelongsTo, todayMidnightMs } from "@/lib/domain";
+import { cupsLeft, sinceText, daysAgoFromStartedAt, baseGreeting, rateBelongsTo, todayMidnightMs } from "@/lib/domain";
 import { EMPTY_STAT, lastBrewByCoffee } from "@/lib/domain/derive";
 import { useCoffeeStats } from "@/lib/hooks/useCoffeeStats";
 import { noteIcon, noteColor, processTexture } from "@/lib/flavour";
 import { useCoffeeColor } from "@/lib/store/AppContext";
-import { Icon, FreshDot, OriginTile, CoffeeName } from "@/components/ui";
+import { Icon, FreshDot, OriginTile, CoffeeName, IconButton, ScreenHeader } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useLongPress } from "@/lib/hooks/useLongPress";
 import type { FreshStatus } from "@/lib/types";
@@ -22,6 +22,7 @@ interface StepWhatProps {
   onSend?: (b: Brew) => void;
   onOpenBrew?: (b: Brew) => void;
   onGotoShelf?: () => void;
+  onOpenSettings?: () => void;
   /** Long-press shortcut on a ready/past-peak row: log it again with its last recipe. */
   onBrewAgain?: (c: Coffee) => void;
 }
@@ -93,8 +94,7 @@ const CoffeeRow = memo(function CoffeeRow({ c, st, active, last, i, dim = false,
   );
 });
 
-export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf, onBrewAgain }: StepWhatProps) {
-  const intro = useMemo(() => makeIntro(config.random_greeting), [config.random_greeting]);
+export function StepWhat({ coffees, brews, config, profile, members, onPick, onRate, onSend, onOpenBrew, onGotoShelf, onOpenSettings, onBrewAgain }: StepWhatProps) {
   const [, setTick] = useState(0);
   const colorOf = useCoffeeColor();
 
@@ -177,6 +177,14 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   const coffeeById = useMemo(() => new Map(coffees.map((c) => [c.id, c])), [coffees]);
   const brewerById = (id: string) => config.brewers.find((b) => b.id === id);
 
+  const header = (
+    <ScreenHeader
+      eyebrow={[baseGreeting(), ready.length > 0 && `${ready.length} ready`, pending.length > 0 && `${pending.length} to rate`].filter(Boolean).join(" · ")}
+      title="Brew"
+      actions={onOpenSettings && <IconButton icon="gear" label="Settings" onClick={onOpenSettings} size={40} iconSize={19} stroke={1.8} />}
+    />
+  );
+
   // First-run: no coffees at all yet. The "resting/in the freezer" copy below is
   // wrong here (there's nothing resting either) and every other section on this
   // screen (pending, ready, past peak, frozen banner, recent strip) is derived
@@ -184,12 +192,10 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
   // shelf's own Add flow instead of a dead-end "0 ready" screen.
   if (coffees.length === 0) {
     return (
+      <>
+      <div className="rise rise-1">{header}</div>
       <div className="screen-pad">
-        <div className="rise rise-1" style={{ paddingTop: 8 }}>
-          <div className="h-greet">{intro.greet}{/[?!.]$/.test(intro.greet) ? "" : "."}</div>
-          <h1 className="h-ask" style={{ marginTop: 4 }}>{intro.q}</h1>
-        </div>
-        <div className="rise rise-2" style={{ marginTop: 24 }}>
+        <div className="rise rise-2" style={{ marginTop: 6 }}>
           <EmptyState
             icon="shelf"
             title="Your shelf is empty"
@@ -210,18 +216,17 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
         </div>
         <div className="screen-bottom" />
       </div>
+      </>
     );
   }
 
   return (
+    <>
+    <div className="rise rise-1">{header}</div>
     <div className="screen-pad">
-      <div className="rise rise-1" style={{ paddingTop: 8 }}>
-        <div className="h-greet">{intro.greet}{/[?!.]$/.test(intro.greet) ? "" : "."}</div>
-        <h1 className="h-ask" style={{ marginTop: 4 }}>{intro.q}</h1>
-      </div>
 
       {pending.length > 0 && (
-        <div className="rise rise-2" style={{ marginTop: 24 }}>
+        <div className="rise rise-2" style={{ marginTop: 6 }}>
           <div className="label" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 7 }}>
             <span className="dot" style={{ width: 6, height: 6, background: "var(--accent)" }} /> Waiting to rate · {pending.length}
           </div>
@@ -279,7 +284,7 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
         </div>
       )}
 
-      <div className="label rise rise-2" style={{ margin: "26px 0 12px" }}>Rested &amp; ready · {ready.length}</div>
+      <div className="label rise rise-2" style={{ margin: `${pending.length ? 26 : 6}px 0 12px` }}>Rested &amp; ready · {ready.length}</div>
       {ready.length === 0 && (
         <div className="rise rise-2" style={{ textAlign: "center", padding: "30px 16px", color: "var(--ink-dim)" }}>
           <div style={{ color: "var(--ink-ghost)", display: "flex", justifyContent: "center", marginBottom: 12 }}><Icon name="timer" size={40} stroke={1.3} /></div>
@@ -367,5 +372,6 @@ export function StepWhat({ coffees, brews, config, profile, members, onPick, onR
 
       <div className="screen-bottom" />
     </div>
+    </>
   );
 }

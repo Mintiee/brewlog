@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
-import { Icon, Segmented, EmptyState } from "@/components/ui";
+import { Icon, Segmented, EmptyState, ScreenHeader } from "@/components/ui";
 import dynamic from "next/dynamic";
 import { Journal } from "./Journal";
 import { StepRate } from "@/components/brew/StepRate";
@@ -54,9 +54,8 @@ export function History({ brews, coffees, config, llmEnabled }: HistoryProps) {
 
   return (
     <div className="screen">
-      <div className="screen-pad" style={{ paddingTop: 8 }}>
-        <div className="label">{brews.length} {brews.length === 1 ? "brew" : "brews"}</div>
-        <h1 className="h-ask" style={{ fontSize: 30, marginTop: 3, marginBottom: 18 }}>Log</h1>
+      <ScreenHeader eyebrow={`${brews.length} ${brews.length === 1 ? "brew" : "brews"}`} title="Log" />
+      <div className="screen-pad">
 
         {brews.length === 0 ? (
           <EmptyState

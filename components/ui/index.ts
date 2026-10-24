@@ -1,6 +1,7 @@
 export { Icon } from "./Icon";
 export { IconButton } from "./IconButton";
 export { SheetHeader } from "./SheetHeader";
+export { ScreenHeader } from "./ScreenHeader";
 export { Stars, StarsMini } from "./Stars";
 export { Scale5 } from "./Scale5";
 export { Stepper } from "./Stepper";

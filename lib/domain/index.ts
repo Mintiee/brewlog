@@ -734,77 +734,14 @@ export function defaultsFor(coffee: Coffee | null, brewer: Brewer): Recipe {
   return { dose, ratio, water, bypass, temp, grind: brewer.grind, water_type: "" };
 }
 
-// ---------- Greeting + randomised question ----------
+// ---------- Greeting ----------
 
-function timeSlot(): "late" | "morning" | "afternoon" | "evening" {
-  const h = new Date().getHours();
-  if (h < 5) return "late";
-  if (h < 12) return "morning";
-  if (h < 17) return "afternoon";
-  return "evening";
-}
-
-const OPENERS: Record<string, string[]> = {
-  morning:   ["Morning", "Good morning", "Rise and grind", "Up and at 'em", "Top of the morning", "Early bird", "Bright and early", "First light", "Hello, sunshine"],
-  afternoon: ["Afternoon", "Good afternoon", "Midday", "Hey there", "Halfway there", "Afternoon slump?", "Back for more"],
-  evening:   ["Evening", "Good evening", "Winding down", "Night owl", "Day's done", "Golden hour", "Easy now"],
-  late:      ["Late night", "Still up?", "Midnight oil", "Can't sleep?", "One more?", "The witching hour"],
-};
-const TAILS = ["", "", "", "", ", friend", " — coffee o'clock", ", let's go", ", champ", ", you legend", " then"];
-const VERBS = ["brewing", "pouring", "grinding", "drinking", "sipping", "chasing", "cupping", "making", "dialing in", "fancying"];
-// Base-form verbs for templates that need the infinitive ("Let's brew…"); the
-// gerund VERBS above would read "Let's brewing…".
-const BASE_VERBS = ["brew", "pour", "grind", "make", "chase", "sip"];
-const ADJ   = ["bright", "sweet", "fruity", "chocolatey", "clean", "funky", "juicy", "floral", "bold", "delicate", "wild", "cozy", "zippy", "jammy", "tea-like", "syrupy", "crisp", "punchy", "comforting", "honeyed", "boozy", "vibrant"];
-const NOUNS = ["cup", "pour", "bean", "brew", "ritual", "morning cup", "first cup", "one"];
-
-function randOf<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
-function pick2<T>(a: T[]): [T, T] { const x = randOf(a); let y = randOf(a); let g = 0; while (y === x && g++ < 6) y = randOf(a); return [x, y]; }
-function cap(s: string) { return s[0].toUpperCase() + s.slice(1); }
-
-const Q_TEMPLATES: Array<() => string> = [
-  () => `What are you ${randOf(VERBS)}?`,
-  () => { const [a, b] = pick2(ADJ); return `Something ${a} or something ${b}?`; },
-  () => `In the mood for something ${randOf(ADJ)}?`,
-  () => `Feeling ${randOf(ADJ)} today?`,
-  () => `${cap(randOf(ADJ))} today?`,
-  () => `Time for something ${randOf(ADJ)}.`,
-  () => `Let's ${randOf(BASE_VERBS)} something ${randOf(ADJ)}.`,
-  () => `${cap(randOf(VERBS))} something ${randOf(ADJ)}?`,
-  () => `Which ${randOf(NOUNS)} today?`,
-  () => { const [a, b] = pick2(ADJ); return `${cap(a)} and ${b}?`; },
-  () => `Chasing something ${randOf(ADJ)}?`,
-  () => `What's the ${randOf(NOUNS)} today?`,
-  () => "Your move.",
-  () => "Dealer's choice.",
-  () => "What sounds good?",
-  () => "Ready when you are.",
-  () => `Make it a ${randOf(ADJ)} one?`,
-];
-
-function baseGreeting(): string {
+export function baseGreeting(): string {
   const h = new Date().getHours();
   if (h < 5) return "Late night";
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
-}
-
-// Tails are vocatives/addendums (", champ", " then", " — coffee o'clock"). They
-// only read well after a plain greeting, so skip them when the opener is already
-// a question/exclamation ("Afternoon slump?", "Still up?") or already carries its
-// own comma clause ("Hello, sunshine") — otherwise we get "Afternoon slump?, champ".
-function withTail(opener: string, tail: string): string {
-  if (/[?!.]$/.test(opener) || opener.includes(",")) return opener;
-  return opener + tail;
-}
-
-export function makeIntro(randomGreeting: boolean): { greet: string; q: string } {
-  if (!randomGreeting) return { greet: baseGreeting(), q: "What are you brewing?" };
-  return {
-    greet: withTail(randOf(OPENERS[timeSlot()]), randOf(TAILS)),
-    q: randOf(Q_TEMPLATES)(),
-  };
 }
 
 // ---------- Origin helpers ----------

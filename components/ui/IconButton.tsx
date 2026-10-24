@@ -11,14 +11,17 @@ interface IconButtonProps {
   iconSize?: number;
   stroke?: number;
   style?: React.CSSProperties;
+  /** For toggles that reveal a panel (e.g. the shelf search). */
+  expanded?: boolean;
 }
 
 /** The app's round soft icon button (close/edit on sheets and headers). */
-export function IconButton({ icon, label, onClick, size = 34, iconSize = 18, stroke = 1.9, style }: IconButtonProps) {
+export function IconButton({ icon, label, onClick, size = 34, iconSize = 18, stroke = 1.9, style, expanded }: IconButtonProps) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
+      aria-expanded={expanded}
       style={{
         background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "50%",
         width: size, height: size, color: "var(--ink-dim)", cursor: "pointer",

@@ -101,7 +101,6 @@ function Shell() {
   const [prevTab, setPrevTab] = useState<Tab>("brew");
   const [brewResetKey, setBrewResetKey] = useState(0);
   const [brewStart, setBrewStart] = useState<{ coffee: Coffee; nonce: number } | null>(null);
-  const [brewStep, setBrewStep] = useState("what");
   const [rateStart, setRateStart] = useState<{ brewId: string; nonce: number } | null>(null);
 
   // Only brews that are mine to rate — ones I logged (and haven't sent away) or
@@ -253,8 +252,8 @@ function Shell() {
           startCoffee={brewStart}
           rateStart={rateStart}
           onRateStarted={clearRateStart}
-          onStep={setBrewStep}
           onGotoShelf={() => gotoTab("shelf")}
+          onOpenSettings={openSettings}
         />
       )}
       {tab === "shelf" && (
@@ -358,23 +357,6 @@ function Shell() {
         </div>
           )}
         </div>
-      )}
-
-      {tab === "brew" && brewStep === "what" && (
-        <button
-          onClick={openSettings}
-          aria-label="Settings"
-          style={{
-            position: "absolute", top: 60, right: 16, zIndex: 45,
-            width: 38, height: 38, borderRadius: "50%",
-            background: "var(--surface)", color: "var(--ink-dim)",
-            border: "1px solid var(--line)", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-          }}
-        >
-          <Icon name="gear" size={19} stroke={1.8} />
-        </button>
       )}
 
       {/* iOS ignores the manifest's portrait orientation, so we gate landscape
